@@ -16,6 +16,7 @@ import { Toaster } from 'react-hot-toast';
 import { VoiceChatProvider } from './context/VoiceChatContext';
 
 export default function App() {
+  const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true); // Add a loading state for auth
   const [activeRoom, setActiveRoom] = useState<GameRoom | null>(null);
@@ -70,7 +71,7 @@ export default function App() {
   const synchronizeBackendUser = async (firebaseUser: FirebaseUser) => {
     try {
       const idToken = await firebaseUser.getIdToken();
-      const response = await fetch('https://dhilidhili.onrender.com/api/auth/login', {
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -147,7 +148,7 @@ export default function App() {
   useEffect(() => {
     if (!user) return;
 
-    const sseUrl = `https://dhilidhili.onrender.com/api/updates?userId=${user.id}`;
+    const sseUrl = `${API_BASE_URL}/api/updates?userId=${user.id}`;
     const eventSource = new EventSource(sseUrl);
 
     eventSource.addEventListener('init', () => {
@@ -357,7 +358,7 @@ export default function App() {
     if (!roomId) return;
   
     try {
-      const response = await fetch(`https://dhilidhili.onrender.com/api/rooms/check-status/${roomId}?userId=${userId}`);
+      const response = await fetch(`${API_BASE_URL}/api/rooms/check-status/${roomId}?userId=${userId}`);
       if (response.ok) {
         const roomData = await response.json();
         if (roomData.error) {
@@ -391,7 +392,7 @@ export default function App() {
   const fetchRoomStateAndRedirect = async (roomId: string) => {
     try {
       // Join endpoint also works as getter if already joined
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/join', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user?.id, roomCode: roomId })
@@ -423,7 +424,7 @@ export default function App() {
   const handleRefreshBalance = async () => {
     if (!user) return;
     try {
-      const res = await fetch(`https://dhilidhili.onrender.com/api/users/${user.id}`);
+      const res = await fetch(`${API_BASE_URL}/api/users/${user.id}`);
       if (res.ok) {
         const data = await res.json();
         setUser(data);
@@ -439,7 +440,7 @@ export default function App() {
     if (!user) return;
     setError(null);
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/create', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/create`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, betAmount, capacity, gameMode })
@@ -462,7 +463,7 @@ export default function App() {
     if (!user) return;
     setError(null);
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/join', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/join`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomCode })
@@ -498,7 +499,7 @@ export default function App() {
     setMatchmakingState({ isQueued: true, betAmount, capacity, gameMode });
 
     const isDirectChallenge = (typeof opponentId === 'string' && opponentId.length > 0);
-    const url = isDirectChallenge ? 'https://dhilidhili.onrender.com/api/rooms/matchmaking/join' : 'https://dhilidhili.onrender.com/api/rooms/matchmaking/enter-queue';
+    const url = isDirectChallenge ? `${API_BASE_URL}/api/rooms/matchmaking/join` : `${API_BASE_URL}/api/rooms/matchmaking/enter-queue`;
     const body = isDirectChallenge 
       ? { userId: user.id, betAmount, capacity, gameMode, opponentId }
       : { userId: user.id, betAmount, capacity, gameMode };
@@ -532,7 +533,11 @@ export default function App() {
       }
       window.dispatchEvent(new Event('refresh_online_players'));
     } catch (err: any) {
-      setErrorToast(err.message || 'Cilad matchmaking.');
+      if (err.message === 'Failed to fetch') {
+        setErrorToast('Lama xidhiidhi karo server-ka. Fadlan isku day mar kale hadhow. (Could not connect to the server. Please try again later.)');
+      } else {
+        setErrorToast(err.message || 'Cilad matchmaking.');
+      }
       setMatchmakingState({ isQueued: false, betAmount: 0 });
     }
   };
@@ -544,7 +549,7 @@ export default function App() {
       matchmakingTimeoutRef.current = null;
     }
     try {
-      await fetch('https://dhilidhili.onrender.com/api/rooms/matchmaking/leave', {
+      await fetch(`${API_BASE_URL}/api/rooms/matchmaking/leave`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, betAmount, capacity, gameMode })
@@ -560,7 +565,7 @@ export default function App() {
   const handleToggleReady = async () => {
     if (!user || !activeRoom) return;
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/ready', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/ready`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomId: activeRoom.id })
@@ -577,7 +582,7 @@ export default function App() {
   const handleAddBot = async () => {
     if (!activeRoom) return;
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/add-bot', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/add-bot`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ roomId: activeRoom.id })
@@ -594,7 +599,7 @@ export default function App() {
   const handleStartMatch = async () => {
     if (!user || !activeRoom) return;
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/start', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomId: activeRoom.id })
@@ -613,7 +618,7 @@ export default function App() {
   const handleRollDice = async () => {
     if (!user || !activeRoom) return;
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/roll-dice', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/roll-dice`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomId: activeRoom.id })
@@ -630,7 +635,7 @@ export default function App() {
   const handleMoveToken = async (tokenId: string) => {
     if (!user || !activeRoom) return;
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/move-token', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/move-token`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomId: activeRoom.id, tokenId })
@@ -647,7 +652,7 @@ export default function App() {
   const handleSendChat = async (text: string) => {
     if (!user || !activeRoom) return;
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/chat', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomId: activeRoom.id, text })
@@ -678,7 +683,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/leave', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/leave`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomId: activeRoom.id })
@@ -707,7 +712,7 @@ export default function App() {
   const handleAcceptInvite = async () => {
     if (!incomingInvite || !user) return;
     try {
-      const response = await fetch('https://dhilidhili.onrender.com/api/rooms/challenge/accept', {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/challenge/accept`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomId: incomingInvite.roomId })
@@ -730,7 +735,7 @@ export default function App() {
   const handleDeclineInvite = async () => {
     if (!incomingInvite || !user) return;
     try {
-      await fetch('https://dhilidhili.onrender.com/api/rooms/challenge/decline', {
+      await fetch(`${API_BASE_URL}/api/rooms/challenge/decline`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, roomId: incomingInvite.roomId })
@@ -753,7 +758,7 @@ export default function App() {
     localStorage.setItem('ludo_session', JSON.stringify(newUser));
 
     try {
-      const response = await fetch(`https://dhilidhili.onrender.com/api/users/${user.id}/update`, {
+      const response = await fetch(`${API_BASE_URL}/api/users/${user.id}/update`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updatedData),
