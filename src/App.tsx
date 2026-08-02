@@ -81,7 +81,7 @@ export default function App() {
               'Content-Type': 'application/json',
               'Authorization': `Bearer ${token}`,
             },
-            body: JSON.stringify({ email: firebaseUser.email }),
+            body: JSON.stringify({ email: firebaseUser.email, username: undefined }),
           });
 
           if (!response.ok) {
