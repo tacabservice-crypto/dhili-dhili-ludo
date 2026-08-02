@@ -5,7 +5,7 @@
 
 import express from 'express';
 import cors from 'cors';
-import { db } from './firebase';
+import { db } from './src/firebase';
 import { createServer as createViteServer, ViteDevServer } from 'vite';
 import jwt from 'jsonwebtoken';
 import { UserProfile, WalletTransaction, GameRoom, LudoPlayer, LudoToken, PlayerColor, ChatMessage, GameLog } from './src/types/game.ts';
