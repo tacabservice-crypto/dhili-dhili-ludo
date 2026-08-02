@@ -1842,27 +1842,31 @@ app.post('/api/rooms/challenge/decline', (req, res) => {
 // Dynamic Leaderboard (Global Earnings Board) from active store data
 app.get('/api/users/leaderboard', (req, res) => {
   const allUsers = Object.values(store.users).filter(u => !u.id.startsWith('user_sim_') && !u.id.startsWith('bot_'));
-  
+
+  allUsers.forEach(u => {
+    const userTransactions = store.transactions.filter(t => t.userId === u.id);
+    const totalWins = userTransactions.filter(t => t.type === 'win_payout').reduce((sum, t) => sum + t.amount, 0);
+    const totalCommission = userTransactions.filter(t => t.type === 'app_commission').reduce((sum, t) => sum + t.amount, 0);
+    u.earnings = totalWins - totalCommission;
+  });
+
   // Sort users by winCount descending
   const sorted = [...allUsers]
     .sort((a, b) => {
-      const aWins = a.winCount || 0;
-      const bWins = b.winCount || 0;
-      return bWins - aWins;
+      const aEarnings = a.earnings || 0;
+      const bEarnings = b.earnings || 0;
+      return bEarnings - aEarnings;
     })
     .slice(0, 5);
 
   let rank = 1;
   const result = sorted.map(u => {
-    // Generate simulated/real proportional earnings: wins * $5 stake + starting balance logic
-    const wins = u.winCount || 0;
-    const earnings = Math.max(wins * 15, u.balance > 100 ? u.balance - 100 : wins * 15);
     return {
       rank: rank++,
       name: u.username,
       avatar: u.avatar || '🎮',
-      wins: wins,
-      earnings: earnings
+      wins: u.winCount || 0,
+      earnings: u.earnings || 0
     };
   });
 
