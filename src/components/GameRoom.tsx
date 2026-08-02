@@ -650,7 +650,7 @@ export default function GameRoomView({
       </header>
 
       {/* 2. GAME INFO BAR */}
-      <div className="grid grid-cols-3 items-center px-4 py-2 bg-black/20 text-xs border-b border-white/10">
+      <div className="grid grid-cols-4 items-center px-4 py-2 bg-black/20 text-xs border-b border-white/10">
         {/* Escrow */}
         <div className="flex items-center gap-1.5 font-bold text-yellow-400">
             <ShieldCheck className="w-4 h-4" />
@@ -740,10 +740,10 @@ export default function GameRoomView({
                           </span>
                         </div>
                         <div className="space-y-1.5">
-                          <div className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                            <div className="flex items-center gap-1.5 text-xs truncate">
+                          <div className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                            <div className="flex items-center gap-1 text-[10px] truncate">
                               <span className="text-sm shrink-0">{pl.avatar}</span>
-                              <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+                              <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
                             </div>
                             <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
                           </div>
@@ -780,10 +780,10 @@ export default function GameRoomView({
                           );
                         }
                         return (
-                          <div key={pl.color} className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                            <div className="flex items-center gap-1.5 text-xs truncate">
+                          <div key={pl.color} className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                            <div className="flex items-center gap-1 text-[10px] truncate">
                               <span className="text-sm shrink-0">{pl.avatar}</span>
-                              <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+                              <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
                             </div>
                             <span className={`w-2.5 h-2.5 rounded-full ${pl.color === 'red' ? 'bg-red-500' : 'bg-yellow-500'} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
                           </div>
@@ -818,10 +818,10 @@ export default function GameRoomView({
                           );
                         }
                         return (
-                          <div key={pl.color} className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                            <div className="flex items-center gap-1.5 text-xs truncate">
+                          <div key={pl.color} className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                            <div className="flex items-center gap-1 text-[10px] truncate">
                               <span className="text-sm shrink-0">{pl.avatar}</span>
-                              <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+                              <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
                             </div>
                             <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
                           </div>
@@ -1072,7 +1072,7 @@ export default function GameRoomView({
                       </p>
                       <div className="flex items-center gap-1">
                         <span className={`w-2 h-2 rounded-full ${COLOR_MAP[pl.color]}`} />
-                        <span className="text-[9px] text-slate-500 font-bold capitalize">{pl.color}</span>
+                        <span className="text-[8px] text-slate-500 font-bold capitalize">{pl.color}</span>
                       </div>
                     </div>
                   </div>
@@ -1093,7 +1093,7 @@ export default function GameRoomView({
               {[...Array(4 - room.players.length)].map((_, idx) => (
                 <div 
                   key={idx} 
-                  className="bg-black/20 border border-dashed border-white/10 p-3 rounded-xl flex items-center justify-center text-slate-500 text-[10px] font-bold"
+                  className="bg-black/20 border border-dashed border-white/10 p-2 rounded-xl flex items-center justify-center text-slate-500 text-[9px] font-semibold"
                 >
                   ⌛ Open Slot
                 </div>
