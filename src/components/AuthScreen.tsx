@@ -7,28 +7,26 @@ import React, { useState } from 'react';
 import { Sparkles, Mail, Lock, LogIn, UserPlus } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageToggle from './LanguageToggle';
-import { auth, db } from '../firebase'; // Import Firebase auth and db instances
-import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-
 import { UserProfile } from '../types/game';
 
 const AVATARS = ['🎮', '🏆', '🔥', '👑', '🎲', '⚡', '🤖', '🦊', '🐯', '🐼', '🦁', '🦄'];
 
 interface AuthScreenProps {
-  onLoginSuccess: (profile: UserProfile) => void;
+  onLoginSuccess: (profile: UserProfile, token: string) => void;
   initialError?: string | null;
 }
 
 export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenProps) {
+  const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
   const { t } = useLanguage();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [avatar, setAvatar] = useState('🎮');
-  const [isLogin, setIsLogin] = useState(true); // true for Sign In, false for Sign Up
+  const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(initialError || '');
+  const [successMessage, setSuccessMessage] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,57 +41,38 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
 
     setLoading(true);
     setError('');
+    setSuccessMessage('');
+
+    const url = isLogin ? `${API_BASE_URL}/api/auth/login` : `${API_BASE_URL}/api/auth/register`;
+    const body = isLogin
+      ? { email, password }
+      : { username, email, password, avatar };
 
     try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || 'An unknown error occurred.');
+      }
+
       if (isLogin) {
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        if (userCredential.user) {
-          const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
-          if (userDoc.exists()) {
-            onLoginSuccess(userDoc.data() as UserProfile);
-          } else {
-            // This case is unlikely if sign-in works, but good to handle.
-            throw new Error('User profile not found in database.');
-          }
+        if (data.user && data.token) {
+          onLoginSuccess(data.user, data.token);
+        } else {
+          throw new Error('Login response was invalid.');
         }
       } else {
-        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        // Create a user profile document in Firestore
-        await setDoc(doc(db, "users", userCredential.user.uid), {
-          uid: userCredential.user.uid,
-          email: userCredential.user.email,
-          displayName: username,
-          avatar: avatar,
-          createdAt: new Date(),
-          stats: {
-            gamesPlayed: 0,
-            wins: 0,
-            losses: 0,
-          }
-        });
+        setSuccessMessage('Registration successful! Please sign in.');
+        setIsLogin(true);
       }
     } catch (err: any) {
-      // Map Firebase auth errors to user-friendly messages
-      let errorMessage = 'An unknown error occurred.';
-      switch (err.code) {
-        case 'auth/invalid-email':
-          errorMessage = 'Please enter a valid email address.';
-          break;
-        case 'auth/user-not-found':
-        case 'auth/wrong-password':
-          errorMessage = 'Invalid email or password. Please try again.';
-          break;
-        case 'auth/email-already-in-use':
-          errorMessage = 'An account with this email already exists. Please sign in.';
-          break;
-        case 'auth/weak-password':
-          errorMessage = 'The password is too weak. Please use at least 6 characters.';
-          break;
-        default:
-          errorMessage = err.message;
-          break;
-      }
-      setError(errorMessage);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -101,12 +80,10 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#2e1065] via-[#0f052d] to-[#020012] text-white flex flex-col items-center justify-center p-4 selection:bg-purple-500 selection:text-white relative overflow-hidden">
-      {/* Top right language toggle */}
       <div className="absolute top-4 right-4 z-20">
         <LanguageToggle />
       </div>
 
-      {/* Background decoration */}
       <div className="absolute inset-0 z-0 pointer-events-none flex items-center justify-center">
         <div className="absolute w-[600px] h-[600px] rounded-full border border-purple-500/10 animate-pulse" />
         <div className="absolute w-[800px] h-[800px] rounded-full border border-purple-500/5" />
@@ -130,11 +107,15 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
             {error}
           </div>
         )}
+        {successMessage && (
+          <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-lg text-sm text-center font-medium">
+            {successMessage}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {!isLogin && (
             <>
-              {/* Avatar selector */}
               <div className="space-y-2">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   {t('chooseAvatar')}
@@ -156,7 +137,6 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
                   ))}
                 </div>
               </div>
-              {/* Username Input */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                   {t('displayName')}
@@ -173,7 +153,6 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
             </>
           )}
 
-          {/* Email Input */}
           <div className="space-y-1">
              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                 <Mail className="w-3 h-3 text-slate-500" /> {t('emailAddress')}
@@ -188,7 +167,6 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
               />
           </div>
 
-          {/* Password Input */}
           <div className="space-y-1">
               <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
                 <Lock className="w-3 h-3 text-slate-500" /> Password
@@ -203,7 +181,6 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
               />
             </div>
 
-          {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
@@ -220,7 +197,6 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
           </button>
         </form>
 
-        {/* Divider */}
         <div className="text-center text-xs text-slate-400">
           {isLogin ? "Don't have an account?" : "Already have an account?"}{' '}
           <button

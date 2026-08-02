@@ -18,13 +18,13 @@ Kani waa mashruuc Ludo game ah oo leh real-time multiplayer, matchmaking, wallet
     npm install
     ```
 
-2.  **Habee Firebase (Optional):**
-    Haddii aad rabto inaad isticmaasho Firebase Firestore si aad u kaydiso xogta, raac tillaabooyinkan:
-    *   Samee project cusub Firebase Console.
-    *   Aad **Project settings** > **Service accounts**.
-    *   Guji **Generate new private key** si aad u soo dejiso faylka `JSON`.
-    *   Faylkaas u bixi `firebase-admin-key.json` oo geli xididka (root) project-gaaga.
-    *   Server-ku si toos ah ayuu u aqoonsan doonaa faylka marka uu kaco. Haddii faylkaas la waayo, wuxuu isticmaali doonaa kaydinta maxalliga ah (`db_store.json`).
+2.  **Habee Environment Variables:**
+    *   Koobi ka samee `.env.example` una bixi `.env`.
+    *   Gudaha `.env`, ku buuxi `JWT_SECRET` mid adag oo sir ah. Tusaale:
+        ```
+        JWT_SECRET=sir-aad-u-adag-oo-ugu-yaraan-32-xaraf-ah
+        ```
+    *   Waxaad kaloo habeyn kartaa `ADMIN_USERNAME` iyo `ADMIN_PASSWORD` haddii aad rabto.
 
 3.  **Kici server-ka horumarinta (development server):**
     ```bash
@@ -50,8 +50,9 @@ Si aad app-kan online-ka u geliso, waxaad u baahan tahay inaad ku martigeliso (h
 3.  **Habee Environment Variables:**
     Server-kaaga, deji environment variable-kan:
     *   `NODE_ENV=production`
-
-    Sidoo kale, hubi in faylkaaga `firebase-admin-key.json` uu yaallo meesha saxda ah ee server-kaaga si uu ula xiriiro database-kaaga.
+    *   `JWT_SECRET` (Isticmaal mid adag oo sir ah oo ka duwan kan aad u isticmaashay horumarinta)
+    *   `ADMIN_USERNAME` (Optional)
+    *   `ADMIN_PASSWORD` (Optional)
 
 4.  **Kici server-ka production-ka:**
     Markaad server-ka saaran tahay, isticmaal amarkan si aad u kiciso app-ka. Wuxuu isticmaalayaa faylasha la build-gareeyay ee ku jira `dist` folder.

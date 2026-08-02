@@ -5,7 +5,6 @@
 
 export interface UserProfile {
   id: string;
-  firebaseUid?: string;
   username: string;
   email?: string;
   phone?: string;

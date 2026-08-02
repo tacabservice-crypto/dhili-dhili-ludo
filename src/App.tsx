@@ -2,8 +2,6 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { auth } from './firebase';
-import { onAuthStateChanged, signOut, User as FirebaseUser } from 'firebase/auth';
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, GameRoom } from './types/game';
 import AuthScreen from './components/AuthScreen';
@@ -68,57 +66,23 @@ export default function App() {
     };
   }, []);
 
-  const synchronizeBackendUser = async (firebaseUser: FirebaseUser) => {
-    try {
-      const idToken = await firebaseUser.getIdToken();
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${idToken}`
-        },
-        body: JSON.stringify({
-          username: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'LudoPlayer',
-          email: firebaseUser.email,
-          avatar: firebaseUser.photoURL || '🎲'
-        })
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Failed to synchronize user with backend. The server might be down.' }));
-        throw new Error(errorData.message || 'Failed to synchronize user with backend.');
-      }
-
-      const backendProfile = await response.json();
-      setUser(backendProfile);
-      localStorage.setItem('ludo_session', JSON.stringify(backendProfile));
-      await checkAndPromptRejoin(backendProfile.id);
-    } catch (error) {
-      console.error("Backend sync failed:", error);
-      setError(`Failed to connect to the server. Please try again later. Details: ${(error as Error).message}`);
-      // If sync fails, sign out the user so they can try again.
-      // The onAuthStateChanged listener will then re-render the AuthScreen.
-      signOut(auth);
-    }
-  };
-
-  // Listen for auth state changes
+  // Check for saved session on initial load
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser: FirebaseUser | null) => {
-      if (firebaseUser) {
-        // User is signed in, synchronize with our backend.
-        synchronizeBackendUser(firebaseUser);
-      } else {
-        // User is signed out.
-        setUser(null);
-        localStorage.removeItem('ludo_session');
-        localStorage.removeItem('ludo_active_room_id');
+    try {
+      const savedSession = localStorage.getItem('ludo_session');
+      if (savedSession) {
+        const { user: savedUser, token: savedToken } = JSON.parse(savedSession);
+        if (savedUser && savedToken) {
+          setUser(savedUser);
+          setToken(savedToken);
+          checkAndPromptRejoin(savedUser.id, savedToken);
+        }
       }
-      setAuthLoading(false); // Set loading to false once auth state is determined
-    });
-
-    // Cleanup subscription on unmount
-    return () => unsubscribe();
+    } catch (error) {
+      console.error("Failed to parse saved session:", error);
+      localStorage.removeItem('ludo_session');
+    }
+    setAuthLoading(false);
   }, []);
 
   useEffect(() => {
@@ -413,11 +377,11 @@ export default function App() {
   };
 
   const handleLogout = () => {
-    signOut(auth).catch((error) => {
-      console.error('Logout Error:', error);
-    });
+    setUser(null);
+    setToken(null);
     setActiveRoom(null);
     setMatchmakingState({ isQueued: false, betAmount: 0 });
+    localStorage.removeItem('ludo_session');
     localStorage.removeItem('ludo_active_room_id');
   };
 

@@ -50,27 +50,27 @@ Hadda waxaan u gudbaynaa website-ka Render si aan u abuurno adeegga (service) ma
 5.  **Guji "Create Web Service":**
     *   Ha gujin weli! Hoos u soco si aan u habaynno Environment-ka.
 
-## Qaybta 3: Habaynta Environment-ka iyo Sirta (Firebase)
+## Qaybta 3: Habaynta Environment-ka iyo Sirta
 
-Tani waa tallaabo aad muhiim u ah si app-kaagu ula xiriiro database-ka Firebase una shaqeeyo si sax ah.
+Tani waa tallaabo aad muhiim u ah si app-kaagu u shaqeeyo si sax ah.
 
 1.  **Guji "Advanced Settings":**
     *   Intaadan abuurin adeegga, hoos u soco oo raadi qaybta **"Advanced"** oo fur.
 
 2.  **Ku dar Environment Variables:**
-    *   Guji **"Add Environment Variable"**.
-    *   Samee variable-kan:
+    *   Guji **"Add Environment Variable"** dhowr jeer si aad u abuurto meelaha aad ku qori doonto variable-adan:
+    *   **Variable 1:**
         *   **Key:** `NODE_ENV`
         *   **Value:** `production`
-
-3.  **Ku dar Faylka Sirta ah ee Firebase (Secret File):**
-    *   Tani waa tallaabada ugu muhiimsan haddii aad isticmaalayso Firebase.
-    *   Guji **"Add Secret File"**.
-    *   **Filename:** Qor `firebase-admin-key.json`
-    *   **Contents:**
-        1.  Fur faylkaaga `firebase-admin-key.json` ee kombiyuutarkaaga ku jira.
-        2.  Koobiyee (Copy) dhammaan qoraalka ku dhex jira.
-        3.  Ku dheji (Paste) sanduuqa **"Contents"** ee Render.
+    *   **Variable 2:**
+        *   **Key:** `JWT_SECRET`
+        *   **Value:** Ku qor furahaaga sirta ah ee aad u diyaarisay production-ka. **Waa inuu ahaadaa mid aad u adag oo ka duwan kan aad isticmaashay markaad tijaabinaysay.**
+    *   **Variable 3 (Optional):**
+        *   **Key:** `ADMIN_USERNAME`
+        *   **Value:** Magaca admin-ka aad rabto.
+    *   **Variable 4 (Optional):**
+        *   **Key:** `ADMIN_PASSWORD`
+        *   **Value:** Password-ka admin-ka aad rabto.
 
 ## Qaybta 4: Daah-furka (Deployment)
 

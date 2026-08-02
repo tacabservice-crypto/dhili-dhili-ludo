@@ -8,22 +8,18 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer, ViteDevServer } from 'vite';
-import { initializeApp, cert, getApp } from 'firebase-admin/app';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import { getAuth, Auth } from 'firebase-admin/auth';
-
-import {
-  UserProfile,
-  WalletTransaction,
-  GameRoom,
-  LudoPlayer,
-  LudoToken,
-  PlayerColor,
-  ChatMessage,
-  GameLog
-} from './src/types/game.ts';
+import jwt from 'jsonwebtoken';
+import { UserProfile, WalletTransaction, GameRoom, LudoPlayer, LudoToken, PlayerColor, ChatMessage, GameLog } from './src/types/game.ts';
 
 const app = express();
+
+// IMPORTANT: Use a strong, secret key and store it in environment variables.
+const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-and-long-jwt-key-that-is-at-least-32-chars';
+if (JWT_SECRET === 'your-super-secret-and-long-jwt-key-that-is-at-least-32-chars') {
+  console.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+  console.warn('!!! WARNING: Using default JWT_SECRET. Please set a secure key in your .env file.');
+  console.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
+}
 
 // Enable CORS for the frontend origin
 const allowedOrigins = [
@@ -50,34 +46,24 @@ const DB_FILE = path.join(process.cwd(), 'db_store.json');
 
 app.use(express.json());
 
-// ==========================================
-// FIREBASE FIRESTORE PERSISTENCE SETUP
-// ==========================================
-let db: Firestore | null = null;
-let auth: Auth | null = null;
-const serviceAccountPath = path.join(process.cwd(), 'firebase-admin-key.json');
-if (fs.existsSync(serviceAccountPath)) {
-  try {
-    const serviceAccountFile = fs.readFileSync(serviceAccountPath, 'utf8');
-    const serviceAccount = JSON.parse(serviceAccountFile);
-    
-    // The private_key from the JSON file has its newlines escaped (e.g., "").
-    // The Firebase Admin SDK's crypto library expects actual newline characters.
-    // We need to "un-escape" them before passing the credential to Firebase.
-    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-
-    initializeApp({
-      credential: cert(serviceAccount)
-    });
-    db = getFirestore();
-    auth = getAuth();
-    console.log('Firebase Firestore and Auth initialized successfully with Admin SDK.');
-  } catch (err) {
-    console.error('Failed to initialize Firebase Admin SDK:', err);
+const verifyJwt = (req: any, res: any, next: any) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(403).json({ error: 'Unauthorized: No token provided.' });
   }
-} else {
-  console.log('No firebase-admin-key.json found. Running offline.');
-}
+
+  const token = authHeader.split('Bearer ')[1];
+  try {
+    const decoded: any = jwt.verify(token, JWT_SECRET);
+    req.user = decoded; // Adds { userId: '...' } to the request object
+    next();
+  } catch (error) {
+    console.error('Error verifying JWT:', error);
+    res.status(403).json({ error: 'Unauthorized: Invalid token.' });
+  }
+};
+
+
 
 // ==========================================
 // 1. DATA STORE SETUP & PERSISTENCE
@@ -128,61 +114,12 @@ function loadStore() {
   }
 }
 
-// Load store from Firebase Firestore
-async function loadStoreFromFirestore() {
-  if (!db) {
-    loadStore();
-    return;
-  }
-  try {
-    console.log('Fetching latest state from Firebase Firestore...');
-    const storeRef = db.collection('ludo_store').doc('main');
-    const docSnap = await storeRef.get();
-    if (docSnap.exists) {
-      const payload = docSnap.data();
-      if (payload && payload.data) {
-        const parsed = JSON.parse(payload.data);
-        store.users = parsed.users || {};
-        store.transactions = parsed.transactions || [];
-        store.rooms = parsed.rooms || {};
-        store.matchmakingQueues = parsed.matchmakingQueues || {
-          0: [], 1: [], 5: [], 10: [], 25: [], 50: []
-        };
-        store.houseRevenue = parsed.houseRevenue || 0;
-        console.log('Database loaded successfully from Firebase Firestore.');
-        // Update local file backup
-        fs.writeFileSync(DB_FILE, payload.data, 'utf8');
-        return;
-      }
-    }
-    console.log('No existing state in Firestore. Loading from local store fallback...');
-    loadStore();
-    // Immediately seed the empty Firestore with the loaded local data
-    syncToFirestore();
-  } catch (err) {
-    console.error('Failed to load store from Firestore:', err);
-    loadStore();
-  }
-}
 
-async function syncToFirestore() {
-  if (!db) return;
-
-  try {
-    const storeRef = db.collection('ludo_store').doc('main');
-    const serialized = JSON.stringify(store);
-    await storeRef.set({ data: serialized, updatedAt: Date.now() });
-    console.log('Successfully synchronized store to Firebase Firestore.');
-  } catch (err) {
-    console.error('Failed to sync store to Firestore:', err);
-  }
-}
 
 // Save store to disk and sync with Firestore
 function saveStore() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-    syncToFirestore(); // Fire-and-forget for non-critical updates
   } catch (error) {
     console.error('Failed to write database to disk.', error);
   }
@@ -192,13 +129,12 @@ function saveStore() {
 async function saveStoreAndWait() {
     try {
       fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-      await syncToFirestore();
     } catch (error) {
       console.error('Failed to write database to disk.', error);
     }
   }
 
-loadStoreFromFirestore();
+loadStore();
 
 // ==========================================
 // PURGE SIMULATED USERS TO KEEP ONLY REAL REGISTERED USER SESSIONS ON THE RADAR
@@ -314,11 +250,7 @@ function removeSSEClient(res: any) {
       if (changed) {
         saveStoreAndWait();
       }
-      if (db) {
-        db.collection('matchmaking').doc(client.userId).delete().catch(err => {
-          console.error('Failed to delete matchmaking record from Firestore on disconnect:', err);
-        });
-      }
+      
     }
     broadcastToAll('online_players_updated', {});
   }
@@ -814,13 +746,7 @@ setInterval(() => {
       store.matchmakingQueues[queueKey] = [];
 
       // Clean up Firestore matchmaking documents
-      if (db) {
-        realPlayers.forEach(p => {
-          db.collection('matchmaking').doc(p.id).delete().catch(err => {
-            console.error('Failed to delete matchmaking record from Firestore on auto-fill:', err);
-          });
-        });
-      }
+      
 
       // Generate bots for the remaining slots
       const matchedList = [...realPlayers];
@@ -859,187 +785,74 @@ setInterval(() => {
 // 4. API ENDPOINTS
 // ==========================================
 
-const verifyFirebaseToken = async (req: any, res: any, next: any) => {
-  if (!auth) {
-    return res.status(500).json({ error: 'Firebase Admin not configured on server.' });
-  }
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(403).json({ error: 'Unauthorized: No token provided.' });
-  }
-
-  const idToken = authHeader.split('Bearer ')[1];
-  try {
-    const decodedToken = await auth.verifyIdToken(idToken);
-    req.user = decodedToken;
-    next();
-  } catch (error) {
-    console.error('Error verifying Firebase ID token:', error);
-    res.status(403).json({ error: 'Unauthorized: Invalid token.' });
-  }
-};
-
-// Debug Firebase endpoint
-app.get('/api/debug/firebase', async (req, res) => {
-  if (!db) {
-    return res.json({ 
-      initialized: false, 
-      error: 'Firebase Firestore db object is null. Check if firebase-admin-key.json exists.' 
-    });
-  }
-  try {
-    const testRef = db.collection('ludo_store').doc('debug_test');
-    await testRef.set({ test: true, timestamp: Date.now() });
-    const snap = await testRef.get();
-    const data = snap.exists ? snap.data() : null;
-    return res.json({
-      initialized: true,
-      writeAndReadSuccess: data?.test === true,
-      data,
-      projectId: getApp().options.projectId,
-    });
-  } catch (err: any) {
-    return res.json({
-      initialized: true,
-      error: err.message || err.toString(),
-      stack: err.stack
-    });
-  }
-});
-
-// SSE Connection Endpoint
-app.get('/api/updates', (req, res) => {
-  const userId = req.query.userId as string;
-  if (!userId) {
-    return res.status(400).json({ error: 'Missing userId parameter' });
-  }
-
-  // Set response headers to support real-time streaming behind proxies
-  res.writeHead(200, {
-    'Content-Type': 'text/event-stream; charset=utf-8',
-    'Cache-Control': 'no-cache, no-transform',
-    'Connection': 'keep-alive',
-    'X-Accel-Buffering': 'no'
-  });
-  
-  if (typeof res.flushHeaders === 'function') {
-    res.flushHeaders();
-  }
-  
-  // Write initial keepalive comment and reconnect interval
-  res.write(`:ok
-
-`);
-  res.write(`retry: 3000
-
-`);
-
-  const client: SSEClient = { userId, res };
-  activeClients.push(client);
-
-  // Handle Reconnection: Check if this user is rejoining an active game
-  const activeRoom = Object.values(store.rooms).find(r =>
-    r.status === 'playing' && r.players.some(p => p.userId === userId && p.status === 'offline')
-  );
-
-  if (activeRoom) {
-    const player = activeRoom.players.find(p => p.userId === userId);
-    if (player) {
-      player.status = 'online';
-      player.inactivityTimer = 300; // Reset their full inactivity timer
-      addLog(activeRoom, `🟢 ${player.username} has reconnected! Welcome back.`);
-      broadcastToRoom(activeRoom.id, 'game_update', activeRoom);
-      saveStore();
-    }
-  }
-
-  // Send a welcome heart-beat
-  res.write(`event: init
-data: ${JSON.stringify({ status: 'connected' })}
-
-`);
-  
-  if (typeof (res as any).flush === 'function') {
-    (res as any).flush();
-  }
-
-  // Instantly send any active matchmaking search requests to new connected client
-  setTimeout(() => {
-    for (const [qKey, queueUserIds] of Object.entries(store.matchmakingQueues)) {
-      for (const seekingUserId of queueUserIds) {
-        if (seekingUserId !== userId && store.users[seekingUserId]) {
-          const seekingUser = store.users[seekingUserId];
-          const parts = qKey.split('_');
-          const seekingData = {
-            senderId: seekingUser.id,
-            username: seekingUser.username,
-            avatar: seekingUser.avatar,
-            betAmount: parseFloat(parts[0]) || 0,
-            capacity: parseInt(parts[1]) || 2,
-            gameMode: parts[2] || 'solo',
-            queueKey: qKey
-          };
-          res.write(`event: matchmaker_seeking
-data: ${JSON.stringify(seekingData)}
-
-`);
-          if (typeof (res as any).flush === 'function') {
-            (res as any).flush();
-          }
-        }
-      }
-    }
-  }, 500);
-
-  req.on('close', () => {
-    removeSSEClient(res);
-  });
-});
-
 // Authentication / Session
-app.post('/api/auth/login', verifyFirebaseToken, async (req: any, res) => {
-  const { username, email, avatar } = req.body;
-  const firebaseUid = req.user.uid;
-
-  if (!username) {
-    return res.status(400).json({ error: 'Username is required' });
-  }
-
-  const cleanUsername = username.trim().substring(0, 20);
-
-  let foundUser = Object.values(store.users).find(u => u.firebaseUid === firebaseUid);
-
-  if (foundUser) {
-    return res.json(foundUser);
-  }
-
-  if (email) {
-    const userByEmail = Object.values(store.users).find(u => u.email === email && !u.firebaseUid);
-    if (userByEmail) {
-      userByEmail.firebaseUid = firebaseUid;
-      await saveStoreAndWait();
-      return res.json(userByEmail);
+app.post('/api/auth/register', async (req: any, res) => {
+    const { username, email, password, avatar } = req.body;
+  
+    if (!username || !email || !password) {
+      return res.status(400).json({ error: 'Username, email, and password are required.' });
     }
-  }
+  
+    // Check if user already exists
+    const existingUser = Object.values(store.users).find(u => u.email === email);
+    if (existingUser) {
+      return res.status(409).json({ error: 'An account with this email already exists.' });
+    }
+  
+    // IMPORTANT: In a real app, hash the password before saving!
+    // Example using bcrypt:
+    // const salt = await bcrypt.genSalt(10);
+    // const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = password; // Storing plain text for this example. NOT FOR PRODUCTION.
+  
+    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    const newUser: UserProfile = {
+      id: userId,
+      username: username.trim().substring(0, 20),
+      email: email,
+      password: hashedPassword, // Storing this for our new auth system
+      avatar: avatar || '🌸',
+      balance: 100.0,
+      winCount: 0,
+      lossCount: 0
+    };
+  
+    store.users[userId] = newUser;
+    addTransaction(userId, 'deposit', 100.0, undefined, 'Welcome signup bonus.');
+    await saveStoreAndWait();
+  
+    res.status(201).json({ success: true, message: 'User registered successfully.' });
+});
 
-  const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-  const newUser: UserProfile = {
-    id: userId,
-    firebaseUid: firebaseUid,
-    username: cleanUsername,
-    email: email || undefined,
-    avatar: avatar || '🌸',
-    balance: 100.0,
-    winCount: 0,
-    lossCount: 0
-  };
+app.post('/api/auth/login', async (req: any, res) => {
+    const { email, password } = req.body;
 
-  store.users[userId] = newUser;
-  addTransaction(userId, 'deposit', 100.0, undefined, 'Welcome signup bonus.');
-  await saveStoreAndWait();
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required.' });
+    }
 
-  res.json(newUser);
+    const user = Object.values(store.users).find(u => u.email === email);
+
+    if (!user) {
+        return res.status(404).json({ error: 'User not found.' });
+    }
+
+    // IMPORTANT: In a real app, compare hashed passwords!
+    // Example using bcrypt:
+    // const isValid = await bcrypt.compare(password, user.password);
+    const isValid = user.password === password; // Plain text comparison. NOT FOR PRODUCTION.
+
+    if (!isValid) {
+        return res.status(401).json({ error: 'Invalid password.' });
+    }
+
+    // Create and sign a JWT
+    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+    // Don't send the password back to the client
+    const { password: _, ...userProfile } = user;
+
+    res.json({ token, user: userProfile });
 });
 
 // Retrieve single profile
@@ -1051,44 +864,57 @@ app.get('/api/users/:userId', (req, res, next) => {
   if (!user) {
     return res.status(404).json({ error: 'User not found' });
   }
-  res.json(user);
+  const { password, firebaseUid, ...userProfile } = user;
+  res.json(userProfile);
 });
 
 // Update profile
-app.post('/api/users/:userId/update', async (req, res) => {
-  const user = store.users[req.params.userId];
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  const { username, avatar, isOfflinePreference } = req.body;
-  if (username) user.username = username.trim().substring(0, 20);
-  if (avatar) user.avatar = avatar;
-  if (typeof isOfflinePreference === 'boolean') user.isOfflinePreference = isOfflinePreference;
-
-  await saveStoreAndWait();
-  broadcastUserUpdate(user.id);
-  res.json(user);
+app.post('/api/users/:userId/update', verifyJwt, async (req: any, res) => {
+    // Ensure the authenticated user is the one they are trying to update
+    if (req.user.userId !== req.params.userId) {
+        return res.status(403).json({ error: 'Forbidden: You can only update your own profile.' });
+    }
+    const user = store.users[req.params.userId];
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+  
+    const { username, avatar, isOfflinePreference } = req.body;
+    if (username) user.username = username.trim().substring(0, 20);
+    if (avatar) user.avatar = avatar;
+    if (typeof isOfflinePreference === 'boolean') user.isOfflinePreference = isOfflinePreference;
+  
+    await saveStoreAndWait();
+    broadcastUserUpdate(user.id);
+    const { password, firebaseUid, ...userProfile } = user;
+    res.json(userProfile);
 });
 
 // Update online/offline status preference
-app.post('/api/users/:userId/status', (req, res) => {
-  const user = store.users[req.params.userId];
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
-  const { isOffline } = req.body;
-  user.isOfflinePreference = !!isOffline;
-
-  saveStore();
-  broadcastUserUpdate(user.id);
-  res.json({ success: true, isOfflinePreference: user.isOfflinePreference, user });
+app.post('/api/users/:userId/status', verifyJwt, (req: any, res) => {
+    if (req.user.userId !== req.params.userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    const user = store.users[req.params.userId];
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+  
+    const { isOffline } = req.body;
+    user.isOfflinePreference = !!isOffline;
+  
+    saveStore();
+    broadcastUserUpdate(user.id);
+    const { password, firebaseUid, ...userProfile } = user;
+    res.json({ success: true, isOfflinePreference: user.isOfflinePreference, user: userProfile });
 });
 
 // Wallet Deposits / Withdrawals
-app.post('/api/wallet/deposit', (req, res) => {
+app.post('/api/wallet/deposit', verifyJwt, (req: any, res) => {
   const { userId, amount } = req.body;
+  if (req.user.userId !== userId) {
+    return res.status(403).json({ error: 'Forbidden' });
+  }
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: 'User not found' });
   
@@ -1104,30 +930,36 @@ app.post('/api/wallet/deposit', (req, res) => {
   res.json({ success: true, balance: user.balance });
 });
 
-app.post('/api/wallet/withdraw', (req, res) => {
-  const { userId, amount } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const withAmt = parseFloat(amount);
-  if (isNaN(withAmt) || withAmt <= 0) {
-    return res.status(400).json({ error: 'Invalid withdrawal amount' });
-  }
-
-  if (user.balance < withAmt) {
-    return res.status(400).json({ error: 'Insufficient funds' });
-  }
-
-  user.balance -= withAmt;
-  addTransaction(userId, 'withdrawal', withAmt, undefined, `Withdrawn funds to bank account.`);
-  broadcastUserUpdate(userId);
-
-  res.json({ success: true, balance: user.balance });
+app.post('/api/wallet/withdraw', verifyJwt, (req: any, res) => {
+    const { userId, amount } = req.body;
+    if (req.user.userId !== userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    const user = store.users[userId];
+    if (!user) return res.status(404).json({ error: 'User not found' });
+  
+    const withAmt = parseFloat(amount);
+    if (isNaN(withAmt) || withAmt <= 0) {
+      return res.status(400).json({ error: 'Invalid withdrawal amount' });
+    }
+  
+    if (user.balance < withAmt) {
+      return res.status(400).json({ error: 'Insufficient funds' });
+    }
+  
+    user.balance -= withAmt;
+    addTransaction(userId, 'withdrawal', withAmt, undefined, `Withdrawn funds to bank account.`);
+    broadcastUserUpdate(userId);
+  
+    res.json({ success: true, balance: user.balance });
 });
 
-app.get('/api/wallet/transactions/:userId', (req, res) => {
-  const txs = store.transactions.filter(t => t.userId === req.params.userId);
-  res.json(txs);
+app.get('/api/wallet/transactions/:userId', verifyJwt, (req: any, res) => {
+    if (req.user.userId !== req.params.userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
+    const txs = store.transactions.filter(t => t.userId === req.params.userId);
+    res.json(txs);
 });
 
 
@@ -1136,8 +968,11 @@ app.get('/api/wallet/transactions/:userId', (req, res) => {
 // ==========================================
 
 // Create Room (Private or Public Friends list)
-app.post('/api/rooms/create', (req, res) => {
+app.post('/api/rooms/create', verifyJwt, (req: any, res) => {
   const { userId, betAmount, capacity, gameMode } = req.body;
+    if (req.user.userId !== userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -1193,8 +1028,11 @@ app.post('/api/rooms/create', (req, res) => {
 });
 
 // Join Room via Code
-app.post('/api/rooms/join', (req, res) => {
+app.post('/api/rooms/join', verifyJwt, (req: any, res) => {
   const { userId, roomCode } = req.body;
+    if (req.user.userId !== userId) {
+        return res.status(403).json({ error: 'Forbidden' });
+    }
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: 'User not found' });
 
@@ -1378,20 +1216,7 @@ app.post('/api/rooms/matchmaking/enter-queue', (req, res) => {
     store.matchmakingQueues[queueKey].push(userId);
 
     // Write matchmaking record to Firestore
-    if (db) {
-      db.collection('matchmaking').doc(userId).set({
-        userId: userId,
-        username: user.username,
-        avatar: user.avatar,
-        betAmount: bet,
-        capacity: cap,
-        gameMode: mode,
-        status: 'WAITING_FOR_MATCH',
-        timestamp: Date.now()
-      }).catch(err => {
-        console.error('Failed to write matchmaking record to Firestore:', err);
-      });
-    }
+    
 
     // Broadcast seeking event to all online users on dashboard
     broadcastToAll('matchmaker_seeking', {
@@ -1445,10 +1270,7 @@ app.post('/api/rooms/matchmaking/join', (req, res) => {
   if (store.users[opponentId]) delete (store.users[opponentId] as any).seekingJoinedAt;
 
   // Clean up Firestore matchmaking documents if they exist
-  if (db) {
-    db.collection('matchmaking').doc(userId).delete().catch(err => console.error('Failed to delete matchmaking record from Firestore for user:', err));
-    db.collection('matchmaking').doc(opponentId).delete().catch(err => console.error('Failed to delete matchmaking record from Firestore for opponent:', err));
-  }
+  
 
   const matchedList = [user, oppUser];
   // For a direct 1v1 challenge, capacity is always 2 and mode is solo.
@@ -1516,11 +1338,7 @@ app.post('/api/rooms/matchmaking/leave', (req, res) => {
     broadcastToAll('matchmaker_seeking_cancelled', { senderId: userId });
 
     // Also delete matchmaking record in Firestore if exists
-    if (db) {
-      db.collection('matchmaking').doc(userId).delete().catch(err => {
-        console.error('Failed to delete matchmaking record from Firestore on leave:', err);
-      });
-    }
+    
   }
   res.json({ success: true });
 });
@@ -1552,38 +1370,7 @@ app.get('/api/users/online', async (req, res) => {
   cleanupMatchmakingQueues();
 
   // Sync matchmaking queue from Firestore if db is available to support multi-instance
-  if (db) {
-    try {
-      const qs = await db.collection('matchmaking').get();
-      qs.forEach(docSnap => {
-        const data = docSnap.data();
-        if (data && data.status === 'WAITING_FOR_MATCH') {
-          const qKey = `${data.betAmount}_${data.capacity}_${data.gameMode}`;
-          if (!store.matchmakingQueues[qKey]) {
-            store.matchmakingQueues[qKey] = [];
-          }
-          if (!store.matchmakingQueues[qKey].includes(data.userId)) {
-            store.matchmakingQueues[qKey].push(data.userId);
-            // Reconstruct user in store if not present
-            if (!store.users[data.userId]) {
-              store.users[data.userId] = {
-                id: data.userId,
-                username: data.username,
-                avatar: data.avatar,
-                balance: 100, // Fallback
-                winCount: 0,
-                lossCount: 0,
-                isOfflinePreference: false
-              };
-            }
-            (store.users[data.userId] as any).seekingJoinedAt = data.timestamp || Date.now();
-          }
-        }
-      });
-    } catch (e) {
-      console.error('Failed to sync matchmaking from Firestore:', e);
-    }
-  }
+  
 
   // Real connected clients via SSE
   const activeIds = new Set(activeClients.map(c => c.userId));
@@ -1773,10 +1560,7 @@ app.post('/api/rooms/challenge/invite', (req, res) => {
   for (const qKey of Object.keys(store.matchmakingQueues)) {
     store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter(id => id !== senderId && id !== receiverId);
   }
-  if (db) {
-    db.collection('matchmaking').doc(senderId).delete().catch(err => console.error('Failed to delete sender from matchmaking on challenge:', err));
-    db.collection('matchmaking').doc(receiverId).delete().catch(err => console.error('Failed to delete receiver from matchmaking on challenge:', err));
-  }
+  
   broadcastToAll('matchmaker_seeking_cancelled', { senderId });
   broadcastToAll('matchmaker_seeking_cancelled', { senderId: receiverId });
 
@@ -2628,8 +2412,8 @@ app.post('/api/admin/broadcast', isAdmin, (req, res) => {
 // 7. VITE MIDDLEWARE SETUP
 // ==========================================
 async function startServer() {
-  // Load authoritative state from Firebase Firestore on startup
-  await loadStoreFromFirestore();
+  // Load authoritative state from local file on startup
+  loadStore();
   purgeSimulatedUsers(); // Ensure simulated users are purged from the memory state
 
   let vite: ViteDevServer | undefined;
