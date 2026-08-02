@@ -686,6 +686,15 @@ export default function App() {
 
   const handleLeaveRoom = async (force: boolean = false) => {
     if (!user || !activeRoom) return;
+
+    const isPlayer = activeRoom.players.some(p => p.userId === user.id);
+
+    // A spectator is leaving. Just clear the room and let the GameRoom's cleanup effect handle the API call.
+    if (!isPlayer) {
+        setActiveRoom(null);
+        localStorage.removeItem('ludo_active_room_id');
+        return;
+    }
     
     if (activeRoom.status === 'playing' && !force) {
       setShowConfirmLeave(true);

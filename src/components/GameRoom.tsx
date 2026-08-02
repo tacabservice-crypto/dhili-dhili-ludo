@@ -16,6 +16,7 @@ import {
   Bot,
   Copy, // Added for copy functionality
   Edit,
+  Eye, // Import the Eye icon
   LogOut,
   MessageSquare,
   Mic,
@@ -706,28 +707,17 @@ export default function GameRoomView({
         </div>
       </header>
 
-      {isSpectator && (
-        <div className="bg-yellow-500/10 border-b-2 border-yellow-500/20 text-center py-2 px-4 z-20">
-          <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">👁️ Habka Daawashada (Spectator Mode)</p>
+      {/* New TikTok-style Spectator Count */}
+      {room.spectators && room.spectators.length > 0 && (
+        <div className="absolute top-24 right-4 z-20 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-1.5 px-3 py-1.5 shadow-lg">
+          <Eye className="w-4 h-4 text-yellow-300" />
+          <span className="text-xs font-bold text-white">{room.spectators.length}</span>
         </div>
       )}
 
-      {/* Spectator List */}
-      {room.spectators && room.spectators.length > 0 && (
-        <div className="bg-black/20 backdrop-blur-sm py-2 px-4 z-10">
-          <div className="flex items-center justify-center gap-2 text-center">
-            <Users className="w-4 h-4 text-slate-400" />
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-              DAAWADAYAASHA ({room.spectators.length})
-            </h4>
-          </div>
-          <div className="flex items-center justify-center gap-1 mt-1.5">
-            {room.spectators.map((spectator) => (
-              <div key={spectator.id} className="flex items-center p-1 bg-black/20 rounded-full border border-white/5" title={spectator.username}>
-                <span className="text-lg">{spectator.avatar}</span>
-              </div>
-            ))}
-          </div>
+      {isSpectator && (
+        <div className="bg-yellow-500/10 border-b-2 border-yellow-500/20 text-center py-2 px-4 z-20">
+          <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">👁️ Habka Daawashada (Spectator Mode)</p>
         </div>
       )}
 
