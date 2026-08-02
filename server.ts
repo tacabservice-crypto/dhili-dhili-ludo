@@ -1008,27 +1008,30 @@ app.post('/api/auth/login', verifyFirebaseToken, async (req: any, res) => {
   const { username, email, avatar } = req.body;
   const firebaseUid = req.user.uid;
 
-  if (!username) {
-    return res.status(400).json({ error: 'Username is required' });
-  }
-
-  const cleanUsername = username.trim().substring(0, 20);
-
+  // First, try to find an existing user by their Firebase UID.
   let foundUser = Object.values(store.users).find(u => u.firebaseUid === firebaseUid);
 
   if (foundUser) {
+    // If user exists, just return their profile. No need for username.
     return res.json(foundUser);
   }
 
+  // If not found by UID, maybe it's an old account we can link.
   if (email) {
     const userByEmail = Object.values(store.users).find(u => u.email === email && !u.firebaseUid);
     if (userByEmail) {
-      userByEmail.firebaseUid = firebaseUid;
+      userByEmail.firebaseUid = firebaseUid; // Link account
       await saveStoreAndWait();
       return res.json(userByEmail);
     }
   }
 
+  // If we're here, it's a new registration. NOW we require a username.
+  if (!username) {
+    return res.status(400).json({ error: 'Username is required for new registration' });
+  }
+  const cleanUsername = username.trim().substring(0, 20);
+  
   const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
   const newUser: UserProfile = {
     id: userId,
