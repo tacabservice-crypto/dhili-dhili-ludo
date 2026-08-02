@@ -71,6 +71,8 @@ if (fs.existsSync(serviceAccountPath)) {
     } catch (error) {
       initializeApp({
         credential: cert(serviceAccount)
+        credential: cert(serviceAccount),
+        databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
       });
     }
     db = getFirestore();
