@@ -1374,6 +1374,16 @@ app.post('/api/rooms/join', (req, res) => {
   res.json(room);
 });
 
+// GET Room (for spectators or re-joining)
+app.get('/api/rooms/:roomId', (req, res) => {
+  const { roomId } = req.params;
+  const room = store.rooms[roomId];
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found.' });
+  }
+  res.json(room);
+});
+
 // Helper to build and start a matched game room
 function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; avatar: string; winCount?: number; lossCount?: number; balance: number }>, bet: number, cap: number, mode: 'solo' | 'team'): GameRoom {
   const roomId = `MATCH_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
