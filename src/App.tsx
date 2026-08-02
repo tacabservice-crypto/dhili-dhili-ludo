@@ -12,6 +12,8 @@ import RejoinPrompt from './components/RejoinPrompt';
 import AdminDashboard from './components/AdminDashboard';
 import { Toaster } from 'react-hot-toast';
 import { VoiceChatProvider } from './context/VoiceChatContext';
+import { auth } from './firebase-client';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 export default function App() {
   const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
@@ -66,23 +68,41 @@ export default function App() {
     };
   }, []);
 
-  // Check for saved session on initial load
+  // Firebase Auth State Listener
   useEffect(() => {
-    try {
-      const savedSession = localStorage.getItem('ludo_session');
-      if (savedSession) {
-        const { user: savedUser, token: savedToken } = JSON.parse(savedSession);
-        if (savedUser && savedToken) {
-          setUser(savedUser);
-          setToken(savedToken);
-          checkAndPromptRejoin(savedUser.id, savedToken);
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const token = await firebaseUser.getIdToken();
+          // Fetch user profile from your backend
+          const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`,
+            },
+            body: JSON.stringify({ email: firebaseUser.email }),
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to fetch user profile from backend.');
+          }
+
+          const profileData: UserProfile = await response.json();
+          setUser(profileData);
+          checkAndPromptRejoin(profileData.id);
+        } catch (err) {
+          console.error("Auth session restore error:", err);
+          setUser(null); // Ensure user is logged out on error
         }
+      } else {
+        setUser(null);
       }
-    } catch (error) {
-      console.error("Failed to parse saved session:", error);
-      localStorage.removeItem('ludo_session');
-    }
-    setAuthLoading(false);
+      setAuthLoading(false);
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
   }, []);
 
   useEffect(() => {
@@ -123,7 +143,6 @@ export default function App() {
       try {
         const updatedProfile = JSON.parse(e.data) as UserProfile;
         setUser(updatedProfile);
-        localStorage.setItem('ludo_session', JSON.stringify(updatedProfile));
       } catch (err) {
         console.error('Failed to parse user update', err);
       }
@@ -370,18 +389,17 @@ export default function App() {
     }
   };
 
-  const handleLoginSuccess = async (profile: UserProfile) => {
+  const handleLoginSuccess = (profile: UserProfile) => {
     setUser(profile);
-    localStorage.setItem('ludo_session', JSON.stringify(profile));
-    await checkAndPromptRejoin(profile.id);
+    // No need to set localStorage here, onAuthStateChanged is the source of truth
+    checkAndPromptRejoin(profile.id);
   };
 
   const handleLogout = () => {
-    setUser(null);
-    setToken(null);
+    signOut(auth).catch((error) => console.error('Sign out error', error));
+    // onAuthStateChanged will handle setting user to null
     setActiveRoom(null);
     setMatchmakingState({ isQueued: false, betAmount: 0 });
-    localStorage.removeItem('ludo_session');
     localStorage.removeItem('ludo_active_room_id');
   };
 
@@ -392,7 +410,6 @@ export default function App() {
       if (res.ok) {
         const data = await res.json();
         setUser(data);
-        localStorage.setItem('ludo_session', JSON.stringify(data));
       }
     } catch (err) {
       console.error('Failed to reload balance', err);
@@ -719,7 +736,6 @@ export default function App() {
 
     // Optimistic update
     setUser(newUser);
-    localStorage.setItem('ludo_session', JSON.stringify(newUser));
 
     try {
       const response = await fetch(`${API_BASE_URL}/api/users/${user.id}/update`, {
@@ -740,7 +756,6 @@ export default function App() {
     } catch (error) {
       // Revert on error
       setUser(oldUser);
-      localStorage.setItem('ludo_session', JSON.stringify(oldUser));
       setErrorToast((error as Error).message || 'Profile update failed. Please try again.');
       // Re-throw so the calling component knows about the failure
       throw error;
@@ -756,6 +771,14 @@ export default function App() {
   }, [errorToast]);
 
   // Rendering orchestration
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-b from-[#2e1065] via-[#0f052d] to-[#020012] text-white flex items-center justify-center">
+        <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
   if (window.location.pathname === '/admin') {
     return <AdminDashboard />;
   }
