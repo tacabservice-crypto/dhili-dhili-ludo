@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import admin from 'firebase-admin';
+import * as admin from 'firebase-admin';
 
 // This is the recommended way to initialize the Firebase Admin SDK on platforms like Render.
 // The service account key is stored in an environment variable.
