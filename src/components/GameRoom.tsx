@@ -737,41 +737,18 @@ export default function GameRoomView({
                   {room.players.map(pl => {
                     const isCurrent = activePlayer?.color === pl.color;
                     return (
-                      <div key={pl.userId} className={`p-2.5 rounded-xl border transition-all duration-300 bg-black/20 border-white/5`}>
-                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
-                          <span className={`${COLOR_TEXT_MAP[pl.color]} tracking-widest font-black text-[9px]`}>
-                            CIYAARTOY {pl.color.toUpperCase()}
-                          </span>
+                      <div key={pl.userId} className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                        <div className="flex items-center gap-1 text-[10px] truncate">
+                          <span className="text-sm shrink-0">{pl.avatar}</span>
+                          <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
                         </div>
-                        <div className="space-y-1.5">
-                          <div className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                            <div className="flex items-center gap-1 text-[10px] truncate">
-                              <span className="text-sm shrink-0">{pl.avatar}</span>
-                              <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
-                            </div>
-                            <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
-                          </div>
-                        </div>
+                        <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
                       </div>
                     )
                   })}
                 </>
               ) : (
                 <>
-                  <div className={`p-2.5 rounded-xl border transition-all duration-300 ${
-                    room.gameMode === 'team' 
-                      ? 'bg-gradient-to-br from-red-500/5 to-yellow-500/5 border-red-500/20 shadow-lg shadow-red-500/5' 
-                      : 'bg-black/20 border-white/5'
-                  }`}>
-                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
-                      <span className="text-red-400 tracking-widest font-black text-[9px]">
-                        {room.gameMode === 'team' ? 'TEAM CAS & HURUUD' : 'TEAM CAS & HURUUD'}
-                      </span>
-                      {room.gameMode === 'team' && (
-                        <span className="text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded text-[8px] font-bold">🤝 XULAFA</span>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
                       {['red', 'yellow'].map((color) => {
                         const pl = room.players.find(p => p.color === color);
                         const isCurrent = activePlayer?.color === color;
@@ -793,23 +770,7 @@ export default function GameRoomView({
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
 
-                  <div className={`p-2.5 rounded-xl border transition-all duration-300 ${
-                    room.gameMode === 'team' 
-                      ? 'bg-gradient-to-br from-green-500/5 to-blue-500/5 border-green-500/20 shadow-lg shadow-green-500/5' 
-                      : 'bg-black/20 border-white/5'
-                  }`}>
-                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
-                      <span className="text-green-400 tracking-widest font-black text-[9px]">
-                        {room.gameMode === 'team' ? 'TEAM CAGAAR & BULUUG' : 'TEAM CAGAAR & BULUUG'}
-                      </span>
-                      {room.gameMode === 'team' && (
-                        <span className="text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded text-[8px] font-bold">🤝 XULAFA</span>
-                      )}
-                    </div>
-                    <div className="space-y-1.5">
                       {['green', 'blue'].map((color) => {
                         const pl = room.players.find(p => p.color === color);
                         const isCurrent = activePlayer?.color === color;
@@ -827,12 +788,10 @@ export default function GameRoomView({
                               <span className="text-sm shrink-0">{pl.avatar}</span>
                               <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
                             </div>
-                            <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+                            <span className={`w-2.5 h-2.5 rounded-full ${pl.color === 'green' ? 'bg-green-500' : 'bg-blue-500'} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
                           </div>
                         );
                       })}
-                    </div>
-                  </div>
                 </>
               )}
             </div>
