@@ -131,7 +131,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
             Escrow Secured
           </div>
           <span className="text-xs text-white/85 font-semibold tracking-wider uppercase">{t('availableBalance')}</span>
-          <span className="text-3xl font-black font-mono">${user.balance.toFixed(2)}</span>
+          <span className="text-3xl font-black font-mono">${(user.balance || 0).toFixed(2)}</span>
           <div className="text-[10px] text-white/65 font-medium">
             {language === 'so' ? "100% Khamaar La'aan & Damaanad Ku Jiro" : '100% Secure Virtual Betting Tokens'}
           </div>
@@ -371,7 +371,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                           </p>
                         </div>
                         <span className={`font-black text-sm whitespace-nowrap ml-2 font-mono ${isCredit ? 'text-green-400' : 'text-red-400'}`}>
-                          {isCredit ? '+' : '-'}${tx.amount.toFixed(2)}
+                          {isCredit ? '+' : '-'}${(tx.amount || 0).toFixed(2)}
                         </span>
                       </div>
                     );

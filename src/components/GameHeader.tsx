@@ -82,7 +82,7 @@ export default function GameHeader({
       <div className="flex items-center gap-3">
         <div className="hidden sm:flex items-center gap-2 text-xs font-bold text-yellow-400 bg-black/20 px-3 py-1.5 rounded-lg border border-white/10">
           <Shield className="w-4 h-4" />
-          <span>${room.gameState.escrowBalance.toFixed(2)}</span>
+          <span>${(room?.gameState?.escrowBalance || 0).toFixed(2)}</span>
         </div>
         <div className="flex items-center gap-2 text-xs font-bold text-slate-400 bg-black/20 px-3 py-1.5 rounded-lg border border-white/10">
           <Clock className="w-4 h-4" />

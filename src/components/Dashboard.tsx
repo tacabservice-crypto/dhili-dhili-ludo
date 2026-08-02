@@ -662,7 +662,7 @@ export default function Dashboard({
             className="bg-black/40 hover:bg-black/60 border border-white/10 px-3 py-1.5 rounded-xl flex items-center gap-2 transition-all active:scale-95 cursor-pointer"
           >
             <Wallet className="w-3.5 h-3.5 text-blue-400" />
-            <span className="text-xs font-mono text-white font-bold">${user.balance.toFixed(2)}</span>
+            <span className="text-xs font-mono text-white font-bold">${(user.balance || 0).toFixed(2)}</span>
             <span className="bg-blue-500 text-white text-[9px] px-1.5 py-0.5 rounded-full font-black flex items-center justify-center">+</span>
           </button>
 
@@ -1092,7 +1092,7 @@ export default function Dashboard({
                   <span className="font-bold text-slate-200">{player.name}</span>
                 </div>
                 <div className="text-right space-y-0.5">
-                  <p className="font-black text-blue-400 font-mono">${player.earnings.toFixed(2)}</p>
+                  <p className="font-black text-blue-400 font-mono">${(player.earnings || 0).toFixed(2)}</p>
                   <p className="text-[9px] text-slate-500 font-semibold">{player.wins} Match Wins</p>
                 </div>
               </div>
