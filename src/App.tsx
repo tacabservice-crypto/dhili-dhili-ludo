@@ -679,7 +679,7 @@ export default function App() {
         const data = await response.json();
         setActiveRoom(data);
       }
-    } catch (err).
+    } catch (err) {
       console.error(err);
     }
   };

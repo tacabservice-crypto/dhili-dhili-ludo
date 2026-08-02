@@ -234,14 +234,30 @@ data: ${JSON.stringify(data)}
 function broadcastToRoom(roomId, eventName, data) {
   const room = store.rooms[roomId];
   if (!room) return;
+  let payload = { ...data };
+  if (eventName === "game_update" || eventName === "timer_tick") {
+    const spectatorClients = activeClients.filter((c) => c.spectatingRoomId === roomId);
+    const spectatorsInfo = spectatorClients.map((c) => {
+      const user = store.users[c.userId];
+      if (user) {
+        return {
+          id: user.id,
+          username: user.username,
+          avatar: user.avatar
+        };
+      }
+      return null;
+    }).filter(Boolean);
+    payload.spectators = spectatorsInfo;
+  }
   room.players.forEach((p) => {
-    sendEventToUser(p.userId, eventName, data);
+    sendEventToUser(p.userId, eventName, payload);
   });
-  const spectators = activeClients.filter((c) => c.spectatingRoomId === roomId);
-  spectators.forEach((s) => {
+  const spectatorConnections = activeClients.filter((c) => c.spectatingRoomId === roomId);
+  spectatorConnections.forEach((s) => {
     const isPlayer = room.players.some((p) => p.userId === s.userId);
     if (!isPlayer) {
-      sendEventToUser(s.userId, eventName, data);
+      sendEventToUser(s.userId, eventName, payload);
     }
   });
 }
@@ -903,8 +919,11 @@ app.get("/api/wallet/transactions/:userId", (req, res) => {
 });
 app.get("/api/rooms/active", (req, res) => {
   const activeGames = Object.values(store.rooms).filter((r) => r.status === "playing").map((r) => ({
-    roomId: r.id,
+    id: r.id,
+    // Changed from roomId to id to match GameRoom type
     players: r.players.map((p) => ({
+      userId: p.userId,
+      // Added userId
       username: p.username,
       avatar: p.avatar
     })),
@@ -913,6 +932,46 @@ app.get("/api/rooms/active", (req, res) => {
     capacity: r.capacity
   }));
   res.json(activeGames);
+});
+app.post("/api/rooms/:roomId/spectate", (req, res) => {
+  const { roomId } = req.params;
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "User ID is required." });
+  }
+  const room = store.rooms[roomId];
+  if (!room) {
+    return res.status(404).json({ error: "Room not found." });
+  }
+  const client = activeClients.find((c) => c.userId === userId);
+  if (client) {
+    client.spectatingRoomId = roomId;
+    console.log(`User ${userId} is now spectating room ${roomId}`);
+  }
+  broadcastToRoom(roomId, "game_update", room);
+  res.json({ success: true, message: "Spectating started." });
+});
+app.post("/api/rooms/:roomId/stop-spectating", (req, res) => {
+  const { roomId } = req.params;
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "User ID is required." });
+  }
+  const room = store.rooms[roomId];
+  if (!room) {
+    const client2 = activeClients.find((c) => c.userId === userId && c.spectatingRoomId === roomId);
+    if (client2) {
+      client2.spectatingRoomId = void 0;
+    }
+    return res.json({ success: true, message: "Stopped spectating a room that no longer exists." });
+  }
+  const client = activeClients.find((c) => c.userId === userId && c.spectatingRoomId === roomId);
+  if (client) {
+    client.spectatingRoomId = void 0;
+    console.log(`User ${userId} stopped spectating room ${roomId}`);
+  }
+  broadcastToRoom(roomId, "game_update", room);
+  res.json({ success: true, message: "Stopped spectating." });
 });
 app.post("/api/rooms/create", (req, res) => {
   const { userId, betAmount, capacity, gameMode } = req.body;
@@ -1007,6 +1066,14 @@ app.post("/api/rooms/join", (req, res) => {
   addLog(room, `\u{1F514} Challenger ${user.username} is requesting to join the match. Waiting for host approval!`);
   saveStore();
   broadcastToRoom(room.id, "game_update", room);
+  res.json(room);
+});
+app.get("/api/rooms/:roomId", (req, res) => {
+  const { roomId } = req.params;
+  const room = store.rooms[roomId];
+  if (!room) {
+    return res.status(404).json({ error: "Room not found." });
+  }
   res.json(room);
 });
 function startMatchedRoom(matchedUsers, bet, cap, mode) {
@@ -1700,16 +1767,22 @@ app.post("/api/rooms/chat", (req, res) => {
   const { userId, roomId, text } = req.body;
   const room = store.rooms[roomId];
   if (!room) return res.status(404).json({ error: "Room not found" });
-  const p = room.players.find((pl) => pl.userId === userId);
-  if (!p) return res.status(403).json({ error: "You are not in this room." });
+  const player = room.players.find((pl) => pl.userId === userId);
+  const spectator = activeClients.find((c) => c.userId === userId && c.spectatingRoomId === roomId);
+  if (!player && !spectator) {
+    return res.status(403).json({ error: "You are not in this room as a player or spectator." });
+  }
   const cleanText = (text || "").trim().substring(0, 100);
   if (cleanText.length > 0) {
+    const senderName = player ? player.username : store.users[userId]?.username || "Spectator";
     const chatMsg = {
       id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       senderId: userId,
-      senderName: p.username,
+      senderName,
       text: cleanText,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      isSpectator: !player
+      // Mark as spectator message if not a player
     };
     room.gameState.chat.push(chatMsg);
     if (room.gameState.chat.length > 30) {
