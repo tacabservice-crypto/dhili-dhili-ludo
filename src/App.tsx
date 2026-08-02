@@ -2,6 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
+import { useParams } from 'react-router-dom';
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, GameRoom } from './types/game';
 import AuthScreen from './components/AuthScreen';
@@ -16,6 +17,7 @@ import { auth } from './firebase-client';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 export default function App() {
+  const { roomId } = useParams<{ roomId: string }>();
   const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true); // Add a loading state for auth
@@ -58,6 +60,15 @@ export default function App() {
   } | null>(null);
 
   const matchmakingTimeoutRef = useRef<any>(null);
+
+  // When the URL has a roomId, try to join it.
+  useEffect(() => {
+    // If there's a roomId in the URL, and the user is logged in,
+    // and we're not already in that room, try to join/spectate it.
+    if (roomId && user && (!activeRoom || activeRoom.id !== roomId)) {
+      handleJoinPrivateRoom(roomId);
+    }
+  }, [roomId, user]); // This effect depends on the roomId from the URL and the user's login state.
 
   // Clear matchmaking timeout on unmount
   useEffect(() => {
