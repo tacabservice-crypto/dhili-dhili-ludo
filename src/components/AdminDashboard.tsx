@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, GameRoom } from '../types/game';
 import UserEditModal from './UserEditModal';
+import { formatCurrency } from '../utils/number';
 
 const AdminDashboard: React.FC = () => {
     const [adminId, setAdminId] = useState<string | null>(localStorage.getItem('admin_id'));
@@ -298,7 +299,7 @@ const AdminDashboard: React.FC = () => {
                         <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold">{stats.totalRooms}</p><p className="text-sm text-gray-400">Total Rooms</p></div>
                         <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold text-green-400">{stats.activeRooms}</p><p className="text-sm text-gray-400">Active Rooms</p></div>
                         <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold text-yellow-400">{stats.waitingRooms}</p><p className="text-sm text-gray-400">Waiting Rooms</p></div>
-                        <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold">${(stats.houseRevenue || 0).toFixed(2)}</p><p className="text-sm text-gray-400">House Revenue</p></div>
+                        <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold">{formatCurrency(stats.houseRevenue)}</p><p className="text-sm text-gray-400">House Revenue</p></div>
                         <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold">{stats.onlineClients}</p><p className="text-sm text-gray-400">Online Clients</p></div>
                     </div>
                 );
@@ -319,7 +320,7 @@ const AdminDashboard: React.FC = () => {
                                 {users.map(user => (
                                     <tr key={user.id}>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white flex items-center"><span className="mr-2 text-xl">{user.avatar}</span> {user.username}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400">${(user.balance || 0).toFixed(2)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400">{formatCurrency(user.balance)}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{user.winCount} / {user.lossCount}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-purple-400">{user.role || 'Player'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
@@ -384,7 +385,7 @@ const AdminDashboard: React.FC = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.timestamp).toLocaleString()}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-white font-mono">{tx.userId}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.type}</td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${tx.type.includes('payout') || tx.type.includes('deposit') ? 'text-green-400' : 'text-red-400'}`}>${(tx.amount || 0).toFixed(2)}</td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${tx.type.includes('payout') || tx.type.includes('deposit') ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(tx.amount)}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tx.description}</td>
                                     </tr>
                                 ))}

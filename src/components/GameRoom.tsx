@@ -39,6 +39,7 @@ import { toast } from 'react-hot-toast';
 import { useVoiceChat } from '../context/VoiceChatContext';
 import diceSoundURL from '/src/assets/dice.mp3';
 import winSoundURL from '/src/assets/win.mp3';
+import { formatCurrency } from '../utils/number';
 
 interface GameRoomProps {
   room: GameRoom;
@@ -465,7 +466,7 @@ export default function GameRoomView({
           <div className="mt-4 bg-black/40 border border-yellow-500/30 px-6 py-2 rounded-xl text-center shadow-lg">
             <span className="text-[9px] text-yellow-400 font-black uppercase tracking-widest block">Dakhliga Guusha (Winnings)</span>
             <span className="text-2xl font-mono font-black text-green-400 block mt-0.5">
-              +{room.betAmount > 0 ? `$${((room?.betAmount || 0) * (room?.players?.length || 0)).toFixed(2)}` : 'FREE DEMO'}
+              +{room.betAmount > 0 ? `${formatCurrency((room?.betAmount || 0) * (room?.players?.length || 0))}` : 'FREE DEMO'}
             </span>
           </div>
         </div>
@@ -499,7 +500,7 @@ export default function GameRoomView({
               </div>
               <div className="text-right">
                 <span className="text-[10px] bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded-full uppercase font-black">
-                  -{room.betAmount > 0 ? `$${(room?.betAmount || 0).toFixed(2)}` : '0'}
+                  -{room.betAmount > 0 ? `${formatCurrency(room?.betAmount)}` : '0'}
                 </span>
               </div>
             </div>
@@ -603,7 +604,7 @@ export default function GameRoomView({
           {/* Escrow with Icon */}
           <div className="flex items-center gap-1 text-xs font-bold text-yellow-400">
             <ShieldCheck className="w-4 h-4" />
-            <span>${(room?.gameState?.escrowBalance || 0).toFixed(2)}</span>
+            <span>{formatCurrency(room?.gameState?.escrowBalance)}</span>
           </div>
 
           {/* Timer with Icon */}
@@ -620,7 +621,7 @@ export default function GameRoomView({
               <span className="text-2xl bg-black/20 p-1 rounded-full">{user.avatar}</span>
               <div className="text-xs">
                 <span className="font-bold text-white block">{user.username}</span>
-                <span className="text-slate-400">${(user?.balance || 0).toFixed(2)}</span>
+                <span className="text-slate-400">{formatCurrency(user?.balance)}</span>
               </div>
               <MoreVertical className="w-4 h-4 text-slate-400" />
             </div>
