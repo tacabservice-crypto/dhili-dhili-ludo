@@ -40,6 +40,7 @@ import { useVoiceChat } from '../context/VoiceChatContext';
 import diceSoundURL from '/src/assets/dice.mp3';
 import winSoundURL from '/src/assets/win.mp3';
 import { formatCurrency } from '../utils/number';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 interface GameRoomProps {
   room: GameRoom;
@@ -123,6 +124,46 @@ export default function GameRoomView({
     toggleSpeaker 
   } = useVoiceChat();
 
+  const location = useLocation();
+  const navigate = useNavigate();
+  const queryParams = new URLSearchParams(location.search);
+  const isSpectator = queryParams.get('spectate') === 'true';
+
+  useEffect(() => {
+    if (isSpectator) {
+      const startSpectating = async () => {
+        try {
+          await fetch(`/api/rooms/${room.id}/spectate`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId }),
+          });
+        } catch (err) {
+          console.error("Failed to start spectating:", err);
+          toast.error("Could not connect as spectator. Returning to dashboard.");
+          navigate('/');
+        }
+      };
+      startSpectating();
+
+      return () => {
+        const stopSpectating = async () => {
+          try {
+            await fetch(`/api/rooms/${room.id}/stop-spectating`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId }),
+            });
+          } catch (err) {
+            // It's less critical to show an error if this fails, as the user is leaving anyway.
+            console.error("Failed to stop spectating:", err);
+          }
+        };
+        stopSpectating();
+      };
+    }
+  }, [isSpectator, room.id, userId, navigate]);
+
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
@@ -176,13 +217,15 @@ export default function GameRoomView({
   }, [room.status, room.players, room.pendingPlayers, updatePlayers, userId]);
 
   const myPlayer = room.players.find(p => p.userId === userId);
+  const canPlay = myPlayer && !isSpectator;
+  
   // A user has been specifically rejected if they are not in the room's player list,
-  // but the room object they received contains a rejection reason.
+  // but the room object they received contains a rejectionReason.
   const hasBeenRejected = !myPlayer && room.rejectionReason;
   // A user is a pending guest if they are not a full player, have not been rejected,
   // and their ID appears in the list of pending players.
   const isPendingGuest = !myPlayer && !hasBeenRejected && room.pendingPlayers?.some(p => p.userId === userId);
-  const isActiveTurn = room.status === 'playing' && room.players[room.gameState.turn]?.userId === userId;
+  const isActiveTurn = canPlay && room.status === 'playing' && room.players[room.gameState.turn]?.userId === userId;
   const activePlayer = room.status === 'playing' ? room.players[room.gameState.turn] : null;
   const host = room.players.find(p => p.isHost);
 
@@ -658,6 +701,31 @@ export default function GameRoomView({
         </div>
       </header>
 
+      {isSpectator && (
+        <div className="bg-yellow-500/10 border-b-2 border-yellow-500/20 text-center py-2 px-4 z-20">
+          <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">👁️ Habka Daawashada (Spectator Mode)</p>
+        </div>
+      )}
+
+      {/* Spectator List */}
+      {room.spectators && room.spectators.length > 0 && (
+        <div className="bg-black/20 backdrop-blur-sm py-2 px-4 z-10">
+          <div className="flex items-center justify-center gap-2 text-center">
+            <Users className="w-4 h-4 text-slate-400" />
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+              DAAWADAYAASHA ({room.spectators.length})
+            </h4>
+          </div>
+          <div className="flex items-center justify-center gap-1 mt-1.5">
+            {room.spectators.map((spectator) => (
+              <div key={spectator.id} className="flex items-center p-1 bg-black/20 rounded-full border border-white/5" title={spectator.username}>
+                <span className="text-lg">{spectator.avatar}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       <main className="max-w-md w-full mx-auto px-4 py-4 flex flex-col space-y-4 relative z-10">
         
 
@@ -782,8 +850,8 @@ export default function GameRoomView({
             tokens={room.gameState.tokens}
             players={room.players}
             activeColor={activePlayer ? activePlayer.color : null}
-            validTokenMoves={validTokenMoves}
-            onTokenClick={onMoveToken}
+            validTokenMoves={canPlay ? validTokenMoves : []}
+            onTokenClick={canPlay ? onMoveToken : () => {}}
             userColor={myPlayer?.color}
           />
         </div>
@@ -823,8 +891,8 @@ export default function GameRoomView({
               <PhysicalDice
                 value={room.gameState.diceRoll ?? room.gameState.lastDiceRoll}
                 isRolling={isRolling}
-                onClick={onRollDice}
-                disabled={!isActiveTurn || room.gameState.hasRolled}
+                onClick={canPlay ? onRollDice : () => {}}
+                disabled={!canPlay || !isActiveTurn || room.gameState.hasRolled}
                 color={
                   activePlayer?.color === 'red' ? '#E53170' :
                   activePlayer?.color === 'green' ? '#00B074' :
@@ -1044,7 +1112,7 @@ export default function GameRoomView({
 
             {/* Add Bot Lobby controls */}
             <div className="flex gap-2">
-              {room.players.length < 4 && myPlayer?.isHost && (
+              {canPlay && room.players.length < 4 && myPlayer?.isHost && (
                 <button
                   onClick={onAddBot}
                   className="flex-1 bg-black/30 hover:bg-white/5 border border-white/10 text-slate-200 font-bold text-xs py-2 px-2 rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer"
@@ -1053,24 +1121,26 @@ export default function GameRoomView({
                 </button>
               )}
 
-              {myPlayer?.isHost ? (
-                <button
-                  onClick={onStartMatch}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer uppercase tracking-wider"
-                >
-                  <Play className="w-3.5 h-3.5" /> Start Match ⚔️
-                </button>
-              ) : (
-                <button
-                  onClick={onToggleReady}
-                  className={`flex-1 font-extrabold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer uppercase tracking-wider ${
-                    myPlayer?.isReady 
-                      ? 'bg-black/40 border border-white/10 text-slate-300' 
-                      : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
-                  }`}
-                >
-                  <UserCheck className="w-3.5 h-3.5" /> {myPlayer?.isReady ? 'De-Ready' : 'Set Ready'}
-                </button>
+              {canPlay && (
+                myPlayer?.isHost ? (
+                  <button
+                    onClick={onStartMatch}
+                    className="flex-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer uppercase tracking-wider"
+                  >
+                    <Play className="w-3.5 h-3.5" /> Start Match ⚔️
+                  </button>
+                ) : (
+                  <button
+                    onClick={onToggleReady}
+                    className={`flex-1 font-extrabold text-xs py-2 px-3 rounded-xl flex items-center justify-center gap-1 transition-all active:scale-95 cursor-pointer uppercase tracking-wider ${
+                      myPlayer?.isReady 
+                        ? 'bg-black/40 border border-white/10 text-slate-300' 
+                        : 'bg-gradient-to-r from-blue-600 to-indigo-600 text-white'
+                    }`}
+                  >
+                    <UserCheck className="w-3.5 h-3.5" /> {myPlayer?.isReady ? 'De-Ready' : 'Set Ready'}
+                  </button>
+                )
               )}
             </div>
           </div>

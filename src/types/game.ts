@@ -89,6 +89,7 @@ export interface GameRoom {
   status: 'waiting' | 'playing' | 'completed' | 'cancelled';
   betAmount: number; // $0, $1, $5, $10, $25, $50
   players: LudoPlayer[];
+  spectators?: Partial<UserProfile>[]; // User profiles of spectators
   gameState: GameState;
   createdAt: number;
   capacity?: number; // 2, 3, 4 players

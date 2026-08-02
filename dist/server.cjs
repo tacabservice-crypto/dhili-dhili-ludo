@@ -27,14 +27,10 @@ var import_cors = __toESM(require("cors"), 1);
 var import_path = __toESM(require("path"), 1);
 var import_fs = __toESM(require("fs"), 1);
 var import_vite = require("vite");
-var import_jsonwebtoken = __toESM(require("jsonwebtoken"), 1);
+var import_app = require("firebase-admin/app");
+var import_firestore = require("firebase-admin/firestore");
+var import_auth = require("firebase-admin/auth");
 var app = (0, import_express.default)();
-var JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-and-long-jwt-key-that-is-at-least-32-chars";
-if (JWT_SECRET === "your-super-secret-and-long-jwt-key-that-is-at-least-32-chars") {
-  console.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-  console.warn("!!! WARNING: Using default JWT_SECRET. Please set a secure key in your .env file.");
-  console.warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-}
 var allowedOrigins = [
   "https://dhili-dhili-ludo.onrender.com",
   "https://dhilidhili.onrender.com",
@@ -43,32 +39,45 @@ var allowedOrigins = [
 ];
 app.use((0, import_cors.default)({
   origin: allowedOrigins,
+  origin: function(origin, callback) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-}));
-app.options("*", (0, import_cors.default)({
-  origin: allowedOrigins,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
 }));
 var PORT = 3002;
 var DB_FILE = import_path.default.join(process.cwd(), "db_store.json");
 app.use(import_express.default.json());
-var verifyJwt = (req, res, next) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(403).json({ error: "Unauthorized: No token provided." });
-  }
-  const token = authHeader.split("Bearer ")[1];
+var db = null;
+var auth = null;
+var serviceAccountPath = import_path.default.join(process.cwd(), "firebase-admin-key.json");
+if (import_fs.default.existsSync(serviceAccountPath)) {
   try {
-    const decoded = import_jsonwebtoken.default.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch (error) {
-    console.error("Error verifying JWT:", error);
-    res.status(403).json({ error: "Unauthorized: Invalid token." });
+    const serviceAccountFile = import_fs.default.readFileSync(serviceAccountPath, "utf8");
+    const serviceAccount = JSON.parse(serviceAccountFile);
+    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+    try {
+      (0, import_app.getApp)();
+    } catch (error) {
+      (0, import_app.initializeApp)({
+        credential: (0, import_app.cert)(serviceAccount),
+        databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
+      });
+    }
+    db = (0, import_firestore.getFirestore)();
+    auth = (0, import_auth.getAuth)();
+    console.log("Firebase Firestore and Auth initialized successfully with Admin SDK.");
+  } catch (err) {
+    console.error("Failed to initialize Firebase Admin SDK:", err);
   }
-};
+} else {
+  console.log("No firebase-admin-key.json found. Running offline.");
+}
 var store = {
   users: {},
   transactions: [],
@@ -108,9 +117,59 @@ function loadStore() {
     console.error("Failed to load database. Starting fresh.", error);
   }
 }
+async function loadStoreFromFirestore() {
+  if (!db) {
+    loadStore();
+    return;
+  }
+  try {
+    console.log("Fetching latest state from Firebase Firestore...");
+    const storeRef = db.collection("ludo_store").doc("main");
+    const docSnap = await storeRef.get();
+    if (docSnap.exists) {
+      const payload = docSnap.data();
+      if (payload && payload.data) {
+        const parsed = JSON.parse(payload.data);
+        store.users = parsed.users || {};
+        store.transactions = parsed.transactions || [];
+        store.rooms = parsed.rooms || {};
+        store.matchmakingQueues = parsed.matchmakingQueues || {
+          0: [],
+          1: [],
+          5: [],
+          10: [],
+          25: [],
+          50: []
+        };
+        store.houseRevenue = parsed.houseRevenue || 0;
+        console.log("Database loaded successfully from Firebase Firestore.");
+        import_fs.default.writeFileSync(DB_FILE, payload.data, "utf8");
+        return;
+      }
+    }
+    console.log("No existing state in Firestore. Loading from local store fallback...");
+    loadStore();
+    syncToFirestore();
+  } catch (err) {
+    console.error("Failed to load store from Firestore:", err);
+    loadStore();
+  }
+}
+async function syncToFirestore() {
+  if (!db) return;
+  try {
+    const storeRef = db.collection("ludo_store").doc("main");
+    const serialized = JSON.stringify(store);
+    await storeRef.set({ data: serialized, updatedAt: Date.now() });
+    console.log("Successfully synchronized store to Firebase Firestore.");
+  } catch (err) {
+    console.error("Failed to sync store to Firestore:", err);
+  }
+}
 function saveStore() {
   try {
     import_fs.default.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
+    syncToFirestore();
   } catch (error) {
     console.error("Failed to write database to disk.", error);
   }
@@ -118,11 +177,12 @@ function saveStore() {
 async function saveStoreAndWait() {
   try {
     import_fs.default.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
+    await syncToFirestore();
   } catch (error) {
     console.error("Failed to write database to disk.", error);
   }
 }
-loadStore();
+loadStoreFromFirestore();
 function purgeSimulatedUsers() {
   let changed = false;
   Object.keys(store.users).forEach((id) => {
@@ -177,11 +237,54 @@ function broadcastToRoom(roomId, eventName, data) {
   room.players.forEach((p) => {
     sendEventToUser(p.userId, eventName, data);
   });
+  const spectators = activeClients.filter((c) => c.spectatingRoomId === roomId);
+  spectators.forEach((s) => {
+    const isPlayer = room.players.some((p) => p.userId === s.userId);
+    if (!isPlayer) {
+      sendEventToUser(s.userId, eventName, data);
+    }
+  });
 }
 function broadcastUserUpdate(userId) {
   const user = store.users[userId];
   if (user) {
     sendEventToUser(userId, "user_update", user);
+  }
+}
+function removeSSEClient(res) {
+  const client = activeClients.find((c) => c.res === res);
+  activeClients = activeClients.filter((c) => c.res !== res);
+  if (client) {
+    const stillConnected = activeClients.some((c) => c.userId === client.userId);
+    if (!stillConnected) {
+      const activeRoom = Object.values(store.rooms).find(
+        (r) => r.status === "playing" && r.players.some((p) => p.userId === client.userId && p.status === "online")
+      );
+      if (activeRoom) {
+        const player = activeRoom.players.find((p) => p.userId === client.userId);
+        if (player) {
+          player.status = "offline";
+          addLog(activeRoom, `\u{1F50C} ${player.username} has disconnected. They have time to reconnect before being forfeited.`);
+          broadcastToRoom(activeRoom.id, "game_update", activeRoom);
+          saveStore();
+        }
+      }
+      let changed = false;
+      for (const qKey of Object.keys(store.matchmakingQueues)) {
+        const lenBefore = store.matchmakingQueues[qKey].length;
+        store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter((id) => id !== client.userId);
+        if (store.matchmakingQueues[qKey].length !== lenBefore) changed = true;
+      }
+      if (changed) {
+        saveStoreAndWait();
+      }
+      if (db) {
+        db.collection("matchmaking").doc(client.userId).delete().catch((err) => {
+          console.error("Failed to delete matchmaking record from Firestore on disconnect:", err);
+        });
+      }
+    }
+    broadcastToAll("online_players_updated", {});
   }
 }
 function cleanupMatchmakingQueues() {
@@ -549,6 +652,13 @@ setInterval(() => {
       console.log(`Matchmaking timeout for queue ${queueKey}. Auto-filling remaining seats with bots...`);
       const realPlayers = queueUserIds.map((id) => store.users[id]).filter(Boolean);
       store.matchmakingQueues[queueKey] = [];
+      if (db) {
+        realPlayers.forEach((p) => {
+          db.collection("matchmaking").doc(p.id).delete().catch((err) => {
+            console.error("Failed to delete matchmaking record from Firestore on auto-fill:", err);
+          });
+        });
+      }
       const matchedList = [...realPlayers];
       const botAvatars = ["\u{1F916}", "\u{1F98A}", "\u26A1", "\u{1F451}"];
       const botNames = ["Dhili Master AI", "SomaliLudoBot", "LudoPro AI", "DesertFox AI", "NomadLudo AI"];
@@ -573,23 +683,147 @@ setInterval(() => {
     }
   });
 }, 2e3);
-app.post("/api/auth/register", async (req, res) => {
-  const { username, email, password, avatar } = req.body;
-  if (!username || !email || !password) {
-    return res.status(400).json({ error: "Username, email, and password are required." });
+var verifyFirebaseToken = async (req, res, next) => {
+  if (!auth) {
+    return res.status(500).json({ error: "Firebase Admin not configured on server." });
   }
-  const existingUser = Object.values(store.users).find((u) => u.email === email);
-  if (existingUser) {
-    return res.status(409).json({ error: "An account with this email already exists." });
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(403).json({ error: "Unauthorized: No token provided." });
   }
-  const hashedPassword = password;
+  const idToken = authHeader.split("Bearer ")[1];
+  try {
+    const decodedToken = await auth.verifyIdToken(idToken);
+    req.user = decodedToken;
+    next();
+  } catch (error) {
+    console.error("Error verifying Firebase ID token:", error);
+    res.status(403).json({ error: "Unauthorized: Invalid token." });
+  }
+};
+app.get("/api/debug/firebase", async (req, res) => {
+  if (!db) {
+    return res.json({
+      initialized: false,
+      error: "Firebase Firestore db object is null. Check if firebase-admin-key.json exists."
+    });
+  }
+  try {
+    const testRef = db.collection("ludo_store").doc("debug_test");
+    await testRef.set({ test: true, timestamp: Date.now() });
+    const snap = await testRef.get();
+    const data = snap.exists ? snap.data() : null;
+    return res.json({
+      initialized: true,
+      writeAndReadSuccess: data?.test === true,
+      data,
+      projectId: (0, import_app.getApp)().options.projectId
+    });
+  } catch (err) {
+    return res.json({
+      initialized: true,
+      error: err.message || err.toString(),
+      stack: err.stack
+    });
+  }
+});
+app.get("/api/updates", (req, res) => {
+  const userId = req.query.userId;
+  if (!userId) {
+    return res.status(400).json({ error: "Missing userId parameter" });
+  }
+  res.writeHead(200, {
+    "Content-Type": "text/event-stream; charset=utf-8",
+    "Cache-Control": "no-cache, no-transform",
+    "Connection": "keep-alive",
+    "X-Accel-Buffering": "no"
+  });
+  if (typeof res.flushHeaders === "function") {
+    res.flushHeaders();
+  }
+  res.write(`:ok
+
+`);
+  res.write(`retry: 3000
+
+`);
+  const client = { userId, res };
+  activeClients.push(client);
+  const activeRoom = Object.values(store.rooms).find(
+    (r) => r.status === "playing" && r.players.some((p) => p.userId === userId && p.status === "offline")
+  );
+  if (activeRoom) {
+    const player = activeRoom.players.find((p) => p.userId === userId);
+    if (player) {
+      player.status = "online";
+      player.inactivityTimer = 300;
+      addLog(activeRoom, `\u{1F7E2} ${player.username} has reconnected! Welcome back.`);
+      broadcastToRoom(activeRoom.id, "game_update", activeRoom);
+      saveStore();
+    }
+  }
+  res.write(`event: init
+data: ${JSON.stringify({ status: "connected" })}
+
+`);
+  if (typeof res.flush === "function") {
+    res.flush();
+  }
+  setTimeout(() => {
+    for (const [qKey, queueUserIds] of Object.entries(store.matchmakingQueues)) {
+      for (const seekingUserId of queueUserIds) {
+        if (seekingUserId !== userId && store.users[seekingUserId]) {
+          const seekingUser = store.users[seekingUserId];
+          const parts = qKey.split("_");
+          const seekingData = {
+            senderId: seekingUser.id,
+            username: seekingUser.username,
+            avatar: seekingUser.avatar,
+            betAmount: parseFloat(parts[0]) || 0,
+            capacity: parseInt(parts[1]) || 2,
+            gameMode: parts[2] || "solo",
+            queueKey: qKey
+          };
+          res.write(`event: matchmaker_seeking
+data: ${JSON.stringify(seekingData)}
+
+`);
+          if (typeof res.flush === "function") {
+            res.flush();
+          }
+        }
+      }
+    }
+  }, 500);
+  req.on("close", () => {
+    removeSSEClient(res);
+  });
+});
+app.post("/api/auth/login", verifyFirebaseToken, async (req, res) => {
+  const { username, email, avatar } = req.body;
+  const firebaseUid = req.user.uid;
+  let foundUser = Object.values(store.users).find((u) => u.firebaseUid === firebaseUid);
+  if (foundUser) {
+    return res.json(foundUser);
+  }
+  if (email) {
+    const userByEmail = Object.values(store.users).find((u) => u.email === email && !u.firebaseUid);
+    if (userByEmail) {
+      userByEmail.firebaseUid = firebaseUid;
+      await saveStoreAndWait();
+      return res.json(userByEmail);
+    }
+  }
+  if (!username) {
+    return res.status(400).json({ error: "Username is required for new registration" });
+  }
+  const cleanUsername = username.trim().substring(0, 20);
   const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
   const newUser = {
     id: userId,
-    username: username.trim().substring(0, 20),
-    email,
-    password: hashedPassword,
-    // Storing this for our new auth system
+    firebaseUid,
+    username: cleanUsername,
+    email: email || void 0,
     avatar: avatar || "\u{1F338}",
     balance: 100,
     winCount: 0,
@@ -598,24 +832,7 @@ app.post("/api/auth/register", async (req, res) => {
   store.users[userId] = newUser;
   addTransaction(userId, "deposit", 100, void 0, "Welcome signup bonus.");
   await saveStoreAndWait();
-  res.status(201).json({ success: true, message: "User registered successfully." });
-});
-app.post("/api/auth/login", async (req, res) => {
-  const { email, password } = req.body;
-  if (!email || !password) {
-    return res.status(400).json({ error: "Email and password are required." });
-  }
-  const user = Object.values(store.users).find((u) => u.email === email);
-  if (!user) {
-    return res.status(404).json({ error: "User not found." });
-  }
-  const isValid = user.password === password;
-  if (!isValid) {
-    return res.status(401).json({ error: "Invalid password." });
-  }
-  const token = import_jsonwebtoken.default.sign({ userId: user.id }, JWT_SECRET, { expiresIn: "7d" });
-  const { password: _, ...userProfile } = user;
-  res.json({ token, user: userProfile });
+  res.json(newUser);
 });
 app.get("/api/users/:userId", (req, res, next) => {
   if (req.params.userId === "online" || req.params.userId === "leaderboard") {
@@ -625,13 +842,9 @@ app.get("/api/users/:userId", (req, res, next) => {
   if (!user) {
     return res.status(404).json({ error: "User not found" });
   }
-  const { password, firebaseUid, ...userProfile } = user;
-  res.json(userProfile);
+  res.json(user);
 });
-app.post("/api/users/:userId/update", verifyJwt, async (req, res) => {
-  if (req.user.userId !== req.params.userId) {
-    return res.status(403).json({ error: "Forbidden: You can only update your own profile." });
-  }
+app.post("/api/users/:userId/update", async (req, res) => {
   const user = store.users[req.params.userId];
   if (!user) {
     return res.status(404).json({ error: "User not found" });
@@ -642,13 +855,9 @@ app.post("/api/users/:userId/update", verifyJwt, async (req, res) => {
   if (typeof isOfflinePreference === "boolean") user.isOfflinePreference = isOfflinePreference;
   await saveStoreAndWait();
   broadcastUserUpdate(user.id);
-  const { password, firebaseUid, ...userProfile } = user;
-  res.json(userProfile);
+  res.json(user);
 });
-app.post("/api/users/:userId/status", verifyJwt, (req, res) => {
-  if (req.user.userId !== req.params.userId) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+app.post("/api/users/:userId/status", (req, res) => {
   const user = store.users[req.params.userId];
   if (!user) {
     return res.status(404).json({ error: "User not found" });
@@ -657,14 +866,10 @@ app.post("/api/users/:userId/status", verifyJwt, (req, res) => {
   user.isOfflinePreference = !!isOffline;
   saveStore();
   broadcastUserUpdate(user.id);
-  const { password, firebaseUid, ...userProfile } = user;
-  res.json({ success: true, isOfflinePreference: user.isOfflinePreference, user: userProfile });
+  res.json({ success: true, isOfflinePreference: user.isOfflinePreference, user });
 });
-app.post("/api/wallet/deposit", verifyJwt, (req, res) => {
+app.post("/api/wallet/deposit", (req, res) => {
   const { userId, amount } = req.body;
-  if (req.user.userId !== userId) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: "User not found" });
   const depAmt = parseFloat(amount);
@@ -676,11 +881,8 @@ app.post("/api/wallet/deposit", verifyJwt, (req, res) => {
   broadcastUserUpdate(userId);
   res.json({ success: true, balance: user.balance });
 });
-app.post("/api/wallet/withdraw", verifyJwt, (req, res) => {
+app.post("/api/wallet/withdraw", (req, res) => {
   const { userId, amount } = req.body;
-  if (req.user.userId !== userId) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: "User not found" });
   const withAmt = parseFloat(amount);
@@ -695,18 +897,25 @@ app.post("/api/wallet/withdraw", verifyJwt, (req, res) => {
   broadcastUserUpdate(userId);
   res.json({ success: true, balance: user.balance });
 });
-app.get("/api/wallet/transactions/:userId", verifyJwt, (req, res) => {
-  if (req.user.userId !== req.params.userId) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
+app.get("/api/wallet/transactions/:userId", (req, res) => {
   const txs = store.transactions.filter((t) => t.userId === req.params.userId);
   res.json(txs);
 });
-app.post("/api/rooms/create", verifyJwt, (req, res) => {
+app.get("/api/rooms/active", (req, res) => {
+  const activeGames = Object.values(store.rooms).filter((r) => r.status === "playing").map((r) => ({
+    roomId: r.id,
+    players: r.players.map((p) => ({
+      username: p.username,
+      avatar: p.avatar
+    })),
+    betAmount: r.betAmount,
+    gameMode: r.gameMode,
+    capacity: r.capacity
+  }));
+  res.json(activeGames);
+});
+app.post("/api/rooms/create", (req, res) => {
   const { userId, betAmount, capacity, gameMode } = req.body;
-  if (req.user.userId !== userId) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: "User not found" });
   const bet = parseFloat(betAmount);
@@ -755,11 +964,8 @@ app.post("/api/rooms/create", verifyJwt, (req, res) => {
   saveStore();
   res.json(newRoom);
 });
-app.post("/api/rooms/join", verifyJwt, (req, res) => {
+app.post("/api/rooms/join", (req, res) => {
   const { userId, roomCode } = req.body;
-  if (req.user.userId !== userId) {
-    return res.status(403).json({ error: "Forbidden" });
-  }
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: "User not found" });
   const code = (roomCode || "").trim().toUpperCase();
@@ -905,6 +1111,20 @@ app.post("/api/rooms/matchmaking/enter-queue", (req, res) => {
     }
     user.seekingJoinedAt = Date.now();
     store.matchmakingQueues[queueKey].push(userId);
+    if (db) {
+      db.collection("matchmaking").doc(userId).set({
+        userId,
+        username: user.username,
+        avatar: user.avatar,
+        betAmount: bet,
+        capacity: cap,
+        gameMode: mode,
+        status: "WAITING_FOR_MATCH",
+        timestamp: Date.now()
+      }).catch((err) => {
+        console.error("Failed to write matchmaking record to Firestore:", err);
+      });
+    }
     broadcastToAll("matchmaker_seeking", {
       senderId: user.id,
       username: user.username,
@@ -943,6 +1163,10 @@ app.post("/api/rooms/matchmaking/join", (req, res) => {
   }
   if (store.users[userId]) delete store.users[userId].seekingJoinedAt;
   if (store.users[opponentId]) delete store.users[opponentId].seekingJoinedAt;
+  if (db) {
+    db.collection("matchmaking").doc(userId).delete().catch((err) => console.error("Failed to delete matchmaking record from Firestore for user:", err));
+    db.collection("matchmaking").doc(opponentId).delete().catch((err) => console.error("Failed to delete matchmaking record from Firestore for opponent:", err));
+  }
   const matchedList = [user, oppUser];
   const finalCapacity = 2;
   const finalMode = "solo";
@@ -995,6 +1219,11 @@ app.post("/api/rooms/matchmaking/leave", (req, res) => {
     }
     saveStore();
     broadcastToAll("matchmaker_seeking_cancelled", { senderId: userId });
+    if (db) {
+      db.collection("matchmaking").doc(userId).delete().catch((err) => {
+        console.error("Failed to delete matchmaking record from Firestore on leave:", err);
+      });
+    }
   }
   res.json({ success: true });
 });
@@ -1016,6 +1245,38 @@ app.get("/api/users/online", async (req, res) => {
     return res.status(400).json({ error: "Missing userId parameter" });
   }
   cleanupMatchmakingQueues();
+  if (db) {
+    try {
+      const qs = await db.collection("matchmaking").get();
+      qs.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data && data.status === "WAITING_FOR_MATCH") {
+          const qKey = `${data.betAmount}_${data.capacity}_${data.gameMode}`;
+          if (!store.matchmakingQueues[qKey]) {
+            store.matchmakingQueues[qKey] = [];
+          }
+          if (!store.matchmakingQueues[qKey].includes(data.userId)) {
+            store.matchmakingQueues[qKey].push(data.userId);
+            if (!store.users[data.userId]) {
+              store.users[data.userId] = {
+                id: data.userId,
+                username: data.username,
+                avatar: data.avatar,
+                balance: 100,
+                // Fallback
+                winCount: 0,
+                lossCount: 0,
+                isOfflinePreference: false
+              };
+            }
+            store.users[data.userId].seekingJoinedAt = data.timestamp || Date.now();
+          }
+        }
+      });
+    } catch (e) {
+      console.error("Failed to sync matchmaking from Firestore:", e);
+    }
+  }
   const activeIds = new Set(activeClients.map((c) => c.userId));
   const onlineList = [];
   Object.values(store.users).forEach((u) => {
@@ -1147,6 +1408,10 @@ app.post("/api/rooms/challenge/invite", (req, res) => {
   store.rooms[roomId] = newRoom;
   for (const qKey of Object.keys(store.matchmakingQueues)) {
     store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter((id) => id !== senderId && id !== receiverId);
+  }
+  if (db) {
+    db.collection("matchmaking").doc(senderId).delete().catch((err) => console.error("Failed to delete sender from matchmaking on challenge:", err));
+    db.collection("matchmaking").doc(receiverId).delete().catch((err) => console.error("Failed to delete receiver from matchmaking on challenge:", err));
   }
   broadcastToAll("matchmaker_seeking_cancelled", { senderId });
   broadcastToAll("matchmaker_seeking_cancelled", { senderId: receiverId });
@@ -1598,6 +1863,35 @@ app.post("/api/rooms/leave", (req, res) => {
   }
   saveStore();
 });
+app.post("/api/rooms/:roomId/spectate", (req, res) => {
+  const { roomId } = req.params;
+  const { userId } = req.body;
+  const room = store.rooms[roomId];
+  if (!room) {
+    return res.status(404).json({ error: "Room not found" });
+  }
+  if (room.status !== "playing") {
+    return res.status(400).json({ error: "This game is not available for spectating." });
+  }
+  const client = activeClients.find((c) => c.userId === userId);
+  if (client) {
+    client.spectatingRoomId = roomId;
+    sendEventToUser(userId, "game_update", room);
+    res.json({ success: true, message: `You are now spectating room ${roomId}` });
+  } else {
+    res.status(404).json({ error: "Could not find an active connection for your user." });
+  }
+});
+app.post("/api/rooms/:roomId/stop-spectating", (req, res) => {
+  const { userId } = req.body;
+  const client = activeClients.find((c) => c.userId === userId);
+  if (client) {
+    client.spectatingRoomId = void 0;
+    res.json({ success: true, message: "Stopped spectating." });
+  } else {
+    res.status(404).json({ error: "Could not find an active connection for your user." });
+  }
+});
 app.get("/api/rooms/check-status/:roomId", (req, res) => {
   const { roomId } = req.params;
   const { userId } = req.query;
@@ -1754,7 +2048,7 @@ app.post("/api/admin/broadcast", isAdmin, (req, res) => {
   res.json({ success: true, message: "Broadcast sent." });
 });
 async function startServer() {
-  loadStore();
+  await loadStoreFromFirestore();
   purgeSimulatedUsers();
   let vite;
   if (process.env.NODE_ENV !== "production") {

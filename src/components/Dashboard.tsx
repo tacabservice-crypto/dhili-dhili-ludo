@@ -31,6 +31,7 @@ import { formatCurrency } from '../utils/number';
 import MatchmakingRadar from './MatchmakingRadar';
 import AboutUs from './AboutUs';
 import Help from './Help';
+import ActiveGamesList from './ActiveGamesList';
 
 interface DashboardProps {
   user: UserProfile;
@@ -369,6 +370,26 @@ export default function Dashboard({
       onJoinPrivateRoom(joinCode.trim().toUpperCase());
     }
   };
+
+  const [activeGames, setActiveGames] = useState<GameRoom[]>([]);
+
+  const fetchActiveGames = async () => {
+    try {
+      const res = await fetch(`/api/rooms/active?_t=${Date.now()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setActiveGames(data);
+      }
+    } catch (err) {
+      console.error('Error fetching active games:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchActiveGames();
+    const interval = setInterval(fetchActiveGames, 10000); // Poll every 10 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   if (rejoinableRoom) {
     return (
@@ -1074,6 +1095,9 @@ export default function Dashboard({
             </form>
           </div>
         </div>
+
+        {/* ACTIVE GAMES (SPECTATOR) LIST */}
+        <ActiveGamesList games={activeGames} />
 
         {/* 5. LEADERBOARD */}
         <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl overflow-hidden shadow-xl shadow-blue-500/5">

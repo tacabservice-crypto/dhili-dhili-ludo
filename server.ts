@@ -229,6 +229,7 @@ purgeSimulatedUsers();
 interface SSEClient {
   userId: string;
   res: any;
+  spectatingRoomId?: string;
 }
 
 let activeClients: SSEClient[] = [];
@@ -271,12 +272,47 @@ data: ${JSON.stringify(data)}
   });
 }
 
-// Send update to all players in a room
+// Send update to all players AND SPECTATORS in a room
 function broadcastToRoom(roomId: string, eventName: string, data: any) {
   const room = store.rooms[roomId];
   if (!room) return;
+
+  let payload = { ...data };
+
+  // If this is a game update, dynamically attach the list of current spectators.
+  if (eventName === 'game_update' || eventName === 'timer_tick') {
+    const spectatorClients = activeClients.filter(c => c.spectatingRoomId === roomId);
+    const spectatorsInfo = spectatorClients
+      .map(c => {
+        const user = store.users[c.userId];
+        // Only include if user profile exists
+        if (user) {
+          return {
+            id: user.id,
+            username: user.username,
+            avatar: user.avatar,
+          };
+        }
+        return null;
+      })
+      .filter(Boolean);
+    
+    payload.spectators = spectatorsInfo;
+  }
+
+  // Send to players
   room.players.forEach(p => {
-    sendEventToUser(p.userId, eventName, data);
+    sendEventToUser(p.userId, eventName, payload);
+  });
+
+  // Send to spectators
+  const spectatorConnections = activeClients.filter(c => c.spectatingRoomId === roomId);
+  spectatorConnections.forEach(s => {
+    // Avoid sending duplicate events if a player is also marked as a spectator
+    const isPlayer = room.players.some(p => p.userId === s.userId);
+    if (!isPlayer) {
+      sendEventToUser(s.userId, eventName, payload);
+    }
   });
 }
 
@@ -1143,6 +1179,24 @@ app.get('/api/wallet/transactions/:userId', (req, res) => {
 // ==========================================
 // 5. MATCHMAKING & LOBBY SYSTEM
 // ==========================================
+
+// GET /api/rooms/active
+// Returns a list of all currently active games that can be spectated.
+app.get('/api/rooms/active', (req, res) => {
+  const activeGames = Object.values(store.rooms)
+    .filter(r => r.status === 'playing')
+    .map(r => ({
+      roomId: r.id,
+      players: r.players.map(p => ({
+        username: p.username,
+        avatar: p.avatar,
+      })),
+      betAmount: r.betAmount,
+      gameMode: r.gameMode,
+      capacity: r.capacity,
+    }));
+  res.json(activeGames);
+});
 
 // Create Room (Private or Public Friends list)
 app.post('/api/rooms/create', (req, res) => {
@@ -2414,6 +2468,43 @@ app.post('/api/rooms/leave', (req, res) => {
   }
 
   saveStore();
+});
+
+// Spectate a game room
+app.post('/api/rooms/:roomId/spectate', (req, res) => {
+  const { roomId } = req.params;
+  const { userId } = req.body;
+
+  const room = store.rooms[roomId];
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found' });
+  }
+
+  if (room.status !== 'playing') {
+    return res.status(400).json({ error: 'This game is not available for spectating.' });
+  }
+
+  const client = activeClients.find(c => c.userId === userId);
+  if (client) {
+    client.spectatingRoomId = roomId;
+    // Immediately send the current game state to the new spectator
+    sendEventToUser(userId, 'game_update', room);
+    res.json({ success: true, message: `You are now spectating room ${roomId}` });
+  } else {
+    res.status(404).json({ error: 'Could not find an active connection for your user.' });
+  }
+});
+
+// Stop spectating a game room
+app.post('/api/rooms/:roomId/stop-spectating', (req, res) => {
+  const { userId } = req.body;
+  const client = activeClients.find(c => c.userId === userId);
+  if (client) {
+    client.spectatingRoomId = undefined;
+    res.json({ success: true, message: 'Stopped spectating.' });
+  } else {
+    res.status(404).json({ error: 'Could not find an active connection for your user.' });
+  }
 });
 
 // Check if a game is active and the user can rejoin
