@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { GameRoom } from '../../types/game';
-import { Eye } from 'lucide-react';
+import { Eye, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface ActiveGamesListProps {
@@ -8,9 +8,12 @@ interface ActiveGamesListProps {
 }
 
 const ActiveGamesList: React.FC<ActiveGamesListProps> = ({ games }) => {
+  const [loadingRoomId, setLoadingRoomId] = useState<string | null>(null);
   const navigate = useNavigate();
 
   const handleSpectate = (roomId: string) => {
+    setLoadingRoomId(roomId);
+    // The navigation will unmount the component, so no need to reset the loading state
     navigate(`/room/${roomId}?spectate=true`);
   };
 
@@ -60,9 +63,20 @@ const ActiveGamesList: React.FC<ActiveGamesListProps> = ({ games }) => {
             {/* Bottom section: Button */}
             <button
               onClick={() => handleSpectate(game.id)}
-              className="mt-auto w-full bg-purple-600/80 hover:bg-purple-600 border border-purple-500/50 text-white font-bold text-xs py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 uppercase tracking-wider transition-all active:scale-95 shadow-md hover:shadow-purple-500/20"
+              disabled={loadingRoomId === game.id}
+              className="mt-auto w-full bg-purple-600/80 hover:bg-purple-600 border border-purple-500/50 text-white font-bold text-xs py-2.5 px-4 rounded-lg flex items-center justify-center gap-2 uppercase tracking-wider transition-all active:scale-95 shadow-md hover:shadow-purple-500/20 disabled:bg-gray-500 disabled:cursor-wait"
             >
-              <Eye className="h-4 w-4" /> Daawasho
+              {loadingRoomId === game.id ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span>Waa socotaa...</span>
+                </>
+              ) : (
+                <>
+                  <Eye className="h-4 w-4" />
+                  <span>Daawasho</span>
+                </>
+              )}
             </button>
           </div>
         ))}
