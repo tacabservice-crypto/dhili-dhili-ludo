@@ -91,12 +91,12 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
   }, [closeSinglePeerConnection]);
 
   const updatePlayers = useStableCallback((players: LudoPlayer[]) => {
-    if (!localStreamRef.current || !localUserIdRef.current) {
+    if (!isInitialized || !localUserIdRef.current) {
       return;
     }
 
     const localUserId = localUserIdRef.current;
-    const stream = localStreamRef.current;
+    const isSpectator = !localStreamRef.current;
     const otherPlayers = players.filter(p => p.userId !== localUserId);
     const existingPeerIds = Object.keys(peerConnectionsRef.current);
 
@@ -110,15 +110,24 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
     // Add connections for new players
     otherPlayers.forEach(p => {
       if (!peerConnectionsRef.current[p.userId]) {
-        console.log(`${LOG_PREFIX} New player ${p.userId} joined. Setting up peer connection.`);
+        console.log(`${LOG_PREFIX} New player ${p.userId} joined. Setting up peer connection (Spectator: ${isSpectator}).`);
         const pc = new RTCPeerConnection({
           iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
         });
 
         pc.onconnectionstatechange = () => console.log(`${LOG_PREFIX} Connection state with ${p.userId}: ${pc.connectionState}`);
-        stream.getTracks().forEach(track => pc.addTrack(track, stream));
+        
+        if (isSpectator) {
+          // Spectators only receive audio
+          pc.addTransceiver('audio', { direction: 'recvonly' });
+        } else {
+          // Players send their audio stream
+          localStreamRef.current!.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current!));
+        }
+        
         pc.onicecandidate = (event) => event.candidate && sendSignalingMessage(p.userId, { type: 'candidate', candidate: event.candidate });
         pc.ontrack = (event) => {
+          console.log(`${LOG_PREFIX} Received remote track from ${p.userId}`);
           const audio = remoteAudioRefs.current[p.userId];
           if (audio) {
             audio.srcObject = event.streams[0];
@@ -127,39 +136,46 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
           }
         };
         
-        pc.createOffer()
-          .then(offer => pc.setLocalDescription(offer))
-          .then(() => {
-            if (pc.localDescription) {
-              sendSignalingMessage(p.userId, { type: 'offer', sdp: pc.localDescription.toJSON() });
-            }
-          })
-          .catch(e => console.error(`${LOG_PREFIX} Error creating offer for ${p.userId}:`, e));
+        // For players, they create the offer. Spectators wait for offers.
+        if (!isSpectator) {
+          pc.createOffer()
+            .then(offer => pc.setLocalDescription(offer))
+            .then(() => {
+              if (pc.localDescription) {
+                sendSignalingMessage(p.userId, { type: 'offer', sdp: pc.localDescription.toJSON() });
+              }
+            })
+            .catch(e => console.error(`${LOG_PREFIX} Error creating offer for ${p.userId}:`, e));
+        }
 
         peerConnectionsRef.current[p.userId] = pc;
       }
     });
 
-    // Sync state with ref to trigger re-render for <audio> elements
     setPeerIds(Object.keys(peerConnectionsRef.current));
   });
 
-  const initializeVoiceChat = useStableCallback(async (userId: string, roomId: string) => {
+  const initializeVoiceChat = useStableCallback(async (userId: string, roomId: string, isSpectator: boolean = false) => {
     if (isInitialized || localStreamRef.current) return;
-    console.log(`${LOG_PREFIX} Initializing voice chat for user ${userId} in room ${roomId}.`);
-    setIsInitialized(true);
-
+    
     localUserIdRef.current = userId;
     roomIdRef.current = roomId;
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
-      console.log(`${LOG_PREFIX} Successfully acquired microphone stream.`);
-      stream.getAudioTracks().forEach(track => track.enabled = !isMuted);
-      localStreamRef.current = stream;
-    } catch (err) {
-      console.error(`${LOG_PREFIX} Could not get microphone access:`, err);
-      setIsInitialized(false);
+    if (isSpectator) {
+      console.log(`${LOG_PREFIX} Initializing voice chat for SPECTATOR ${userId} in room ${roomId}.`);
+      setIsInitialized(true);
+    } else {
+      console.log(`${LOG_PREFIX} Initializing voice chat for PLAYER ${userId} in room ${roomId}.`);
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: false, audio: true });
+        console.log(`${LOG_PREFIX} Successfully acquired microphone stream.`);
+        stream.getAudioTracks().forEach(track => track.enabled = !isMuted);
+        localStreamRef.current = stream;
+        setIsInitialized(true);
+      } catch (err) {
+        console.error(`${LOG_PREFIX} Could not get microphone access:`, err);
+        setIsInitialized(false);
+      }
     }
   });
   
@@ -169,20 +185,27 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
         if (!isInitialized || signalRoomId !== roomIdRef.current) return;
 
         let pc = peerConnectionsRef.current[senderId];
+        const isSpectator = !localStreamRef.current;
         
         if (signal.type === 'offer' && !pc) {
             console.log(`${LOG_PREFIX} Received offer from new peer ${senderId}. Setting up connection.`);
-            if (!localStreamRef.current) return;
             
-            const stream = localStreamRef.current;
             pc = new RTCPeerConnection({
               iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
             });
 
             pc.onconnectionstatechange = () => console.log(`${LOG_PREFIX} Connection state with ${senderId}: ${pc.connectionState}`);
-            stream.getTracks().forEach(track => pc.addTrack(track, stream));
+            
+            if (isSpectator) {
+              pc.addTransceiver('audio', { direction: 'recvonly' });
+            } else {
+              if (!localStreamRef.current) return; // Should not happen for players
+              localStreamRef.current.getTracks().forEach(track => pc.addTrack(track, localStreamRef.current!));
+            }
+
             pc.onicecandidate = event => event.candidate && sendSignalingMessage(senderId, { type: 'candidate', candidate: event.candidate });
             pc.ontrack = event => {
+                console.log(`${LOG_PREFIX} Received remote track from ${senderId}`);
                 const audio = remoteAudioRefs.current[senderId];
                 if (audio) {
                     audio.srcObject = event.streams[0];
@@ -191,7 +214,6 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
                 }
             };
             peerConnectionsRef.current[senderId] = pc;
-            // Sync state to create the new <audio> element
             setPeerIds(Object.keys(peerConnectionsRef.current));
         }
 
@@ -259,3 +281,4 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
     </VoiceChatContext.Provider>
   );
 };
+

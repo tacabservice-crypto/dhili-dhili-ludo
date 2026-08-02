@@ -194,13 +194,14 @@ export default function GameRoomView({
   // Initialize voice chat media and signaling once per room session.
   useEffect(() => {
     if (room.id && userId) {
-      initializeVoiceChat(userId, room.id);
+      // Pass the isSpectator flag to the initialization function
+      initializeVoiceChat(userId, room.id, isSpectator);
     }
     // Cleanup when the GameRoom is left completely.
     return () => {
       closeVoiceChat();
     };
-  }, [userId, room.id, initializeVoiceChat, closeVoiceChat]);
+  }, [userId, room.id, isSpectator, initializeVoiceChat, closeVoiceChat]);
 
   // Update peer connections whenever the player list changes.
   useEffect(() => {
@@ -210,11 +211,15 @@ export default function GameRoomView({
       const uniquePlayers = Array.from(new Map(allPresentPlayers.map(p => [p.userId, p])).values());
       
       const isUserInRoom = uniquePlayers.some(p => p.userId === userId);
-      if (isUserInRoom) {
+
+      // Spectators should connect to all players, while players connect to each other.
+      if (isSpectator) {
+        updatePlayers(room.players);
+      } else if (isUserInRoom) {
         updatePlayers(uniquePlayers);
       }
     }
-  }, [room.status, room.players, room.pendingPlayers, updatePlayers, userId]);
+  }, [room.status, room.players, room.pendingPlayers, updatePlayers, userId, isSpectator]);
 
   const myPlayer = room.players.find(p => p.userId === userId);
   const canPlay = myPlayer && !isSpectator;
@@ -1190,15 +1195,22 @@ export default function GameRoomView({
               /* INTERACTIVE CHAT BOX */
               room.gameState.chat.map((chat) => {
                 const isMe = chat.senderId === userId;
+                const isSpectatorMsg = chat.isSpectator;
+
                 return (
                   <div key={chat.id} className={`flex flex-col ${isMe ? 'items-end' : 'items-start'}`}>
                     <div className="flex items-center gap-1 text-[9px] text-slate-500 font-bold mb-0.5">
+                      {isSpectatorMsg && <span className="text-yellow-400">👁️</span>}
                       <span>{chat.senderName}</span>
                       <span>•</span>
                       <span>{new Date(chat.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                     <p className={`px-2.5 py-1.5 rounded-xl max-w-[80%] leading-relaxed ${
-                      isMe ? 'bg-blue-600 text-white font-semibold' : 'bg-black/40 text-slate-200 border border-white/5'
+                      isMe 
+                        ? 'bg-blue-600 text-white font-semibold' 
+                        : isSpectatorMsg
+                        ? 'bg-yellow-600/20 text-yellow-200 border border-yellow-500/20'
+                        : 'bg-black/40 text-slate-200 border border-white/5'
                     }`}>
                       {chat.text}
                     </p>

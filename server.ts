@@ -2311,17 +2311,24 @@ app.post('/api/rooms/chat', (req, res) => {
   const room = store.rooms[roomId];
   if (!room) return res.status(404).json({ error: 'Room not found' });
 
-  const p = room.players.find(pl => pl.userId === userId);
-  if (!p) return res.status(403).json({ error: 'You are not in this room.' });
+  const player = room.players.find(pl => pl.userId === userId);
+  const spectator = activeClients.find(c => c.userId === userId && c.spectatingRoomId === roomId);
+
+  if (!player && !spectator) {
+    return res.status(403).json({ error: 'You are not in this room as a player or spectator.' });
+  }
 
   const cleanText = (text || '').trim().substring(0, 100);
   if (cleanText.length > 0) {
+    const senderName = player ? player.username : (store.users[userId]?.username || 'Spectator');
+    
     const chatMsg: ChatMessage = {
       id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       senderId: userId,
-      senderName: p.username,
+      senderName: senderName,
       text: cleanText,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      isSpectator: !player, // Mark as spectator message if not a player
     };
     room.gameState.chat.push(chatMsg);
     if (room.gameState.chat.length > 30) {

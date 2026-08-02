@@ -2,7 +2,7 @@
  * @license
  * SPDX-License-Identifier: Apache-2.0
  */
-import { useParams } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, GameRoom } from './types/game';
 import AuthScreen from './components/AuthScreen';
@@ -18,6 +18,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 export default function App() {
   const { roomId } = useParams<{ roomId: string }>();
+  const location = useLocation();
   const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true); // Add a loading state for auth
@@ -66,9 +67,16 @@ export default function App() {
     // If there's a roomId in the URL, and the user is logged in,
     // and we're not already in that room, try to join/spectate it.
     if (roomId && user && (!activeRoom || activeRoom.id !== roomId)) {
-      handleJoinPrivateRoom(roomId);
+      const queryParams = new URLSearchParams(location.search);
+      const isSpectate = queryParams.get('spectate') === 'true';
+
+      if (isSpectate) {
+        handleSpectateRoom(roomId);
+      } else {
+        handleJoinPrivateRoom(roomId);
+      }
     }
-  }, [roomId, user]); // This effect depends on the roomId from the URL and the user's login state.
+  }, [roomId, user, location.search]); // This effect depends on the roomId from the URL and the user's login state.
 
   // Clear matchmaking timeout on unmount
   useEffect(() => {
@@ -450,6 +458,24 @@ export default function App() {
     }
   };
 
+  const handleSpectateRoom = async (roomCode: string) => {
+    if (!user) return;
+    setError(null);
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/rooms/${roomCode}`);
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || 'Failed to get room for spectating.');
+      }
+
+      const roomData = await response.json();
+      setActiveRoom(roomData);
+    } catch (err: any) {
+      setErrorToast(err.message || 'Could not spectate room.');
+    }
+  };
+
   const handleJoinPrivateRoom = async (roomCode: string) => {
     console.log('handleJoinPrivateRoom called with roomCode:', roomCode);
     if (!user) return;
@@ -653,7 +679,7 @@ export default function App() {
         const data = await response.json();
         setActiveRoom(data);
       }
-    } catch (err) {
+    } catch (err).
       console.error(err);
     }
   };

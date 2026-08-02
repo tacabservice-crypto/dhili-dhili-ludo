@@ -59,6 +59,7 @@ export interface ChatMessage {
   senderName: string;
   text: string;
   timestamp: number;
+  isSpectator?: boolean;
 }
 
 export interface GameLog {
