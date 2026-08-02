@@ -5,153 +5,10 @@
 
 import express from 'express';
 import cors from 'cors';
-import path from 'path';
-import fs from 'fs';
+import { db } from './firebase.js';
 import { createServer as createViteServer, ViteDevServer } from 'vite';
 import jwt from 'jsonwebtoken';
 import { UserProfile, WalletTransaction, GameRoom, LudoPlayer, LudoToken, PlayerColor, ChatMessage, GameLog } from './src/types/game.ts';
-
-const app = express();
-
-// IMPORTANT: Use a strong, secret key and store it in environment variables.
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-and-long-jwt-key-that-is-at-least-32-chars';
-if (JWT_SECRET === 'your-super-secret-and-long-jwt-key-that-is-at-least-32-chars') {
-  console.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-  console.warn('!!! WARNING: Using default JWT_SECRET. Please set a secure key in your .env file.');
-  console.warn('!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!');
-}
-
-// Enable CORS for the frontend origin
-const allowedOrigins = [
-  'https://dhili-dhili-ludo.onrender.com',
-  'https://dhilidhili.onrender.com',
-  'http://localhost:5173',
-  'http://127.0.0.1:5173'
-];
-app.use(cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-// Handle preflight requests for all routes
-app.options('*', cors({
-  origin: allowedOrigins,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
-
-const PORT = 3002;
-const DB_FILE = path.join(process.cwd(), 'db_store.json');
-
-app.use(express.json());
-
-const verifyJwt = (req: any, res: any, next: any) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(403).json({ error: 'Unauthorized: No token provided.' });
-  }
-
-  const token = authHeader.split('Bearer ')[1];
-  try {
-    const decoded: any = jwt.verify(token, JWT_SECRET);
-    req.user = decoded; // Adds { userId: '...' } to the request object
-    next();
-  } catch (error) {
-    console.error('Error verifying JWT:', error);
-    res.status(403).json({ error: 'Unauthorized: Invalid token.' });
-  }
-};
-
-
-
-// ==========================================
-// 1. DATA STORE SETUP & PERSISTENCE
-// ==========================================
-interface DBStore {
-  users: Record<string, UserProfile>;
-  transactions: WalletTransaction[];
-  rooms: Record<string, GameRoom>;
-  matchmakingQueues: Record<string, string[]>; // betAmount -> array of userIds
-  houseRevenue: number;
-}
-
-let store: DBStore = {
-  users: {},
-  transactions: [],
-  rooms: {},
-  matchmakingQueues: {
-    0: [],
-    1: [],
-    5: [],
-    10: [],
-    25: [],
-    50: []
-  },
-  houseRevenue: 0
-};
-
-// Load store from disk (local backup/fallback)
-function loadStore() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf8');
-      const parsed = JSON.parse(raw);
-      // Re-initialize lists to make sure they match expected shapes
-      store.users = parsed.users || {};
-      store.transactions = parsed.transactions || [];
-      store.rooms = parsed.rooms || {};
-      store.matchmakingQueues = parsed.matchmakingQueues || {
-        0: [], 1: [], 5: [], 10: [], 25: [], 50: []
-      };
-      store.houseRevenue = parsed.houseRevenue || 0;
-      console.log('Database loaded successfully from disk.');
-    } else {
-      saveStoreAndWait();
-    }
-  } catch (error) {
-    console.error('Failed to load database. Starting fresh.', error);
-  }
-}
-
-
-
-// Save store to disk and sync with Firestore
-function saveStore() {
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-  } catch (error) {
-    console.error('Failed to write database to disk.', error);
-  }
-}
-
-// Slower, awaited version for critical updates
-async function saveStoreAndWait() {
-    try {
-      fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-    } catch (error) {
-      console.error('Failed to write database to disk.', error);
-    }
-  }
-
-loadStore();
-
-// ==========================================
-// PURGE SIMULATED USERS TO KEEP ONLY REAL REGISTERED USER SESSIONS ON THE RADAR
-// ==========================================
-function purgeSimulatedUsers() {
-  let changed = false;
-  Object.keys(store.users).forEach(id => {
-    if (id.startsWith('user_sim_')) {
-      delete store.users[id];
-      changed = true;
-    }
-  });
-  if (changed) {
-    saveStore();
-  }
-}
-purgeSimulatedUsers();
 
 // ==========================================
 // 2. REAL-TIME EVENT STREAM (SSE)
@@ -211,36 +68,46 @@ function broadcastToRoom(roomId: string, eventName: string, data: any) {
 }
 
 // Global user update broadcast (for dashboard balance/profile syncing)
-function broadcastUserUpdate(userId: string) {
-  const user = store.users[userId];
-  if (user) {
-    sendEventToUser(userId, 'user_update', user);
+async function broadcastUserUpdate(userId: string) {
+  if (!db) return;
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (userDoc.exists) {
+      sendEventToUser(userId, 'user_update', userDoc.data());
+    }
+  } catch (error) {
+    console.error("Error broadcasting user update:", error);
   }
 }
 
 // Remove disconnected client
-function removeSSEClient(res: any) {
+async function removeSSEClient(res: any) {
   const client = activeClients.find(c => c.res === res);
   activeClients = activeClients.filter(c => c.res !== res);
   if (client) {
     const stillConnected = activeClients.some(c => c.userId === client.userId);
-    if (!stillConnected) {
-      // User has no more active connections. Mark as offline in any active games.
-      const activeRoom = Object.values(store.rooms).find(r => 
-        r.status === 'playing' && r.players.some(p => p.userId === client.userId && p.status === 'online')
-      );
+    if (!stillConnected && db) {
+      try {
+        const roomsQuery = await db.collection('rooms')
+          .where('status', '==', 'playing')
+          .where('players', 'array-contains', { userId: client.userId, status: 'online' })
+          .get();
 
-      if (activeRoom) {
-        const player = activeRoom.players.find(p => p.userId === client.userId);
-        if (player) {
-          player.status = 'offline';
-          addLog(activeRoom, `🔌 ${player.username} has disconnected. They have time to reconnect before being forfeited.`);
-          broadcastToRoom(activeRoom.id, 'game_update', activeRoom);
-          saveStore();
+        for (const doc of roomsQuery.docs) {
+          const room = doc.data() as GameRoom;
+          const player = room.players.find(p => p.userId === client.userId);
+          if (player) {
+            player.status = 'offline';
+            addLog(room, `🔌 ${player.username} has disconnected. They have time to reconnect before being forfeited.`);
+            await doc.ref.set(room);
+            broadcastToRoom(room.id, 'game_update', room);
+          }
         }
+      } catch (e) {
+        console.error("Error updating player status on disconnect:", e);
       }
 
-      // Clean up from matchmaking queues
+      // Clean up from matchmaking queues (still in-memory for now)
       let changed = false;
       for (const qKey of Object.keys(store.matchmakingQueues)) {
         const lenBefore = store.matchmakingQueues[qKey].length;
@@ -248,9 +115,8 @@ function removeSSEClient(res: any) {
         if (store.matchmakingQueues[qKey].length !== lenBefore) changed = true;
       }
       if (changed) {
-        saveStoreAndWait();
+        // Here we would also update the matchmaking state in Firestore
       }
-      
     }
     broadcastToAll('online_players_updated', {});
   }
@@ -275,7 +141,7 @@ function cleanupMatchmakingQueues() {
     }
   }
   if (changed) {
-    saveStore();
+    // saveStore();
   }
 }
 
@@ -353,7 +219,23 @@ function advanceTurn(room: GameRoom) {
 }
 
 // Add a transaction helper
-function addTransaction(userId: string, type: WalletTransaction['type'], amount: number, matchId?: string, description = '') {
+async function addTransaction(userId: string, type: WalletTransaction['type'], amount: number, matchId?: string, description = '') {
+  if (!db) {
+    console.error("Database connection is not available. Cannot add transaction.");
+    // Fallback to in-memory store for now, but this needs to be fixed.
+    const tx: WalletTransaction = {
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userId,
+      type,
+      amount,
+      timestamp: Date.now(),
+      matchId,
+      description
+    };
+    store.transactions.unshift(tx);
+    return tx;
+  }
+
   const tx: WalletTransaction = {
     id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     userId,
@@ -363,9 +245,18 @@ function addTransaction(userId: string, type: WalletTransaction['type'], amount:
     matchId,
     description
   };
-  store.transactions.unshift(tx);
-  saveStore();
-  return tx;
+
+  try {
+    await db.collection('transactions').add(tx);
+    // For now, also add to local store for compatibility with other in-memory functions
+    store.transactions.unshift(tx);
+    return tx;
+  } catch (error) {
+    console.error("Error adding transaction to Firestore:", error);
+    // Fallback to in-memory store in case of Firestore error
+    store.transactions.unshift(tx);
+    return tx;
+  }
 }
 
 // Add a log to the room
@@ -387,12 +278,12 @@ function isBotPlayer(userId: string): boolean {
 }
 
 // Trigger game auto-play bot actions
-function executeBotTurnIfActive(room: GameRoom) {
+async function executeBotTurnIfActive(room: GameRoom) {
   const activePlayer = room.players[room.gameState.turn];
   if (!activePlayer || !isBotPlayer(activePlayer.userId)) return;
 
   // Bot logic
-  setTimeout(() => {
+  setTimeout(async () => {
     // If bot has not rolled, roll the dice
     if (!room.gameState.hasRolled) {
       const d = Math.floor(Math.random() * 6) + 1;
@@ -407,10 +298,10 @@ function executeBotTurnIfActive(room: GameRoom) {
       if (validTokens.length === 0) {
         // No moves possible, pass turn
         addLog(room, `🤖 Bot ${activePlayer.username} has no valid moves.`);
-        setTimeout(() => {
+        setTimeout(async () => {
           advanceTurn(room);
           broadcastToRoom(room.id, 'game_update', room);
-          executeBotTurnIfActive(room);
+          await executeBotTurnIfActive(room);
         }, 500);
       } else {
         // Prioritize moves:
@@ -444,10 +335,10 @@ function executeBotTurnIfActive(room: GameRoom) {
         }
 
         // Apply movement
-        setTimeout(() => {
-          moveTokenLogic(room, selectedToken.id, d);
+        setTimeout(async () => {
+          await moveTokenLogic(room, selectedToken.id, d);
           broadcastToRoom(room.id, 'game_update', room);
-          executeBotTurnIfActive(room);
+          await executeBotTurnIfActive(room);
         }, 500);
       }
     }
@@ -455,7 +346,7 @@ function executeBotTurnIfActive(room: GameRoom) {
 }
 
 // Core token movement logic
-function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
+async function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
   const gs = room.gameState;
   const token = gs.tokens.find(t => t.id === tokenId);
   if (!token) return;
@@ -529,39 +420,43 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
 
       if (room.betAmount > 0) {
         const share = gs.escrowBalance / 2;
-        winningTeammates.forEach(p => {
+        for (const p of winningTeammates) {
           if (!isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.balance += share;
-              user.winCount += 1;
-              addTransaction(p.userId, 'win_payout', share, room.id, `Team Win payout for match ${room.id}.`);
+            const userRef = db.collection('users').doc(p.userId);
+            const userDoc = await userRef.get();
+            if(userDoc.exists) {
+              await userRef.update({ 
+                balance: userDoc.data().balance + share,
+                winCount: (userDoc.data().winCount || 0) + 1 
+              });
+              await addTransaction(p.userId, 'win_payout', share, room.id, `Team Win payout for match ${room.id}.`);
               broadcastUserUpdate(p.userId);
             }
           }
-        });
+        }
 
         // Record losses for other real players
-        room.players.forEach(p => {
+        for (const p of room.players) {
           if (!winningColors.includes(p.color) && !isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.lossCount += 1;
-              broadcastUserUpdate(p.userId);
-            }
+            const userRef = db.collection('users').doc(p.userId);
+            await userRef.update({ lossCount: (store.users[p.userId]?.lossCount || 0) + 1 });
+            broadcastUserUpdate(p.userId);
           }
-        });
+        }
       }
     } else {
       addLog(room, `🏆 CHAMPION! ${activePlayer.username} has finished all 4 tokens and WON the game!`);
 
       // Escrow payout
       if (room.betAmount > 0) {
-        const winner = store.users[activePlayer.userId];
-        if (winner) {
-          winner.balance += gs.escrowBalance;
-          winner.winCount += 1;
-          addTransaction(
+        const userRef = db.collection('users').doc(activePlayer.userId);
+        const userDoc = await userRef.get();
+        if (userDoc.exists) {
+          await userRef.update({
+             balance: userDoc.data().balance + gs.escrowBalance,
+             winCount: (userDoc.data().winCount || 0) + 1
+          });
+          await addTransaction(
             activePlayer.userId,
             'win_payout',
             gs.escrowBalance,
@@ -572,15 +467,13 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
         }
 
         // Record losses for other real players
-        room.players.forEach(p => {
+        for (const p of room.players) {
           if (p.userId !== activePlayer.userId && !isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.lossCount += 1;
-              broadcastUserUpdate(p.userId);
-            }
+            const userRef = db.collection('users').doc(p.userId);
+            await userRef.update({ lossCount: (store.users[p.userId]?.lossCount || 0) + 1 });
+            broadcastUserUpdate(p.userId);
           }
-        });
+        }
       }
     }
     gs.escrowBalance = 0;
@@ -596,12 +489,10 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
       advanceTurn(room);
     }
   }
-
-  saveStore();
 }
 
 // Helper to handle inactivity forfeit
-function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
+async function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
   if (room.status !== 'playing') return;
 
   addLog(room, `⏱️ ${inactivePlayer.username} has been forfeited due to inactivity.`);
@@ -617,26 +508,28 @@ function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
     const totalPayout = room.gameState.escrowBalance;
     addLog(room, `🏆 Game Over! ${winner.username} wins by forfeit and takes the pot of $${totalPayout.toFixed(2)}!`);
 
-    if (room.betAmount > 0 && totalPayout > 0) {
-      const winnerProfile = store.users[winner.userId];
-      if (winnerProfile && !isBotPlayer(winnerProfile.id)) {
-        winnerProfile.balance += totalPayout;
-        winnerProfile.winCount += 1;
-        addTransaction(winner.userId, 'win_payout', totalPayout, room.id, `Win by opponent inactivity forfeit.`);
+    if (room.betAmount > 0 && totalPayout > 0 && !isBotPlayer(winner.userId)) {
+      const userRef = db.collection('users').doc(winner.userId);
+      const userDoc = await userRef.get();
+      if(userDoc.exists) {
+        await userRef.update({
+          balance: userDoc.data().balance + totalPayout,
+          winCount: (userDoc.data().winCount || 0) + 1
+        });
+        await addTransaction(winner.userId, 'win_payout', totalPayout, room.id, `Win by opponent inactivity forfeit.`);
         broadcastUserUpdate(winner.userId);
       }
     }
     room.gameState.escrowBalance = 0;
   }
 
-  saveStore();
   broadcastToRoom(room.id, 'game_update', room);
 }
 
 // Initialize continuous turn timers thread (1s interval)
-setInterval(() => {
+setInterval(async () => {
   let changed = false;
-  Object.keys(store.rooms).forEach(roomId => {
+  for (const roomId of Object.keys(store.rooms)) {
     const room = store.rooms[roomId];
     if (room.status === 'playing') {
       const gs = room.gameState;
@@ -657,9 +550,9 @@ setInterval(() => {
 
         // Forfeit if 5 minutes are up
         if (activePlayer.inactivityTimer <= 0) {
-          handleInactivityForfeit(room, activePlayer);
+          await handleInactivityForfeit(room, activePlayer);
           // Skip the rest of the turn logic for this room
-          return; 
+          continue; 
         }
       }
 
@@ -679,7 +572,7 @@ setInterval(() => {
         }
       }
     }
-  });
+  }
 
   if (changed) {
     // Notify clients about updated timers
@@ -714,12 +607,12 @@ setInterval(() => {
 }, 10000);
 
 // Matchmaking automatic bot auto-fill (PUBG style)
-setInterval(() => {
+setInterval(async () => {
   cleanupMatchmakingQueues();
 
-  Object.keys(store.matchmakingQueues).forEach(queueKey => {
+  for (const queueKey of Object.keys(store.matchmakingQueues)) {
     const queueUserIds = store.matchmakingQueues[queueKey];
-    if (!queueUserIds || queueUserIds.length === 0) return;
+    if (!queueUserIds || queueUserIds.length === 0) continue;
 
     // Get bet, cap, mode from queueKey (e.g., "1_2_solo" -> bet: 1, cap: 2, mode: "solo")
     const parts = queueKey.split('_');
@@ -730,7 +623,7 @@ setInterval(() => {
     // Find the first user in the queue
     const firstUserId = queueUserIds[0];
     const firstUser = store.users[firstUserId];
-    if (!firstUser) return;
+    if (!firstUser) continue;
 
     const joinedAt = (firstUser as any).seekingJoinedAt || Date.now();
     const waitTimeMs = Date.now() - joinedAt;
@@ -766,18 +659,9 @@ setInterval(() => {
       }
 
       // Create the room
-      const room = startMatchedRoom(matchedList, bet, cap, mode);
-
-      // Notify all real players
-      realPlayers.forEach(p => {
-        sendEventToUser(p.id, 'matchmaker_success', { roomId: room.id, room });
-        broadcastToAll('matchmaker_seeking_cancelled', { senderId: p.id });
-      });
-
-      broadcastToAll('online_players_updated', {});
-      saveStoreAndWait();
+      await startMatchedRoom(matchedList, bet, cap, mode);
     }
-  });
+  }
 }, 2000);
 
 
@@ -792,36 +676,47 @@ app.post('/api/auth/register', async (req: any, res) => {
     if (!username || !email || !password) {
       return res.status(400).json({ error: 'Username, email, and password are required.' });
     }
-  
-    // Check if user already exists
-    const existingUser = Object.values(store.users).find(u => u.email === email);
-    if (existingUser) {
-      return res.status(409).json({ error: 'An account with this email already exists.' });
+
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection is not available.' });
     }
   
-    // IMPORTANT: In a real app, hash the password before saving!
-    // Example using bcrypt:
-    // const salt = await bcrypt.genSalt(10);
-    // const hashedPassword = await bcrypt.hash(password, salt);
-    const hashedPassword = password; // Storing plain text for this example. NOT FOR PRODUCTION.
+    try {
+      // Check if user already exists in Firestore
+      const usersRef = db.collection('users');
+      const snapshot = await usersRef.where('email', '==', email).get();
+      if (!snapshot.empty) {
+        return res.status(409).json({ error: 'An account with this email already exists.' });
+      }
   
-    const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-    const newUser: UserProfile = {
-      id: userId,
-      username: username.trim().substring(0, 20),
-      email: email,
-      password: hashedPassword, // Storing this for our new auth system
-      avatar: avatar || '🌸',
-      balance: 100.0,
-      winCount: 0,
-      lossCount: 0
-    };
+      // IMPORTANT: In a real app, hash the password before saving!
+      const hashedPassword = password; // Storing plain text for this example. NOT FOR PRODUCTION.
   
-    store.users[userId] = newUser;
-    addTransaction(userId, 'deposit', 100.0, undefined, 'Welcome signup bonus.');
-    await saveStoreAndWait();
+      const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+      const newUser: UserProfile = {
+        id: userId,
+        username: username.trim().substring(0, 20),
+        email: email,
+        password: hashedPassword, // Storing this for our new auth system
+        avatar: avatar || '🌸',
+        balance: 100.0,
+        winCount: 0,
+        lossCount: 0
+      };
   
-    res.status(201).json({ success: true, message: 'User registered successfully.' });
+      // Save the new user to Firestore
+      await usersRef.doc(userId).set(newUser);
+      
+      // The addTransaction function still uses the in-memory store, this will be refactored later.
+      // For now, we also add the user to the local store to keep things working temporarily.
+      store.users[userId] = newUser;
+      await addTransaction(userId, 'deposit', 100.0, undefined, 'Welcome signup bonus.');
+  
+      res.status(201).json({ success: true, message: 'User registered successfully.' });
+    } catch (error) {
+      console.error("Error during user registration:", error);
+      res.status(500).json({ error: "An internal server error occurred during registration." });
+    }
 });
 
 app.post('/api/auth/login', async (req: any, res) => {
@@ -831,41 +726,72 @@ app.post('/api/auth/login', async (req: any, res) => {
         return res.status(400).json({ error: 'Email and password are required.' });
     }
 
-    const user = Object.values(store.users).find(u => u.email === email);
-
-    if (!user) {
-        return res.status(404).json({ error: 'User not found.' });
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection is not available.' });
     }
 
-    // IMPORTANT: In a real app, compare hashed passwords!
-    // Example using bcrypt:
-    // const isValid = await bcrypt.compare(password, user.password);
-    const isValid = user.password === password; // Plain text comparison. NOT FOR PRODUCTION.
+    try {
+      const usersRef = db.collection('users');
+      const snapshot = await usersRef.where('email', '==', email).limit(1).get();
 
-    if (!isValid) {
-        return res.status(401).json({ error: 'Invalid password.' });
+      if (snapshot.empty) {
+          return res.status(404).json({ error: 'User not found.' });
+      }
+
+      const user = snapshot.docs[0].data() as UserProfile;
+
+      // IMPORTANT: In a real app, compare hashed passwords!
+      const isValid = user.password === password; // Plain text comparison. NOT FOR PRODUCTION.
+
+      if (!isValid) {
+          return res.status(401).json({ error: 'Invalid password.' });
+      }
+
+      // Also add/update the user in the local store for now for compatibility with other functions.
+      store.users[user.id] = user;
+
+      // Create and sign a JWT
+      const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
+
+      // Don't send the password back to the client
+      const { password: _, ...userProfile } = user;
+
+      res.json({ token, user: userProfile });
+    } catch (error) {
+      console.error("Error during user login:", error);
+      res.status(500).json({ error: "An internal server error occurred during login." });
     }
-
-    // Create and sign a JWT
-    const token = jwt.sign({ userId: user.id }, JWT_SECRET, { expiresIn: '7d' });
-
-    // Don't send the password back to the client
-    const { password: _, ...userProfile } = user;
-
-    res.json({ token, user: userProfile });
 });
 
 // Retrieve single profile
-app.get('/api/users/:userId', (req, res, next) => {
+app.get('/api/users/:userId', async (req, res, next) => {
   if (req.params.userId === 'online' || req.params.userId === 'leaderboard') {
     return next();
   }
-  const user = store.users[req.params.userId];
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
+  if (!db) {
+    return res.status(500).json({ error: 'Database connection is not available.' });
   }
-  const { password, firebaseUid, ...userProfile } = user;
-  res.json(userProfile);
+
+  try {
+    const userDoc = await db.collection('users').doc(req.params.userId).get();
+    if (!userDoc.exists) {
+      // Fallback to in-memory store for now for compatibility with bot users etc.
+      const user = store.users[req.params.userId];
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      const { password, firebaseUid, ...userProfile } = user;
+      return res.json(userProfile);
+    }
+    const user = userDoc.data() as UserProfile;
+    // Also add/update the user in the local store for now for compatibility
+    store.users[user.id] = user;
+    const { password, firebaseUid, ...userProfile } = user;
+    res.json(userProfile);
+  } catch (error) {
+    console.error("Error fetching user profile:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
+  }
 });
 
 // Update profile
@@ -884,7 +810,7 @@ app.post('/api/users/:userId/update', verifyJwt, async (req: any, res) => {
     if (avatar) user.avatar = avatar;
     if (typeof isOfflinePreference === 'boolean') user.isOfflinePreference = isOfflinePreference;
   
-    await saveStoreAndWait();
+    // await // saveStoreAndWait();
     broadcastUserUpdate(user.id);
     const { password, firebaseUid, ...userProfile } = user;
     res.json(userProfile);
@@ -903,63 +829,125 @@ app.post('/api/users/:userId/status', verifyJwt, (req: any, res) => {
     const { isOffline } = req.body;
     user.isOfflinePreference = !!isOffline;
   
-    saveStore();
+    // saveStore();
     broadcastUserUpdate(user.id);
     const { password, firebaseUid, ...userProfile } = user;
     res.json({ success: true, isOfflinePreference: user.isOfflinePreference, user: userProfile });
 });
 
 // Wallet Deposits / Withdrawals
-app.post('/api/wallet/deposit', verifyJwt, (req: any, res) => {
+app.post('/api/wallet/deposit', verifyJwt, async (req: any, res) => {
   const { userId, amount } = req.body;
   if (req.user.userId !== userId) {
     return res.status(403).json({ error: 'Forbidden' });
   }
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-  
-  const depAmt = parseFloat(amount);
-  if (isNaN(depAmt) || depAmt <= 0) {
-    return res.status(400).json({ error: 'Invalid deposit amount' });
+
+  if (!db) {
+    return res.status(500).json({ error: 'Database connection is not available.' });
   }
 
-  user.balance += depAmt;
-  addTransaction(userId, 'deposit', depAmt, undefined, `Deposited funds via Simulated Net Banking.`);
-  broadcastUserUpdate(userId);
+  try {
+    const userRef = db.collection('users').doc(userId);
+    const userDoc = await userRef.get();
 
-  res.json({ success: true, balance: user.balance });
+    if (!userDoc.exists) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const user = userDoc.data() as UserProfile;
+    
+    const depAmt = parseFloat(amount);
+    if (isNaN(depAmt) || depAmt <= 0) {
+      return res.status(400).json({ error: 'Invalid deposit amount' });
+    }
+
+    const newBalance = user.balance + depAmt;
+
+    // Update balance in Firestore
+    await userRef.update({ balance: newBalance });
+    
+    // Add transaction record
+    await addTransaction(userId, 'deposit', depAmt, undefined, `Deposited funds via Simulated Net Banking.`);
+
+    // For now, update in-memory store for compatibility
+    if (store.users[userId]) {
+      store.users[userId].balance = newBalance;
+    }
+    
+    broadcastUserUpdate(userId);
+
+    res.json({ success: true, balance: newBalance });
+  } catch (error) {
+    console.error("Error during deposit:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
+  }
 });
 
-app.post('/api/wallet/withdraw', verifyJwt, (req: any, res) => {
+app.post('/api/wallet/withdraw', verifyJwt, async (req: any, res) => {
     const { userId, amount } = req.body;
     if (req.user.userId !== userId) {
         return res.status(403).json({ error: 'Forbidden' });
     }
-    const user = store.users[userId];
-    if (!user) return res.status(404).json({ error: 'User not found' });
-  
-    const withAmt = parseFloat(amount);
-    if (isNaN(withAmt) || withAmt <= 0) {
-      return res.status(400).json({ error: 'Invalid withdrawal amount' });
+
+    if (!db) {
+      return res.status(500).json({ error: 'Database connection is not available.' });
     }
-  
-    if (user.balance < withAmt) {
-      return res.status(400).json({ error: 'Insufficient funds' });
+
+    try {
+      const userRef = db.collection('users').doc(userId);
+      const userDoc = await userRef.get();
+
+      if (!userDoc.exists) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const user = userDoc.data() as UserProfile;
+    
+      const withAmt = parseFloat(amount);
+      if (isNaN(withAmt) || withAmt <= 0) {
+        return res.status(400).json({ error: 'Invalid withdrawal amount' });
+      }
+    
+      if (user.balance < withAmt) {
+        return res.status(400).json({ error: 'Insufficient funds' });
+      }
+    
+      const newBalance = user.balance - withAmt;
+
+      // Update balance in Firestore
+      await userRef.update({ balance: newBalance });
+      
+      // Add transaction record
+      await addTransaction(userId, 'withdrawal', withAmt, undefined, `Withdrawn funds to bank account.`);
+
+      // For now, update in-memory store for compatibility
+      if (store.users[userId]) {
+        store.users[userId].balance = newBalance;
+      }
+      
+      broadcastUserUpdate(userId);
+    
+      res.json({ success: true, balance: newBalance });
+    } catch (error) {
+      console.error("Error during withdrawal:", error);
+      res.status(500).json({ error: "An internal server error occurred." });
     }
-  
-    user.balance -= withAmt;
-    addTransaction(userId, 'withdrawal', withAmt, undefined, `Withdrawn funds to bank account.`);
-    broadcastUserUpdate(userId);
-  
-    res.json({ success: true, balance: user.balance });
 });
 
-app.get('/api/wallet/transactions/:userId', verifyJwt, (req: any, res) => {
+app.get('/api/wallet/transactions/:userId', verifyJwt, async (req: any, res) => {
     if (req.user.userId !== req.params.userId) {
         return res.status(403).json({ error: 'Forbidden' });
     }
-    const txs = store.transactions.filter(t => t.userId === req.params.userId);
-    res.json(txs);
+    if (!db) return res.status(500).json({ error: "Database not available" });
+
+    try {
+        const snapshot = await db.collection('transactions').where('userId', '==', req.params.userId).orderBy('timestamp', 'desc').get();
+        const txs = snapshot.docs.map(doc => doc.data());
+        res.json(txs);
+    } catch (error) {
+        console.error("Error fetching transactions:", error);
+        res.status(500).json({ error: "An internal server error occurred." });
+    }
 });
 
 
@@ -1023,7 +1011,7 @@ app.post('/api/rooms/create', verifyJwt, (req: any, res) => {
   };
 
   store.rooms[roomId] = newRoom;
-  saveStore();
+  // saveStore();
   res.json(newRoom);
 });
 
@@ -1080,7 +1068,7 @@ app.post('/api/rooms/join', verifyJwt, (req: any, res) => {
   room.pendingPlayers.push(newPendingPlayer);
   
   addLog(room, `🔔 Challenger ${user.username} is requesting to join the match. Waiting for host approval!`);
-  saveStore();
+  // saveStore();
 
   // Notify existing room players (including host) so they see the live approval dialog
   broadcastToRoom(room.id, 'game_update', room);
@@ -1089,12 +1077,11 @@ app.post('/api/rooms/join', verifyJwt, (req: any, res) => {
 });
 
 // Helper to build and start a matched game room
-function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; avatar: string; winCount?: number; lossCount?: number; balance: number }>, bet: number, cap: number, mode: 'solo' | 'team'): GameRoom {
+async function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; avatar: string; winCount?: number; lossCount?: number; balance: number }>, bet: number, cap: number, mode: 'solo' | 'team'): Promise<GameRoom> {
   const roomId = `MATCH_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
   let colors: PlayerColor[];
 
   if (cap === 2 && mode === 'solo') {
-    // For 2-player games, use Green (Host) and Blue (Challenger)
     colors = ['green', 'blue'];
   } else {
     colors = ['red', 'green', 'yellow', 'blue'];
@@ -1115,17 +1102,23 @@ function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; av
 
   // Create escrow holding for real players
   let totalEscrow = 0;
-  players.forEach(p => {
-    if (!isBotPlayer(p.userId)) {
-      const u = store.users[p.userId];
-      if (u) {
-        u.balance = Math.max(0, u.balance - bet);
-        addTransaction(p.userId, 'bet_escrow_locked', bet, roomId, `Escrow stake for Ludo Match ${roomId}.`);
-        broadcastUserUpdate(p.userId);
+  for (const p of players) {
+    if (!isBotPlayer(p.userId) && db) {
+      try {
+        const userRef = db.collection('users').doc(p.userId);
+        const userDoc = await userRef.get();
+        if (userDoc.exists) {
+          const newBalance = Math.max(0, userDoc.data().balance - bet);
+          await userRef.update({ balance: newBalance });
+          await addTransaction(p.userId, 'bet_escrow_locked', bet, roomId, `Escrow stake for Ludo Match ${roomId}.`);
+          broadcastUserUpdate(p.userId);
+        }
+      } catch (e) {
+        console.error("Error deducting escrow for player", p.userId, e);
       }
     }
     totalEscrow += bet;
-  });
+  }
 
   const tokens: LudoToken[] = [];
   players.forEach(p => {
@@ -1134,7 +1127,7 @@ function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; av
 
   const newRoom: GameRoom = {
     id: roomId,
-    status: 'playing', // Starts immediately
+    status: 'playing',
     betAmount: bet,
     players,
     capacity: cap,
@@ -1158,7 +1151,11 @@ function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; av
   };
 
   store.rooms[roomId] = newRoom;
-  saveStore();
+  
+  // Create room in Firestore as well
+  if(db) {
+    await db.collection('rooms').doc(roomId).set(newRoom);
+  }
 
   // Notify real players instantly over SSE with redirect payload
   players.forEach(p => {
@@ -1230,7 +1227,7 @@ app.post('/api/rooms/matchmaking/enter-queue', (req, res) => {
     });
     broadcastToAll('online_players_updated', {});
 
-    saveStore();
+    // saveStore();
     res.json({ status: 'queued', message: 'Looking for real online opponent...' });
   } catch (error: any) {
     console.error('!!! UNHANDLED ERROR in /enter-queue:', error);
@@ -1239,7 +1236,7 @@ app.post('/api/rooms/matchmaking/enter-queue', (req, res) => {
 });
 
 // Join Matchmaking Game (Challenge Player)
-app.post('/api/rooms/matchmaking/join', (req, res) => {
+app.post('/api/rooms/matchmaking/join', async (req, res) => {
   const { userId, betAmount, capacity, gameMode, opponentId } = req.body;
   
   if (!opponentId) {
@@ -1259,9 +1256,6 @@ app.post('/api/rooms/matchmaking/join', (req, res) => {
     return res.status(400).json({ error: 'Insufficient balance to match stake.' });
   }
 
-  const cap = parseInt(capacity) || 2;
-  const mode = gameMode === 'team' ? 'team' : 'solo';
-
   // Remove both users from all matchmaking queues
   for (const qKey of Object.keys(store.matchmakingQueues)) {
     store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter(id => id !== userId && id !== opponentId);
@@ -1276,22 +1270,13 @@ app.post('/api/rooms/matchmaking/join', (req, res) => {
   // For a direct 1v1 challenge, capacity is always 2 and mode is solo.
   const finalCapacity = 2;
   const finalMode = 'solo';
-  const room = startMatchedRoom(matchedList, bet, finalCapacity, finalMode);
-  // Notify both players instantly over SSE with redirect payload
-  matchedList.forEach(p => {
-    if (!isBotPlayer(p.id)) {
-      sendEventToUser(p.id, 'matchmaker_success', { roomId: room.id, room });
-      broadcastToAll('matchmaker_seeking_cancelled', { senderId: p.id });
-    }
-  });
-  broadcastToAll('online_players_updated', {});
-  saveStore();
+  const room = await startMatchedRoom(matchedList, bet, finalCapacity, finalMode);
 
   return res.json({ matched: true, roomId: room.id, room });
 });
 
 // Explicit endpoint to play against AI Bots ONLY (when user explicitly chooses)
-app.post('/api/rooms/create-bot-room', (req, res) => {
+app.post('/api/rooms/create-bot-room', async (req, res) => {
   const { userId, betAmount, capacity, gameMode } = req.body;
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -1320,7 +1305,7 @@ app.post('/api/rooms/create-bot-room', (req, res) => {
     });
   }
 
-  const room = startMatchedRoom(matchedList, bet, cap, mode);
+  const room = await startMatchedRoom(matchedList, bet, cap, mode);
   res.json({ success: true, roomId: room.id });
 });
 
@@ -1334,7 +1319,7 @@ app.post('/api/rooms/matchmaking/leave', (req, res) => {
     for (const qKey of Object.keys(store.matchmakingQueues)) {
       store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter(id => id !== userId);
     }
-    saveStore();
+    // saveStore();
     broadcastToAll('matchmaker_seeking_cancelled', { senderId: userId });
 
     // Also delete matchmaking record in Firestore if exists
@@ -1433,7 +1418,7 @@ app.get('/api/users/online', async (req, res) => {
 });
 
 // Challenge / Invite a player (PUBG-style)
-app.post('/api/rooms/challenge/invite', (req, res) => {
+app.post('/api/rooms/challenge/invite', async (req, res) => {
   const { senderId, receiverId, betAmount, capacity, gameMode } = req.body;
   const sender = store.users[senderId];
   if (!sender) return res.status(404).json({ error: 'Sender user not found.' });
@@ -1471,7 +1456,7 @@ app.post('/api/rooms/challenge/invite', (req, res) => {
       });
     }
 
-    const room = startMatchedRoom(matchedList, bet, selectedCapacity, selectedMode);
+    const room = await startMatchedRoom(matchedList, bet, selectedCapacity, selectedMode);
     return res.json({ success: true, roomId: room.id, room });
   }
 
@@ -1486,35 +1471,6 @@ app.post('/api/rooms/challenge/invite', (req, res) => {
       }
     }
   }
-
-  /*
-  if (isReceiverSeeking) {
-    // Both are ready, create match instantly!
-    const matchedList = [sender, receiverUser];
-    // If capacity > 2, add bots to fill the room
-    const botAvatars = ['🤖', '🦊', '⚡', '👑'];
-    const botNames = ['LudoMaster AI', 'SpeedyBot', 'ProLudo AI', 'ZenBot'];
-    while (matchedList.length < selectedCapacity) {
-      const idx = matchedList.length;
-      matchedList.push({
-        id: `bot_match_${Date.now()}_${idx}`,
-        username: botNames[idx % botNames.length],
-        avatar: botAvatars[idx % botAvatars.length],
-        winCount: 10 + Math.floor(Math.random() * 20),
-        lossCount: 5 + Math.floor(Math.random() * 10),
-        balance: 100
-      });
-    }
-
-    const room = startMatchedRoom(matchedList, bet, selectedCapacity, selectedMode);
-    
-    // Notify receiver directly that they are matched!
-    sendEventToUser(receiverId, 'matchmaker_success', { roomId: room.id, room });
-    broadcastToAll('matchmaker_seeking_cancelled', { senderId: receiverId });
-    
-    return res.json({ success: true, roomId: room.id, room });
-  }
-  */
 
   const roomId = `INV_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
@@ -1563,8 +1519,6 @@ app.post('/api/rooms/challenge/invite', (req, res) => {
   
   broadcastToAll('matchmaker_seeking_cancelled', { senderId });
   broadcastToAll('matchmaker_seeking_cancelled', { senderId: receiverId });
-
-  saveStore();
 
   // Notify real user over SSE
   sendEventToUser(receiverId, 'game_invite', {
@@ -1616,7 +1570,7 @@ app.post('/api/rooms/challenge/accept', (req, res) => {
 
   room.players.push(newPlayer);
   addLog(room, `⚔️ ${user.username} accepted the challenge and joined the room.`);
-  saveStore();
+  // saveStore();
 
   const hostId = room.players.find(p => p.isHost)?.userId;
   if (hostId) {
@@ -1639,7 +1593,7 @@ app.post('/api/rooms/challenge/decline', (req, res) => {
       sendEventToUser(hostId, 'game_invite_declined', { receiverName: user.username });
     }
     delete store.rooms[roomId];
-    saveStore();
+    // saveStore();
   }
 
   res.json({ success: true });
@@ -1680,59 +1634,80 @@ app.get('/api/users/leaderboard', (req, res) => {
 });
 
 // Ready Up / Toggle Ready
-app.post('/api/rooms/ready', (req, res) => {
+app.post('/api/rooms/ready', async (req, res) => {
   const { userId, roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (!db) return res.status(500).json({ error: "Database not available" });
 
-  const p = room.players.find(p => p.userId === userId);
-  if (!p) return res.status(404).json({ error: 'Player not in room' });
+  try {
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (!roomDoc.exists) return res.status(404).json({ error: 'Room not found' });
 
-  p.isReady = !p.isReady;
-  addLog(room, `${p.username} is ${p.isReady ? 'READY' : 'NOT READY'}.`);
-  saveStore();
+    const room = roomDoc.data() as GameRoom;
+    const p = room.players.find(p => p.userId === userId);
+    if (!p) return res.status(404).json({ error: 'Player not in room' });
 
-  broadcastToRoom(room.id, 'game_update', room);
-  res.json(room);
+    p.isReady = !p.isReady;
+    addLog(room, `${p.username} is ${p.isReady ? 'READY' : 'NOT READY'}.`);
+    
+    await roomRef.set(room);
+
+    broadcastToRoom(room.id, 'game_update', room);
+    res.json(room);
+  } catch (error) {
+    console.error("Error in /ready:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
+  }
 });
 
 // Add Bot to Private Room (To start match immediately)
-app.post('/api/rooms/add-bot', (req, res) => {
+app.post('/api/rooms/add-bot', async (req, res) => {
   const { roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  if (room.players.length >= 4) {
-    return res.status(400).json({ error: 'Room is already full.' });
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  try {
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (!roomDoc.exists) return res.status(404).json({ error: 'Room not found' });
+    
+    const room = roomDoc.data() as GameRoom;
+    if (room.players.length >= 4) {
+      return res.status(400).json({ error: 'Room is already full.' });
+    }
+
+    const botNames = ['DeepBlue', 'AlphaGo', 'ChessMaster', 'LudoAI', 'LudoKing', 'Siri', 'Alexa'];
+    const name = botNames[Math.floor(Math.random() * botNames.length)] + `_${Math.floor(Math.random() * 100)}`;
+    const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
+    
+    const colors: PlayerColor[] = ['red', 'green', 'yellow', 'blue'];
+    const occupiedColors = room.players.map(p => p.color);
+    const color = colors.find(c => !occupiedColors.includes(c)) || 'green';
+
+    const botPlayer: LudoPlayer = {
+      userId: botId,
+      username: `🤖 ${name}`,
+      avatar: '🤖',
+      color,
+      isHost: false,
+      isReady: true,
+      status: 'online'
+    };
+
+    room.players.push(botPlayer);
+    addLog(room, `Bot ${botPlayer.username} joined the match.`);
+    
+    await roomRef.set(room);
+
+    broadcastToRoom(room.id, 'game_update', room);
+    res.json(room);
+  } catch (error) {
+    console.error("Error in /add-bot:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
   }
-
-  const botNames = ['DeepBlue', 'AlphaGo', 'ChessMaster', 'LudoAI', 'LudoKing', 'Siri', 'Alexa'];
-  const name = botNames[Math.floor(Math.random() * botNames.length)] + `_${Math.floor(Math.random() * 100)}`;
-  const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-  
-  const colors: PlayerColor[] = ['red', 'green', 'yellow', 'blue'];
-  const occupiedColors = room.players.map(p => p.color);
-  const color = colors.find(c => !occupiedColors.includes(c)) || 'green';
-
-  const botPlayer: LudoPlayer = {
-    userId: botId,
-    username: `🤖 ${name}`,
-    avatar: '🤖',
-    color,
-    isHost: false,
-    isReady: true,
-    status: 'online'
-  };
-
-  room.players.push(botPlayer);
-  addLog(room, `Bot ${botPlayer.username} joined the match.`);
-  saveStore();
-
-  broadcastToRoom(room.id, 'game_update', room);
-  res.json(room);
 });
 
 // Start Match (Host only)
-app.post('/api/rooms/start', (req, res) => {
+app.post('/api/rooms/start', async (req, res) => {
   const { userId, roomId } = req.body;
   const room = store.rooms[roomId];
   if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -1752,61 +1727,48 @@ app.post('/api/rooms/start', (req, res) => {
   // Ensure all players are ready and assigned distinct colors
   let colorsToAssign: PlayerColor[];
   if (room.players.length === 2 && room.gameMode === 'solo') {
-    // Assuming the intent for 2 players is host=red, guest=yellow (diagonal)
     colorsToAssign = ['red', 'yellow']; 
-
     const host = room.players.find(p => p.isHost);
     const guest = room.players.find(p => !p.isHost);
-
     if (host) host.color = 'red';
     if (guest) guest.color = 'yellow';
-
   } else {
-    // If there are more than 2 players, use the full color set
     colorsToAssign = ['red', 'green', 'yellow', 'blue'];
     room.players.forEach((pl, idx) => {
-      pl.color = colorsToAssign[idx] || 'red'; // Assign initial colors for >2 players
+      pl.color = colorsToAssign[idx] || 'red';
     });
   }
 
-  room.players.forEach((pl, idx) => {
-    pl.isReady = true;
-    // Ensure pl.color is only assigned once based on the determined colorsToAssign,
-    // or if already assigned (for 2-player case), just keep it.
-    // This assumes the `pl.color` set in the if block (for host/guest) should take precedence.
-    if (!pl.color) { // Only assign if not already assigned
-      pl.color = colorsToAssign[idx] || 'red';
-    }
-  });
+  room.players.forEach(pl => pl.isReady = true);
 
   // Deduct stakes and lock escrow
   const bet = room.betAmount;
-  let success = true;
-
-  room.players.forEach(pl => {
-    if (!isBotPlayer(pl.userId)) {
-      const user = store.users[pl.userId];
-      if (!user || user.balance < bet) {
-        success = false;
+  if (db) {
+    for (const pl of room.players) {
+      if (!isBotPlayer(pl.userId)) {
+        const userRef = db.collection('users').doc(pl.userId);
+        const userDoc = await userRef.get();
+        if (!userDoc.exists || (userDoc.data()?.balance || 0) < bet) {
+          return res.status(400).json({ error: `One or more players have insufficient balance for this bet. (${pl.username})` });
+        }
       }
     }
-  });
 
-  if (!success) {
-    return res.status(400).json({ error: 'Nus ama mid ka mid ah ciyaartoyda kuma filna baaqiga wallet-kiisa bet-kan.' });
-  }
-
-  // Execute deductions
-  let totalEscrow = 0;
-  room.players.forEach(pl => {
-    if (!isBotPlayer(pl.userId)) {
-      const user = store.users[pl.userId]!;
-      user.balance -= bet;
-      addTransaction(pl.userId, 'bet_escrow_locked', bet, room.id, `Escrow lock for Match ${room.id}`);
-      broadcastUserUpdate(pl.userId);
+    // All checks passed, now execute deductions
+    let totalEscrow = 0;
+    for (const pl of room.players) {
+      if (!isBotPlayer(pl.userId)) {
+        const userRef = db.collection('users').doc(pl.userId);
+        const userDoc = await userRef.get();
+        const currentBalance = userDoc.data()?.balance || 0;
+        await userRef.update({ balance: currentBalance - bet });
+        await addTransaction(pl.userId, 'bet_escrow_locked', bet, room.id, `Escrow lock for Match ${room.id}`);
+        broadcastUserUpdate(pl.userId);
+      }
+      totalEscrow += bet;
     }
-    totalEscrow += bet;
-  });
+    room.gameState.escrowBalance = totalEscrow;
+  }
 
   // Setup tokens
   const tokens: LudoToken[] = [];
@@ -1816,259 +1778,275 @@ app.post('/api/rooms/start', (req, res) => {
 
   room.status = 'playing';
   room.gameState.tokens = tokens;
-  room.gameState.escrowBalance = totalEscrow;
   room.gameState.turn = 0;
   room.gameState.turnTimer = 30;
-  addLog(room, `⚔️ Ciyaartu waa ay bilaabatay! Ciyaartoyda: ${room.players.length}. Bet: $${bet}. Escrow Locked: $${totalEscrow}`);
+  addLog(room, `⚔️ Ciyaartu waa ay bilaabatay! Ciyaartoyda: ${room.players.length}. Bet: $${bet}. Escrow Locked: $${room.gameState.escrowBalance}`);
 
-  saveStore();
+  if (db) {
+    await db.collection('rooms').doc(room.id).set(room);
+  }
+
   broadcastToRoom(room.id, 'game_update', room);
 
   res.json(room);
 });
 
 // Dice Roll Action
-app.post('/api/rooms/roll-dice', (req, res) => {
+app.post('/api/rooms/roll-dice', async (req, res) => {
   const { userId, roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  if (room.status !== 'playing') return res.status(400).json({ error: 'Game is not in playing state.' });
 
-  const gs = room.gameState;
-  const activePlayer = room.players[gs.turn];
+  if (!db) return res.status(500).json({ error: "Database not available" });
 
-  // Reset inactivity timer since player made a move
-  if (activePlayer) activePlayer.inactivityTimer = 300;
-
-  gs.turnTimer = 30; // Reset the short turn timer
-
-  if (!activePlayer || activePlayer.userId !== userId) {
-    return res.status(403).json({ error: "It is not your turn to roll!" });
-  }
-
-  if (gs.hasRolled) {
-    return res.status(400).json({ error: "You have already rolled the dice!" });
-  }
-
-  // Generate Roll
-  const d = Math.floor(Math.random() * 6) + 1;
-  gs.diceRoll = d;
-  gs.lastDiceRoll = d;
-  gs.hasRolled = true;
-
-  addLog(room, `🎲 ${activePlayer.username} rolled a ${d}!`);
-
-  // Triple 6s Check
-  if (d === 6) {
-    gs.consecutiveSixes = (gs.consecutiveSixes || 0) + 1;
-  } else {
-    gs.consecutiveSixes = 0;
-  }
-
-  if (gs.consecutiveSixes === 3) {
-    addLog(room, `⚠️ Triple 6 Penalty! ${activePlayer.username} rolled three 6s in a row. Turn forfeited!`);
-    gs.consecutiveSixes = 0;
-    // The turn is forfeited, so we advance to the next player.
-    // We also nullify the roll to prevent the UI from thinking a move is pending.
-    gs.diceRoll = null;
-    gs.hasRolled = false;
+  try {
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (!roomDoc.exists) return res.status(404).json({ error: 'Room not found' });
     
-    // Advance turn synchronously
-    advanceTurn(room);
-    saveStore();
-    broadcastToRoom(room.id, 'game_update', room);
-    executeBotTurnIfActive(room);
+    const room = roomDoc.data() as GameRoom;
+    if (room.status !== 'playing') return res.status(400).json({ error: 'Game is not in playing state.' });
 
-    return res.json(room);
-  }
+    const gs = room.gameState;
+    const activePlayer = room.players[gs.turn];
 
-  // Analyze if there are valid moves
-  const playerTokens = gs.tokens.filter(t => t.color === activePlayer.color);
-  const validTokens = playerTokens.filter(t => isMoveValid(t, d));
+    if (activePlayer) activePlayer.inactivityTimer = 300;
+    gs.turnTimer = 30;
 
-  if (validTokens.length === 0) {
-    // No moves possible, turn ends automatically.
-    // FIRST, broadcast the result of the roll so all clients can see the animation.
-    addLog(room, `${activePlayer.username} has no valid moves with roll ${d}. Turn passes.`);
-    saveStore();
-    broadcastToRoom(room.id, 'game_update', room);
-    res.json(room); // Respond to the roller immediately.
+    if (!activePlayer || activePlayer.userId !== userId) {
+      return res.status(403).json({ error: "It is not your turn to roll!" });
+    }
+    if (gs.hasRolled) {
+      return res.status(400).json({ error: "You have already rolled the dice!" });
+    }
 
-    // SECOND, after a delay to allow for the animation, advance the turn and broadcast again.
-    setTimeout(() => {
-      // Re-fetch the room to ensure we're acting on the latest state
-      const currentRoom = store.rooms[roomId];
-      if (currentRoom && currentRoom.status === 'playing') {
-        advanceTurn(currentRoom);
-        saveStore();
-        broadcastToRoom(currentRoom.id, 'game_update', currentRoom);
-        executeBotTurnIfActive(currentRoom);
-      }
-    }, 1500); // 1.5-second delay for clients to see the roll animation
+    const d = Math.floor(Math.random() * 6) + 1;
+    gs.diceRoll = d;
+    gs.hasRolled = true;
+    addLog(room, `🎲 ${activePlayer.username} rolled a ${d}!`);
 
-  } else {
-    // There are valid moves, so we just update the state and wait for the player's move.
-    saveStore();
-    broadcastToRoom(room.id, 'game_update', room);
-    res.json(room);
+    if (d === 6) gs.consecutiveSixes = (gs.consecutiveSixes || 0) + 1;
+    else gs.consecutiveSixes = 0;
+
+    if (gs.consecutiveSixes === 3) {
+      addLog(room, `⚠️ Triple 6 Penalty! ${activePlayer.username} rolled three 6s in a row. Turn forfeited!`);
+      gs.consecutiveSixes = 0;
+      gs.diceRoll = null;
+      gs.hasRolled = false;
+      advanceTurn(room);
+      await roomRef.set(room);
+      broadcastToRoom(room.id, 'game_update', room);
+      await executeBotTurnIfActive(room);
+      return res.json(room);
+    }
+
+    const playerTokens = gs.tokens.filter(t => t.color === activePlayer.color);
+    const validTokens = playerTokens.filter(t => isMoveValid(t, d));
+
+    if (validTokens.length === 0) {
+      addLog(room, `${activePlayer.username} has no valid moves with roll ${d}. Turn passes.`);
+      await roomRef.set(room);
+      broadcastToRoom(room.id, 'game_update', room);
+      res.json(room); 
+
+      setTimeout(async () => {
+        const currentRoomDoc = await roomRef.get();
+        if (currentRoomDoc.exists) {
+          const currentRoom = currentRoomDoc.data() as GameRoom;
+          if (currentRoom.status === 'playing') {
+            advanceTurn(currentRoom);
+            await roomRef.set(currentRoom);
+            broadcastToRoom(currentRoom.id, 'game_update', currentRoom);
+            await executeBotTurnIfActive(currentRoom);
+          }
+        }
+      }, 1500);
+    } else {
+      await roomRef.set(room);
+      broadcastToRoom(room.id, 'game_update', room);
+      res.json(room);
+    }
+  } catch (error) {
+    console.error("Error in roll-dice:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
   }
 });
 // Token Move Action
-app.post('/api/rooms/move-token', (req, res) => {
+app.post('/api/rooms/move-token', async (req, res) => {
   const { userId, roomId, tokenId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  if (room.status !== 'playing') return res.status(400).json({ error: 'Game is not playing.' });
+  if (!db) return res.status(500).json({ error: "Database not available" });
 
-  const gs = room.gameState;
-  const activePlayer = room.players[gs.turn];
+  try {
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (!roomDoc.exists) return res.status(404).json({ error: 'Room not found' });
+    
+    const room = roomDoc.data() as GameRoom;
+    if (room.status !== 'playing') return res.status(400).json({ error: 'Game is not playing.' });
 
-  // Reset inactivity timer since player made a move
-  if (activePlayer) activePlayer.inactivityTimer = 300;
+    const gs = room.gameState;
+    const activePlayer = room.players[gs.turn];
 
-  gs.turnTimer = 30; // Reset the short turn timer
+    if (activePlayer) activePlayer.inactivityTimer = 300;
+    gs.turnTimer = 30;
 
-  if (!activePlayer || activePlayer.userId !== userId) {
-    return res.status(403).json({ error: "It is not your turn!" });
+    if (!activePlayer || activePlayer.userId !== userId) {
+      return res.status(403).json({ error: "It is not your turn!" });
+    }
+
+    if (!gs.hasRolled || gs.diceRoll === null) {
+      return res.status(400).json({ error: "You must roll the dice first!" });
+    }
+
+    const token = gs.tokens.find(t => t.id === tokenId);
+    if (!token || token.color !== activePlayer.color) {
+      return res.status(400).json({ error: "Invalid token selected." });
+    }
+
+    if (!isMoveValid(token, gs.diceRoll)) {
+      return res.status(400).json({ error: "This token cannot make a valid move with the current roll." });
+    }
+
+    await moveTokenLogic(room, tokenId, gs.diceRoll);
+    
+    // After moveTokenLogic mutates the room object, save it back to Firestore
+    await roomRef.set(room);
+    
+    broadcastToRoom(room.id, 'game_update', room);
+    
+    await executeBotTurnIfActive(room);
+
+    res.json(room);
+  } catch (error) {
+    console.error("Error in move-token:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
   }
-
-  if (!gs.hasRolled || gs.diceRoll === null) {
-    return res.status(400).json({ error: "You must roll the dice first!" });
-  }
-
-  const token = gs.tokens.find(t => t.id === tokenId);
-  if (!token || token.color !== activePlayer.color) {
-    return res.status(400).json({ error: "Invalid token selected." });
-  }
-
-  if (!isMoveValid(token, gs.diceRoll)) {
-    return res.status(400).json({ error: "This token cannot make a valid move with the current roll." });
-  }
-
-  // Execute Move
-  moveTokenLogic(room, tokenId, gs.diceRoll);
-  broadcastToRoom(room.id, 'game_update', room);
-  
-  // Trigger bot turn if needed
-  executeBotTurnIfActive(room);
-
-  res.json(room);
 });
 
 // Send Chat Message
-app.post('/api/rooms/chat', (req, res) => {
+app.post('/api/rooms/chat', async (req, res) => {
   const { userId, roomId, text } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
+  if (!db) return res.status(500).json({ error: "Database not available" });
 
-  const p = room.players.find(pl => pl.userId === userId);
-  if (!p) return res.status(403).json({ error: 'You are not in this room.' });
+  try {
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (!roomDoc.exists) return res.status(404).json({ error: 'Room not found' });
 
-  const cleanText = (text || '').trim().substring(0, 100);
-  if (cleanText.length > 0) {
-    const chatMsg: ChatMessage = {
-      id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-      senderId: userId,
-      senderName: p.username,
-      text: cleanText,
-      timestamp: Date.now()
-    };
-    room.gameState.chat.push(chatMsg);
-    if (room.gameState.chat.length > 30) {
-      room.gameState.chat.shift();
+    const room = roomDoc.data() as GameRoom;
+    const p = room.players.find(pl => pl.userId === userId);
+    if (!p) return res.status(403).json({ error: 'You are not in this room.' });
+
+    const cleanText = (text || '').trim().substring(0, 100);
+    if (cleanText.length > 0) {
+      const chatMsg: ChatMessage = {
+        id: `chat_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+        senderId: userId,
+        senderName: p.username,
+        text: cleanText,
+        timestamp: Date.now()
+      };
+      room.gameState.chat.push(chatMsg);
+      if (room.gameState.chat.length > 30) {
+        room.gameState.chat.shift();
+      }
+      
+      await roomRef.update({ 'gameState.chat': room.gameState.chat });
+      
+      broadcastToRoom(room.id, 'game_update', room);
     }
-    saveStore();
-    broadcastToRoom(room.id, 'game_update', room);
+    res.json(room);
+  } catch (error) {
+    console.error("Error in /chat:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
   }
-
-  res.json(room);
 });
 
 // Accept Pending Player (Host only)
-app.post('/api/rooms/accept-player', (req, res) => {
+app.post('/api/rooms/accept-player', async (req, res) => {
   const { userId, roomId, challengerId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  
-  // Verify user is host
-  const host = room.players.find(p => p.userId === userId);
-  if (!host || !host.isHost) {
-    return res.status(403).json({ error: 'Only the host can accept players.' });
-  }
+  if (!db) return res.status(500).json({ error: "Database not available" });
 
-  if (!room.pendingPlayers) room.pendingPlayers = [];
-  const idx = room.pendingPlayers.findIndex(p => p.userId === challengerId);
-  if (idx === -1) {
-    return res.status(404).json({ error: 'Challenger not found in pending list.' });
-  }
+  try {
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (!roomDoc.exists) return res.status(404).json({ error: 'Room not found' });
 
-  const challenger = room.pendingPlayers.splice(idx, 1)[0];
-  
-  // Assign color
-  const colors: PlayerColor[] = ['red', 'green', 'yellow', 'blue'];
-  const occupiedColors = room.players.map(p => p.color);
-  const color = colors.find(c => !occupiedColors.includes(c)) || 'green';
-  let assignedColor: PlayerColor;
-  if (room.capacity === 2 && room.gameMode === 'solo') {
-    // For 2-player solo games, if host is 'red', the joiner (challenger) should be 'yellow'.
-    assignedColor = 'yellow'; // Align with red/yellow diagonal for 2-player solo
-  } else {
-    // For other modes/capacities, assign the first available color.
+    const room = roomDoc.data() as GameRoom;
+    const host = room.players.find(p => p.userId === userId);
+    if (!host || !host.isHost) {
+      return res.status(403).json({ error: 'Only the host can accept players.' });
+    }
+
+    if (!room.pendingPlayers) room.pendingPlayers = [];
+    const idx = room.pendingPlayers.findIndex(p => p.userId === challengerId);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Challenger not found in pending list.' });
+    }
+
+    const challenger = room.pendingPlayers.splice(idx, 1)[0];
+    
     const colors: PlayerColor[] = ['red', 'green', 'yellow', 'blue'];
     const occupiedColors = room.players.map(p => p.color);
-    // Find the first color not yet occupied, default to 'red' if somehow no color is found
-    assignedColor = colors.find(c => !occupiedColors.includes(c)) || 'red';
+    let assignedColor: PlayerColor = colors.find(c => !occupiedColors.includes(c)) || 'green';
+    if (room.capacity === 2 && room.gameMode === 'solo') {
+      assignedColor = 'yellow';
+    }
+    challenger.color = assignedColor;
+    challenger.isReady = false;
+
+    room.players.push(challenger);
+    addLog(room, `✅ Host accepted ${challenger.username} into the room.`);
+    
+    await roomRef.set(room);
+    
+    broadcastToRoom(room.id, 'game_update', room);
+    sendEventToUser(challengerId, 'game_update', room);
+
+    res.json(room);
+  } catch (error) {
+    console.error("Error in /accept-player:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
   }
-  challenger.color = assignedColor;
-  challenger.isReady = false; // They must toggle ready
-
-  room.players.push(challenger);
-  addLog(room, `✅ Host accepted ${challenger.username} into the room.`);
-  
-  saveStore();
-  broadcastToRoom(room.id, 'game_update', room);
-  // Send direct update to challenger too
-  sendEventToUser(challengerId, 'game_update', room);
-
-  res.json(room);
 });
 
 // Decline Pending Player (Host only)
-app.post('/api/rooms/decline-player', (req, res) => {
+app.post('/api/rooms/decline-player', async (req, res) => {
   const { userId, roomId, challengerId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  
-  // Verify user is host
-  const host = room.players.find(p => p.userId === userId);
-  if (!host || !host.isHost) {
-    return res.status(403).json({ error: 'Only the host can decline players.' });
+  if (!db) return res.status(500).json({ error: "Database not available" });
+
+  try {
+    const roomRef = db.collection('rooms').doc(roomId);
+    const roomDoc = await roomRef.get();
+    if (!roomDoc.exists) return res.status(404).json({ error: 'Room not found' });
+    
+    const room = roomDoc.data() as GameRoom;
+    const host = room.players.find(p => p.userId === userId);
+    if (!host || !host.isHost) {
+      return res.status(403).json({ error: 'Only the host can decline players.' });
+    }
+
+    if (!room.pendingPlayers) room.pendingPlayers = [];
+    const idx = room.pendingPlayers.findIndex(p => p.userId === challengerId);
+    if (idx === -1) {
+      return res.status(404).json({ error: 'Challenger not found in pending list.' });
+    }
+
+    const challenger = room.pendingPlayers.splice(idx, 1)[0];
+    addLog(room, `❌ Host declined ${challenger.username}'s request.`);
+    
+    await roomRef.update({ pendingPlayers: room.pendingPlayers, 'gameState.logs': room.gameState.logs });
+    
+    const rejectionRoomState = {
+      ...room,
+      rejectionReason: 'Your request to join the room was declined by the host.',
+    };
+    sendEventToUser(challengerId, 'game_update', rejectionRoomState);
+    broadcastToRoom(room.id, 'game_update', room);
+
+    res.json(room);
+  } catch (error) {
+    console.error("Error in /decline-player:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
   }
-
-  if (!room.pendingPlayers) room.pendingPlayers = [];
-  const idx = room.pendingPlayers.findIndex(p => p.userId === challengerId);
-  if (idx === -1) {
-    return res.status(404).json({ error: 'Challenger not found in pending list.' });
-  }
-
-  const challenger = room.pendingPlayers.splice(idx, 1)[0];
-  addLog(room, `❌ Host declined ${challenger.username}'s request.`);
-  
-  // Create a special room object for the rejected player
-  const rejectionRoomState = {
-    ...room,
-    rejectionReason: 'Your request to join the room was declined by the host.',
-    // Ensure the pending list sent to the rejected user is also empty of them
-    pendingPlayers: room.pendingPlayers.filter(p => p.userId !== challengerId) 
-  };
-  // Notify the declined player with a game_update containing the reason
-  sendEventToUser(challengerId, 'game_update', rejectionRoomState);
-
-  saveStore();
-  // Notify the rest of the room
-  broadcastToRoom(room.id, 'game_update', room);
-
-  res.json(room);
 });
 
 // Nudge Slow Player
@@ -2118,7 +2096,7 @@ app.post('/api/rooms/emoji', (req, res) => {
 });
 
 // Leave / Forfeit Game Room
-app.post('/api/rooms/leave', (req, res) => {
+app.post('/api/rooms/leave', async (req, res) => {
   const { userId, roomId } = req.body;
   const room = store.rooms[roomId];
   if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -2133,66 +2111,54 @@ app.post('/api/rooms/leave', (req, res) => {
     if (room.players.length === 0) {
       delete store.rooms[roomId];
     } else {
-      // Re-assign host if host left
       if (p.isHost) {
         room.players[0].isHost = true;
-        room.players[0].isReady = true;
         addLog(room, `${room.players[0].username} is now the host.`);
       }
       broadcastToRoom(room.id, 'game_update', room);
     }
   } else if (room.status === 'playing') {
-    // Mark the player as 'left'
     p.status = 'left';
 
-    // Find the opponent
     const opponent = room.players.find(pl => pl.userId !== userId && pl.status !== 'left');
-
     if (opponent) {
-      // End the game immediately. The opponent wins by forfeit.
       room.status = 'completed';
       room.gameState.winnerId = opponent.userId;
-      const leavingPlayerProfile = store.users[userId];
-      if (leavingPlayerProfile) {
-        leavingPlayerProfile.lossCount = (leavingPlayerProfile.lossCount || 0) + 1;
-        addLog(room, `😭 ${p.username} waa lagu helay ciyaarta!`); // Explicit log for the losing player
-        broadcastUserUpdate(userId);
-      }
-
       const totalPayout = room.gameState.escrowBalance;
       addLog(room, `🏆 ${p.username} has left the game. ${opponent.username} wins by forfeit and takes the pot of $${totalPayout.toFixed(2)}!`);
 
-      // Pay the total escrow pool to the winner
-      if (room.betAmount > 0 && totalPayout > 0) {
-        const winnerProfile = store.users[opponent.userId];
-        if (winnerProfile && !isBotPlayer(winnerProfile.id)) {
-          winnerProfile.balance += totalPayout;
-          winnerProfile.winCount = (winnerProfile.winCount || 0) + 1;
-          addTransaction(opponent.userId, 'win_payout', totalPayout, room.id, `Win by opponent forfeit.`);
-          broadcastUserUpdate(opponent.userId);
+      if (db) {
+        const leavingPlayerRef = db.collection('users').doc(userId);
+        await leavingPlayerRef.update({ lossCount: (store.users[userId]?.lossCount || 0) + 1 });
+        broadcastUserUpdate(userId);
+
+        if (room.betAmount > 0 && totalPayout > 0 && !isBotPlayer(opponent.userId)) {
+          const winnerRef = db.collection('users').doc(opponent.userId);
+          const winnerDoc = await winnerRef.get();
+          if (winnerDoc.exists) {
+            await winnerRef.update({
+              balance: winnerDoc.data().balance + totalPayout,
+              winCount: (winnerDoc.data().winCount || 0) + 1,
+            });
+            await addTransaction(opponent.userId, 'win_payout', totalPayout, room.id, `Win by opponent forfeit.`);
+            broadcastUserUpdate(opponent.userId);
+          }
         }
       }
       room.gameState.escrowBalance = 0;
-
-      // Broadcast the final game state to everyone in the room
-      broadcastToRoom(room.id, 'game_update', room);
-      res.json({ success: true, room }); // Respond with the final room state
-
     } else {
-      // This case handles if somehow the last player leaves, or a player leaves a game with only bots.
-      // We can just mark the game as completed.
       room.status = 'completed';
-      // No winner is declared if no one is left.
-      broadcastToRoom(room.id, 'game_update', room);
-      res.json({ success: true, room }); // Also respond with room state here
     }
+    
+    if (db) await db.collection('rooms').doc(roomId).set(room, { merge: true });
+    broadcastToRoom(room.id, 'game_update', room);
   }
 
-  saveStore();
+  res.json({ success: true, room });
 });
 
 // Check if a game is active and the user can rejoin
-app.get('/api/rooms/check-status/:roomId', (req, res) => {
+app.get('/api/rooms/check-status/:roomId', async (req, res) => {
   const { roomId } = req.params;
   const { userId } = req.query;
 
@@ -2200,23 +2166,31 @@ app.get('/api/rooms/check-status/:roomId', (req, res) => {
     return res.status(400).json({ error: 'User ID is required' });
   }
 
-  const room = store.rooms[roomId];
-  if (!room) {
-    return res.status(404).json({ error: 'Room not found' });
-  }
+  if (!db) return res.status(500).json({ error: "Database not available" });
 
-  if (room.status !== 'playing') {
-    // Return a 409 Conflict status to indicate the game is not in a rejoinable state.
-    return res.status(409).json({ error: 'Game is not in a rejoinable state (e.g., waiting or completed).', room });
-  }
+  try {
+    const roomDoc = await db.collection('rooms').doc(roomId).get();
+    if (!roomDoc.exists) {
+      return res.status(404).json({ error: 'Room not found' });
+    }
 
-  const playerInRoom = room.players.find(p => p.userId === userId && p.status !== 'left');
-  if (!playerInRoom) {
-    return res.status(403).json({ error: 'You are not a player in this game' });
-  }
+    const room = roomDoc.data() as GameRoom;
 
-  // Player is in the room and game is active. Return room data.
-  res.json(room);
+    if (room.status !== 'playing') {
+      return res.status(409).json({ error: 'Game is not in a rejoinable state (e.g., waiting or completed).', room });
+    }
+
+    const playerInRoom = room.players.find(p => p.userId === userId && p.status !== 'left');
+    if (!playerInRoom) {
+      return res.status(403).json({ error: 'You are not a player in this game' });
+    }
+
+    // Player is in the room and game is active. Return room data.
+    res.json(room);
+  } catch (error) {
+    console.error("Error in /check-status:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
+  }
 });
 
 
@@ -2318,7 +2292,7 @@ app.post('/api/admin/users/:userId/update', isAdmin, (req, res) => {
         user.lossCount = lossCount;
     }
 
-    saveStore();
+    // saveStore();
     broadcastUserUpdate(user.id); // Notify user of the change
     res.json(user);
 });
@@ -2329,7 +2303,7 @@ app.delete('/api/admin/users/:userId/delete', isAdmin, (req, res) => {
     const { userId } = req.params;
     if (store.users[userId]) {
         delete store.users[userId];
-        saveStoreAndWait();
+        // saveStoreAndWait();
         res.json({ success: true, message: `User ${userId} has been deleted.` });
     } else {
         res.status(404).json({ error: 'User not found' });
@@ -2337,7 +2311,7 @@ app.delete('/api/admin/users/:userId/delete', isAdmin, (req, res) => {
 });
 
 // Cancel a game
-app.post('/api/admin/rooms/:roomId/cancel', isAdmin, (req, res) => {
+app.post('/api/admin/rooms/:roomId/cancel', isAdmin, async (req, res) => {
     const { roomId } = req.params;
     const room = store.rooms[roomId];
     if (!room) {
@@ -2345,24 +2319,30 @@ app.post('/api/admin/rooms/:roomId/cancel', isAdmin, (req, res) => {
     }
 
     // Refund players
-    if (room.betAmount > 0) {
-        room.players.forEach(p => {
+    if (room.betAmount > 0 && db) {
+        for (const p of room.players) {
             if (!isBotPlayer(p.userId)) {
-                const user = store.users[p.userId];
-                if (user) {
-                    user.balance += room.betAmount;
-                    addTransaction(p.userId, 'refund', room.betAmount, room.id, `Refund for canceled match ${room.id}.`);
-                    broadcastUserUpdate(p.userId);
+                try {
+                    const userRef = db.collection('users').doc(p.userId);
+                    const userDoc = await userRef.get();
+                    if (userDoc.exists) {
+                        await userRef.update({ balance: userDoc.data().balance + room.betAmount });
+                        await addTransaction(p.userId, 'refund', room.betAmount, room.id, `Refund for canceled match ${room.id}.`);
+                        broadcastUserUpdate(p.userId);
+                    }
+                } catch (e) {
+                    console.error("Error refunding player", p.userId, e);
                 }
             }
-        });
+        }
     }
 
     addLog(room, `Game canceled by admin. Bets refunded.`);
     broadcastToRoom(room.id, 'game_canceled', { roomId });
     
     delete store.rooms[roomId];
-    saveStore();
+    if (db) await db.collection('rooms').doc(roomId).delete();
+
     res.json({ success: true, message: `Room ${roomId} has been canceled and bets refunded.` });
 });
 
@@ -2380,7 +2360,7 @@ app.post('/api/admin/users/:userId/toggle-admin', isAdmin, (req, res) => {
         user.role = 'admin';
     }
 
-    saveStore();
+    // saveStore();
     broadcastUserUpdate(user.id);
     res.json({ success: true, user });
 });
@@ -2413,7 +2393,7 @@ app.post('/api/admin/broadcast', isAdmin, (req, res) => {
 // ==========================================
 async function startServer() {
   // Load authoritative state from local file on startup
-  loadStore();
+  // loadStore();
   purgeSimulatedUsers(); // Ensure simulated users are purged from the memory state
 
   let vite: ViteDevServer | undefined;

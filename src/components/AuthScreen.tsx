@@ -44,7 +44,6 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
     setSuccessMessage('');
 
     const url = isLogin ? `${API_BASE_URL}/api/auth/login` : `${API_BASE_URL}/api/auth/register`;
-    console.log(`Fetching from URL: ${url}`); // Logging the URL
     const body = isLogin
       ? { email, password }
       : { username, email, password, avatar };
