@@ -8,6 +8,13 @@ import { Sparkles, Mail, Lock, LogIn, UserPlus } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageToggle from './LanguageToggle';
 import { UserProfile } from '../types/game';
+import { auth } from '../firebase-client'; // Import client-side auth
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword,
+  getIdToken,
+  User
+} from 'firebase/auth';
 
 const AVATARS = ['🎮', '🏆', '🔥', '👑', '🎲', '⚡', '🤖', '🦊', '🐯', '🐼', '🦁', '🦄'];
 
@@ -28,6 +35,37 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
   const [error, setError] = useState(initialError || '');
   const [successMessage, setSuccessMessage] = useState('');
 
+  const handleBackendLogin = async (firebaseUser: User) => {
+    try {
+      const token = await firebaseUser.getIdToken();
+      
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        // For registration, send username and avatar. The backend will handle the rest.
+        body: JSON.stringify({
+          username: isLogin ? undefined : username,
+          email: firebaseUser.email,
+          avatar: isLogin ? undefined : avatar,
+        }),
+      });
+
+      const profileData: UserProfile = await response.json();
+
+      if (!response.ok) {
+        throw new Error(profileData.error || 'Failed to sync with server.');
+      }
+      
+      onLoginSuccess(profileData, token);
+
+    } catch (err: any) {
+      setError(`Login to backend failed: ${err.message}`);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!email.trim() || !password.trim()) {
@@ -43,36 +81,42 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
     setError('');
     setSuccessMessage('');
 
-    const url = isLogin ? `${API_BASE_URL}/api/auth/login` : `${API_BASE_URL}/api/auth/register`;
-    const body = isLogin
-      ? { email, password }
-      : { username, email, password, avatar };
-
     try {
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'An unknown error occurred.');
-      }
-
       if (isLogin) {
-        if (data.user && data.token) {
-          onLoginSuccess(data.user, data.token);
-        } else {
-          throw new Error('Login response was invalid.');
-        }
+        // Handle Login
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        await handleBackendLogin(userCredential.user);
+
       } else {
-        setSuccessMessage('Registration successful! Please sign in.');
-        setIsLogin(true);
+        // Handle Registration
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+        setSuccessMessage('Registration successful! Logging you in...');
+        // After creating the user, we immediately log them into our backend
+        await handleBackendLogin(userCredential.user);
       }
     } catch (err: any) {
-      setError(err.message);
+      // Firebase provides detailed error messages
+      if (err.code) {
+        switch (err.code) {
+          case 'auth/user-not-found':
+            setError('No account found with this email.');
+            break;
+          case 'auth/wrong-password':
+            setError('Incorrect password. Please try again.');
+            break;
+          case 'auth/email-already-in-use':
+            setError('This email is already registered. Please sign in.');
+            break;
+          case 'auth/weak-password':
+            setError('Password is too weak. Must be at least 6 characters.');
+            break;
+          default:
+            setError(`Authentication failed: ${err.message}`);
+            break;
+        }
+      } else {
+        setError(err.message);
+      }
     } finally {
       setLoading(false);
     }
