@@ -4,6 +4,7 @@
  */
 
 import express from 'express';
+import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer, ViteDevServer } from 'vite';
@@ -23,6 +24,27 @@ import {
 } from './src/types/game.ts';
 
 const app = express();
+
+// Enable CORS for the frontend origin
+const allowedOrigins = [
+  'https://dhili-dhili-ludo.onrender.com',
+  'https://dhilidhili.onrender.com',
+  'http://localhost:5173',
+  'http://127.0.0.1:5173'
+];
+app.use(cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
+// Handle preflight requests for all routes
+app.options('*', cors({
+  origin: allowedOrigins,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 const PORT = 3002;
 const DB_FILE = path.join(process.cwd(), 'db_store.json');
 

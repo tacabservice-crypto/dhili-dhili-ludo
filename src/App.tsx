@@ -84,7 +84,8 @@ export default function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to synchronize user with backend.');
+        const errorData = await response.json().catch(() => ({ message: 'Failed to synchronize user with backend. The server might be down.' }));
+        throw new Error(errorData.message || 'Failed to synchronize user with backend.');
       }
 
       const backendProfile = await response.json();
@@ -93,8 +94,10 @@ export default function App() {
       await checkAndPromptRejoin(backendProfile.id);
     } catch (error) {
       console.error("Backend sync failed:", error);
-      // If sync fails, maybe sign out the user or show an error
-      handleLogout();
+      setError(`Failed to connect to the server. Please try again later. Details: ${(error as Error).message}`);
+      // If sync fails, sign out the user so they can try again.
+      // The onAuthStateChanged listener will then re-render the AuthScreen.
+      signOut(auth);
     }
   };
 
@@ -793,7 +796,7 @@ export default function App() {
   }
 
   if (!user) {
-    return <AuthScreen onLoginSuccess={handleLoginSuccess} />;
+    return <AuthScreen onLoginSuccess={handleLoginSuccess} initialError={error} />;
   }
 
   const renderOverlays = () => (

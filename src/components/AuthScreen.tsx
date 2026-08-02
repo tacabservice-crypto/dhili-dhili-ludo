@@ -9,11 +9,18 @@ import { useLanguage } from '../context/LanguageContext';
 import LanguageToggle from './LanguageToggle';
 import { auth, db } from '../firebase'; // Import Firebase auth and db instances
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword } from 'firebase/auth';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from 'firebase/firestore';
+
+import { UserProfile } from '../types/game';
 
 const AVATARS = ['🎮', '🏆', '🔥', '👑', '🎲', '⚡', '🤖', '🦊', '🐯', '🐼', '🦁', '🦄'];
 
-export default function AuthScreen() {
+interface AuthScreenProps {
+  onLoginSuccess: (profile: UserProfile) => void;
+  initialError?: string | null;
+}
+
+export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenProps) {
   const { t } = useLanguage();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
@@ -21,7 +28,7 @@ export default function AuthScreen() {
   const [avatar, setAvatar] = useState('🎮');
   const [isLogin, setIsLogin] = useState(true); // true for Sign In, false for Sign Up
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState(initialError || '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -39,8 +46,16 @@ export default function AuthScreen() {
 
     try {
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-        // Auth state will be handled by the listener in App.tsx
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        if (userCredential.user) {
+          const userDoc = await getDoc(doc(db, 'users', userCredential.user.uid));
+          if (userDoc.exists()) {
+            onLoginSuccess(userDoc.data() as UserProfile);
+          } else {
+            // This case is unlikely if sign-in works, but good to handle.
+            throw new Error('User profile not found in database.');
+          }
+        }
       } else {
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
         // Create a user profile document in Firestore
