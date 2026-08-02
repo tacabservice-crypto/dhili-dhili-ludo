@@ -1186,8 +1186,9 @@ app.get('/api/rooms/active', (req, res) => {
   const activeGames = Object.values(store.rooms)
     .filter(r => r.status === 'playing')
     .map(r => ({
-      roomId: r.id,
+      id: r.id, // Changed from roomId to id to match GameRoom type
       players: r.players.map(p => ({
+        userId: p.userId, // Added userId
         username: p.username,
         avatar: p.avatar,
       })),
@@ -1196,6 +1197,66 @@ app.get('/api/rooms/active', (req, res) => {
       capacity: r.capacity,
     }));
   res.json(activeGames);
+});
+
+// POST /api/rooms/:roomId/spectate
+// Allows a user to start spectating a game.
+app.post('/api/rooms/:roomId/spectate', (req, res) => {
+  const { roomId } = req.params;
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required.' });
+  }
+
+  const room = store.rooms[roomId];
+  if (!room) {
+    return res.status(404).json({ error: 'Room not found.' });
+  }
+
+  const client = activeClients.find(c => c.userId === userId);
+  if (client) {
+    client.spectatingRoomId = roomId;
+    console.log(`User ${userId} is now spectating room ${roomId}`);
+  }
+
+  // Broadcast an update to the room so everyone gets the new spectator list
+  broadcastToRoom(roomId, 'game_update', room);
+
+  res.json({ success: true, message: 'Spectating started.' });
+});
+
+// POST /api/rooms/:roomId/stop-spectating
+// Allows a user to stop spectating a game.
+app.post('/api/rooms/:roomId/stop-spectating', (req, res) => {
+  const { roomId } = req.params;
+  const { userId } = req.body;
+
+  if (!userId) {
+    return res.status(400).json({ error: 'User ID is required.' });
+  }
+
+  const room = store.rooms[roomId];
+  if (!room) {
+    // It's possible the room was deleted while the user was spectating.
+    // In this case, just ensure the client state is clean.
+    const client = activeClients.find(c => c.userId === userId && c.spectatingRoomId === roomId);
+    if (client) {
+      client.spectatingRoomId = undefined;
+    }
+    return res.json({ success: true, message: 'Stopped spectating a room that no longer exists.' });
+  }
+
+  const client = activeClients.find(c => c.userId === userId && c.spectatingRoomId === roomId);
+  if (client) {
+    client.spectatingRoomId = undefined;
+    console.log(`User ${userId} stopped spectating room ${roomId}`);
+  }
+
+  // Broadcast an update to the room to remove the spectator from the list
+  broadcastToRoom(roomId, 'game_update', room);
+
+  res.json({ success: true, message: 'Stopped spectating.' });
 });
 
 // Create Room (Private or Public Friends list)
