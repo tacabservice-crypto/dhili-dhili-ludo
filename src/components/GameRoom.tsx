@@ -605,52 +605,96 @@ export default function GameRoomView({
           <span className="font-black text-sm tracking-widest text-blue-400 block">{room.id}</span>
         </div>
 
-        <div ref={userMenuRef} className="relative">
-            <div
-              className="flex items-center gap-2 cursor-pointer"
-              onClick={() => setIsUserMenuOpen(prev => !prev)}
+        <div className="flex items-center gap-3">
+          {/* Voice Controls Popover Trigger */}
+          <div className="relative" ref={voiceControlsRef}>
+            <button
+              onClick={() => setIsVoiceControlsOpen(prev => !prev)}
+              className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                (!isMuted || isSpeakerOn) 
+                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                  : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
+              }`}
+              title="Voice Controls"
             >
-              <span className="text-2xl bg-black/20 p-1 rounded-full">{user.avatar}</span>
-              <div className="text-xs hidden sm:block"> {/* Hide on small screens */}
-                <span className="font-bold text-white block">{user.username}</span>
-                <span className="text-slate-400">{formatCurrency(user?.balance)}</span>
-              </div>
-              <MoreVertical className="w-4 h-4 text-slate-400" />
-            </div>
+              <Users className="w-3.5 h-3.5" />
+            </button>
 
-            {isUserMenuOpen && (
-              <div className="absolute top-full right-0 mt-2 w-48 bg-[#1A0C40] border border-purple-500/40 rounded-xl shadow-2xl z-50 text-sm">
-                <div className="p-2 border-b border-purple-500/20">
-                  <p className="font-bold text-white">{user.username}</p>
-                  <p className="text-xs text-slate-400">{user.email}</p>
-                </div>
-                <div className="p-1">
-                  <button
-                    onClick={() => {
-                      setIsEditProfileModalOpen(true);
-                      setIsUserMenuOpen(false);
-                    }}
-                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:bg-purple-500/20 hover:text-white rounded-md"
-                  >
-                    <Edit className="w-4 h-4" />
-                    <span>Edit Profile</span>
-                  </button>
-                  <LanguageToggle />
-                  <button
-                    onClick={onLogout}
-                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-md"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Logout</span>
-                  </button>
-                </div>
+            {isVoiceControlsOpen && (
+              <div className="absolute top-full right-0 mt-2 p-1.5 bg-black/40 border border-white/10 rounded-xl shadow-lg z-50 flex items-center gap-2">
+                <button
+                  onClick={toggleMute}
+                  className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                    !isMuted
+                      ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                      : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
+                  }`}
+                  title={!isMuted ? "Mute Mic" : "Unmute Mic"}
+                >
+                  {!isMuted ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5 text-slate-500" />}
+                </button>
+                <button
+                  onClick={toggleSpeaker}
+                  className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                    isSpeakerOn
+                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                      : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
+                  }`}
+                  title={isSpeakerOn ? "Mute Sound" : "Unmute Sound"}
+                >
+                  {isSpeakerOn ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
+                </button>
               </div>
             )}
+          </div>
+        
+          <div ref={userMenuRef} className="relative">
+              <div
+                className="flex items-center gap-2 cursor-pointer"
+                onClick={() => setIsUserMenuOpen(prev => !prev)}
+              >
+                <span className="text-2xl bg-black/20 p-1 rounded-full">{user.avatar}</span>
+                <div className="text-xs hidden sm:block"> {/* Hide on small screens */}
+                  <span className="font-bold text-white block">{user.username}</span>
+                  <span className="text-slate-400">{formatCurrency(user?.balance)}</span>
+                </div>
+                <MoreVertical className="w-4 h-4 text-slate-400" />
+              </div>
+
+              {isUserMenuOpen && (
+                <div className="absolute top-full right-0 mt-2 w-48 bg-[#1A0C40] border border-purple-500/40 rounded-xl shadow-2xl z-50 text-sm">
+                  <div className="p-2 border-b border-purple-500/20">
+                    <p className="font-bold text-white">{user.username}</p>
+                    <p className="text-xs text-slate-400">{user.email}</p>
+                  </div>
+                  <div className="p-1">
+                    <button
+                      onClick={() => {
+                        setIsEditProfileModalOpen(true);
+                        setIsUserMenuOpen(false);
+                      }}
+                      className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:bg-purple-500/20 hover:text-white rounded-md"
+                    >
+                      <Edit className="w-4 h-4" />
+                      <span>Edit Profile</span>
+                    </button>
+                    <LanguageToggle />
+                    <button
+                      onClick={onLogout}
+                      className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-md"
+                    >
+                      <LogOut className="w-4 h-4" />
+                      <span>Logout</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+          </div>
         </div>
       </header>
 
       {/* 2. GAME INFO BAR */}
-      <div className="grid grid-cols-4 items-center px-4 py-2 bg-black/20 text-xs border-b border-white/10">
+      <div className="grid grid-cols-3 items-center px-4 py-2 bg-black/20 text-xs border-b border-white/10">
         {/* Escrow */}
         <div className="flex items-center gap-1.5 font-bold text-yellow-400">
             <ShieldCheck className="w-4 h-4" />
@@ -684,47 +728,7 @@ export default function GameRoomView({
             <div className="flex justify-between items-center mb-2">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Active Players</h3>
                 
-                {/* Voice Controls Popover Trigger - MOVED HERE */}
-                <div className="relative" ref={voiceControlsRef}>
-                    <button
-                      onClick={() => setIsVoiceControlsOpen(prev => !prev)}
-                      className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-                        (!isMuted || isSpeakerOn) 
-                          ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                          : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
-                      }`}
-                      title="Voice Controls"
-                    >
-                      <Users className="w-3.5 h-3.5" />
-                    </button>
 
-                    {isVoiceControlsOpen && (
-                      <div className="absolute top-full right-0 mt-2 p-1.5 bg-black/40 border border-white/10 rounded-xl shadow-lg z-50 flex items-center gap-2">
-                        <button
-                          onClick={toggleMute}
-                          className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-                            !isMuted
-                              ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                              : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
-                          }`}
-                          title={!isMuted ? "Mute Mic" : "Unmute Mic"}
-                        >
-                          {!isMuted ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5 text-slate-500" />}
-                        </button>
-                        <button
-                          onClick={toggleSpeaker}
-                          className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-                            isSpeakerOn
-                              ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                              : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
-                          }`}
-                          title={isSpeakerOn ? "Mute Sound" : "Unmute Sound"}
-                        >
-                          {isSpeakerOn ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
-                        </button>
-                      </div>
-                    )}
-                </div>
             </div>
             
             <div className={`grid grid-cols-2 gap-2 relative z-10`}>
