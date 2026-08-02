@@ -63,7 +63,6 @@ if (fs.existsSync(serviceAccountPath)) {
       getApp();
     } catch (error) {
       initializeApp({
-        credential: cert(serviceAccount)
         credential: cert(serviceAccount),
         databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
       });
