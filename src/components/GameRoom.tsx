@@ -605,70 +605,13 @@ export default function GameRoomView({
           <span className="font-black text-sm tracking-widest text-blue-400 block">{room.id}</span>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* Voice Controls Popover Trigger */}
-          <div className="relative" ref={voiceControlsRef}>
-            <button
-              onClick={() => setIsVoiceControlsOpen(prev => !prev)}
-              className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-                (!isMuted || isSpeakerOn) // if either mic is unmuted or speaker is on
-                  ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                  : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
-              }`}
-              title="Voice Controls"
-            >
-              <Users className="w-3.5 h-3.5" /> {/* Main icon */}
-            </button>
-
-            {isVoiceControlsOpen && (
-              <div className="absolute top-full right-0 mt-2 p-1.5 bg-black/40 border border-white/10 rounded-xl shadow-lg z-50 flex items-center gap-2">
-                {/* Mic toggle */}
-                <button
-                  onClick={toggleMute}
-                  className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-                    !isMuted
-                      ? 'bg-red-500/20 text-red-400 border-red-500/30'
-                      : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
-                  }`}
-                  title={!isMuted ? "Mute Mic" : "Unmute Mic"}
-                >
-                  {!isMuted ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5 text-slate-500" />}
-                </button>
-                {/* Speaker toggle */}
-                <button
-                  onClick={toggleSpeaker}
-                  className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
-                    isSpeakerOn
-                      ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
-                      : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
-                  }`}
-                  title={isSpeakerOn ? "Mute Sound" : "Unmute Sound"}
-                >
-                  {isSpeakerOn ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
-                </button>
-              </div>
-            )}
-          </div>
-
-          {/* Escrow with Icon */}
-          <div className="flex items-center gap-1 text-xs font-bold text-yellow-400">
-            <ShieldCheck className="w-4 h-4" />
-            <span>{formatCurrency(room?.gameState?.escrowBalance)}</span>
-          </div>
-
-          {/* Timer with Icon */}
-          <div className="flex items-center gap-1 text-xs font-bold text-slate-400">
-            <Timer className="w-4 h-4" />
-            <span>{room.gameState.turnTimer}s</span>
-          </div>
-
-          <div ref={userMenuRef} className="relative">
+        <div ref={userMenuRef} className="relative">
             <div
               className="flex items-center gap-2 cursor-pointer"
               onClick={() => setIsUserMenuOpen(prev => !prev)}
             >
               <span className="text-2xl bg-black/20 p-1 rounded-full">{user.avatar}</span>
-              <div className="text-xs">
+              <div className="text-xs hidden sm:block"> {/* Hide on small screens */}
                 <span className="font-bold text-white block">{user.username}</span>
                 <span className="text-slate-400">{formatCurrency(user?.balance)}</span>
               </div>
@@ -703,23 +646,29 @@ export default function GameRoomView({
                 </div>
               </div>
             )}
-          </div>
         </div>
       </header>
 
-      {/* New TikTok-style Spectator Count */}
-      {room.spectators && room.spectators.length > 0 && (
-        <div className="absolute top-24 right-4 z-20 bg-black/40 backdrop-blur-md border border-white/10 rounded-full flex items-center gap-1.5 px-3 py-1.5 shadow-lg">
-          <Eye className="w-4 h-4 text-yellow-300" />
-          <span className="text-xs font-bold text-white">{room.spectators.length}</span>
+      {/* 2. GAME INFO BAR */}
+      <div className="grid grid-cols-3 items-center px-4 py-2 bg-black/20 text-xs border-b border-white/10">
+        {/* Escrow */}
+        <div className="flex items-center gap-1.5 font-bold text-yellow-400">
+            <ShieldCheck className="w-4 h-4" />
+            <span>{formatCurrency(room?.gameState?.escrowBalance)}</span>
         </div>
-      )}
+        {/* Timer */}
+        <div className="flex items-center justify-center gap-1.5 font-bold text-slate-400">
+            <Timer className="w-4 h-4" />
+            <span>{room.gameState.turnTimer}s</span>
+        </div>
+        {/* Spectators */}
+        <div className="flex items-center justify-end gap-1.5 font-bold text-slate-400">
+            <Eye className="w-4 h-4 text-yellow-300" />
+            <span className="text-white">{room.spectators?.length || 0}</span>
+        </div>
+      </div>
 
-      {isSpectator && (
-        <div className="bg-yellow-500/10 border-b-2 border-yellow-500/20 text-center py-2 px-4 z-20">
-          <p className="text-xs font-bold text-yellow-400 uppercase tracking-widest">👁️ Habka Daawashada (Spectator Mode)</p>
-        </div>
-      )}
+
 
       <main className="max-w-md w-full mx-auto px-4 py-4 flex flex-col space-y-4 relative z-10">
         
@@ -730,112 +679,158 @@ export default function GameRoomView({
         {/* ==========================================
             TEAM ALLIANCE & ACTIVE PLAYERS BOARD
            ========================================== */}
-        {room.status === 'playing' && room.players.length === 2 && room.gameMode === 'solo' && (
-          <div className={`grid grid-cols-2 gap-2 relative z-10`}>
-            {/* Render players directly */}
-            {room.players.map(pl => {
-              const isCurrent = activePlayer?.color === pl.color;
-              return (
-                <div key={pl.userId} className={`p-2.5 rounded-xl border transition-all duration-300 bg-black/20 border-white/5`}>
-                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
-                    <span className={`${COLOR_TEXT_MAP[pl.color]} tracking-widest font-black text-[9px]`}>
-                      CIYAARTOY {pl.color.toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="space-y-1.5">
-                    <div className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                      <div className="flex items-center gap-1.5 text-xs truncate">
-                        <span className="text-sm shrink-0">{pl.avatar}</span>
-                        <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+        {room.status === 'playing' && (
+          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-3">
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Active Players</h3>
+                
+                {/* Voice Controls Popover Trigger - MOVED HERE */}
+                <div className="relative" ref={voiceControlsRef}>
+                    <button
+                      onClick={() => setIsVoiceControlsOpen(prev => !prev)}
+                      className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                        (!isMuted || isSpeakerOn) 
+                          ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                          : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
+                      }`}
+                      title="Voice Controls"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                    </button>
+
+                    {isVoiceControlsOpen && (
+                      <div className="absolute top-full right-0 mt-2 p-1.5 bg-black/40 border border-white/10 rounded-xl shadow-lg z-50 flex items-center gap-2">
+                        <button
+                          onClick={toggleMute}
+                          className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                            !isMuted
+                              ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                              : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
+                          }`}
+                          title={!isMuted ? "Mute Mic" : "Unmute Mic"}
+                        >
+                          {!isMuted ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5 text-slate-500" />}
+                        </button>
+                        <button
+                          onClick={toggleSpeaker}
+                          className={`p-1.5 rounded-xl border transition-all cursor-pointer ${
+                            isSpeakerOn
+                              ? 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                              : 'bg-black/40 text-slate-400 border-white/10 hover:text-white'
+                          }`}
+                          title={isSpeakerOn ? "Mute Sound" : "Unmute Sound"}
+                        >
+                          {isSpeakerOn ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5 text-slate-500" />}
+                        </button>
                       </div>
-                      <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
-                    </div>
-                  </div>
+                    )}
                 </div>
-              )
-            })}
-          </div>
-        )}
-
-        {room.status === 'playing' && (room.players.length !== 2 || room.gameMode !== 'solo') && (
-          // The original 4-player and teams rendering logic
-          <div className={`grid grid-cols-2 gap-2 relative z-10`}>
-            {/* Player Group 1 (Green / Red+Yellow) */}
-            <div className={`p-2.5 rounded-xl border transition-all duration-300 ${
-              room.gameMode === 'team' 
-                ? 'bg-gradient-to-br from-red-500/5 to-yellow-500/5 border-red-500/20 shadow-lg shadow-red-500/5' 
-                : 'bg-black/20 border-white/5'
-            }`}>
-              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
-                <span className="text-red-400 tracking-widest font-black text-[9px]">
-                  {room.gameMode === 'team' ? 'TEAM CAS & HURUUD' : 'TEAM CAS & HURUUD'}
-                </span>
-                {room.gameMode === 'team' && (
-                  <span className="text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded text-[8px] font-bold">🤝 XULAFA</span>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                {['red', 'yellow'].map((color) => {
-                  const pl = room.players.find(p => p.color === color);
-                  const isCurrent = activePlayer?.color === color;
-                  if (!pl) {
-                    return (
-                      <div key={color} className="flex items-center justify-between p-1.5 rounded-lg bg-black/20 border border-dashed border-white/5 text-[9px] text-slate-600 font-bold">
-                        <span>Ma Jiro</span>
-                        <span className={`w-2.5 h-2.5 rounded-full ${color === 'red' ? 'bg-red-950' : 'bg-yellow-950'}`} />
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={pl.color} className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                      <div className="flex items-center gap-1.5 text-xs truncate">
-                        <span className="text-sm shrink-0">{pl.avatar}</span>
-                        <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
-                      </div>
-                      <span className={`w-2.5 h-2.5 rounded-full ${pl.color === 'red' ? 'bg-red-500' : 'bg-yellow-500'} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
-                    </div>
-                  );
-                })}
-              </div>
             </div>
-
-            {/* Player Group 2 (Yellow / Green+Blue) */}
-            <div className={`p-2.5 rounded-xl border transition-all duration-300 ${
-              room.gameMode === 'team' 
-                ? 'bg-gradient-to-br from-green-500/5 to-blue-500/5 border-green-500/20 shadow-lg shadow-green-500/5' 
-                : 'bg-black/20 border-white/5'
-            }`}>
-              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
-                <span className="text-green-400 tracking-widest font-black text-[9px]">
-                  {room.gameMode === 'team' ? 'TEAM CAGAAR & BULUUG' : 'TEAM CAGAAR & BULUUG'}
-                </span>
-                {room.gameMode === 'team' && (
-                  <span className="text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded text-[8px] font-bold">🤝 XULAFA</span>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                {['green', 'blue'].map((color) => {
-                  const pl = room.players.find(p => p.color === color);
-                  const isCurrent = activePlayer?.color === color;
-                  if (!pl) {
+            
+            <div className={`grid grid-cols-2 gap-2 relative z-10`}>
+              {room.players.length === 2 && room.gameMode === 'solo' ? (
+                <>
+                  {room.players.map(pl => {
+                    const isCurrent = activePlayer?.color === pl.color;
                     return (
-                      <div key={color} className="flex items-center justify-between p-1.5 rounded-lg bg-black/20 border border-dashed border-white/5 text-[9px] text-slate-600 font-bold">
-                        <span>Ma Jiro</span>
-                        <span className={`w-2.5 h-2.5 rounded-full ${color === 'green' ? 'bg-green-950' : 'bg-blue-950'}`} />
+                      <div key={pl.userId} className={`p-2.5 rounded-xl border transition-all duration-300 bg-black/20 border-white/5`}>
+                        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
+                          <span className={`${COLOR_TEXT_MAP[pl.color]} tracking-widest font-black text-[9px]`}>
+                            CIYAARTOY {pl.color.toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="space-y-1.5">
+                          <div className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                            <div className="flex items-center gap-1.5 text-xs truncate">
+                              <span className="text-sm shrink-0">{pl.avatar}</span>
+                              <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+                            </div>
+                            <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+                          </div>
+                        </div>
                       </div>
-                    );
-                  }
-                  return (
-                    <div key={pl.color} className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                      <div className="flex items-center gap-1.5 text-xs truncate">
-                        <span className="text-sm shrink-0">{pl.avatar}</span>
-                        <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
-                      </div>
-                      <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+                    )
+                  })}
+                </>
+              ) : (
+                <>
+                  <div className={`p-2.5 rounded-xl border transition-all duration-300 ${
+                    room.gameMode === 'team' 
+                      ? 'bg-gradient-to-br from-red-500/5 to-yellow-500/5 border-red-500/20 shadow-lg shadow-red-500/5' 
+                      : 'bg-black/20 border-white/5'
+                  }`}>
+                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
+                      <span className="text-red-400 tracking-widest font-black text-[9px]">
+                        {room.gameMode === 'team' ? 'TEAM CAS & HURUUD' : 'TEAM CAS & HURUUD'}
+                      </span>
+                      {room.gameMode === 'team' && (
+                        <span className="text-yellow-400 bg-yellow-400/10 px-1.5 py-0.5 rounded text-[8px] font-bold">🤝 XULAFA</span>
+                      )}
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="space-y-1.5">
+                      {['red', 'yellow'].map((color) => {
+                        const pl = room.players.find(p => p.color === color);
+                        const isCurrent = activePlayer?.color === color;
+                        if (!pl) {
+                          return (
+                            <div key={color} className="flex items-center justify-between p-1.5 rounded-lg bg-black/20 border border-dashed border-white/5 text-[9px] text-slate-600 font-bold">
+                              <span>Ma Jiro</span>
+                              <span className={`w-2.5 h-2.5 rounded-full ${color === 'red' ? 'bg-red-950' : 'bg-yellow-950'}`} />
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={pl.color} className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                            <div className="flex items-center gap-1.5 text-xs truncate">
+                              <span className="text-sm shrink-0">{pl.avatar}</span>
+                              <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+                            </div>
+                            <span className={`w-2.5 h-2.5 rounded-full ${pl.color === 'red' ? 'bg-red-500' : 'bg-yellow-500'} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className={`p-2.5 rounded-xl border transition-all duration-300 ${
+                    room.gameMode === 'team' 
+                      ? 'bg-gradient-to-br from-green-500/5 to-blue-500/5 border-green-500/20 shadow-lg shadow-green-500/5' 
+                      : 'bg-black/20 border-white/5'
+                  }`}>
+                    <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
+                      <span className="text-green-400 tracking-widest font-black text-[9px]">
+                        {room.gameMode === 'team' ? 'TEAM CAGAAR & BULUUG' : 'TEAM CAGAAR & BULUUG'}
+                      </span>
+                      {room.gameMode === 'team' && (
+                        <span className="text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded text-[8px] font-bold">🤝 XULAFA</span>
+                      )}
+                    </div>
+                    <div className="space-y-1.5">
+                      {['green', 'blue'].map((color) => {
+                        const pl = room.players.find(p => p.color === color);
+                        const isCurrent = activePlayer?.color === color;
+                        if (!pl) {
+                          return (
+                            <div key={color} className="flex items-center justify-between p-1.5 rounded-lg bg-black/20 border border-dashed border-white/5 text-[9px] text-slate-600 font-bold">
+                              <span>Ma Jiro</span>
+                              <span className={`w-2.5 h-2.5 rounded-full ${color === 'green' ? 'bg-green-950' : 'bg-blue-950'}`} />
+                            </div>
+                          );
+                        }
+                        return (
+                          <div key={pl.color} className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                            <div className="flex items-center gap-1.5 text-xs truncate">
+                              <span className="text-sm shrink-0">{pl.avatar}</span>
+                              <span className="font-black text-white truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+                            </div>
+                            <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         )}
