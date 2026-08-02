@@ -932,7 +932,7 @@ export default function App() {
             room={activeRoom}
             user={user}
             userId={user.id}
-            onLeave={() => handleLeaveRoom(false)}
+            onLeave={handleLeaveRoom}
             onLogout={handleLogout}
             onToggleReady={handleToggleReady}
             onAddBot={handleAddBot}

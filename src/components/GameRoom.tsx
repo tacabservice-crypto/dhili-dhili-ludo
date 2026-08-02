@@ -46,7 +46,7 @@ interface GameRoomProps {
   room: GameRoom;
   user: UserProfile;
   userId: string;
-  onLeave: () => void;
+  onLeave: (force: boolean) => void;
   onLogout: () => void;
   onToggleReady: () => void;
   onAddBot: () => void;
@@ -285,7 +285,7 @@ export default function GameRoomView({
           <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-purple-600/10 rounded-full blur-[120px]"></div>
         </div>
         <header className="sticky top-0 z-30 bg-white/5 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center justify-between relative z-10">
-          <button onClick={onLeave} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-all cursor-pointer">
+          <button onClick={() => onLeave(isSpectator)} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-all cursor-pointer">
             <ArrowLeft className="w-4 h-4" /> Exit
           </button>
           <div className="text-center">
@@ -313,7 +313,7 @@ export default function GameRoomView({
             </div>
             <div className="flex gap-3 pt-4">
               <button
-                onClick={onLeave}
+                onClick={() => onLeave(isSpectator)}
                 className="w-full bg-slate-700/50 hover:bg-slate-700/80 text-slate-300 border border-slate-600 font-black text-xs py-3 rounded-xl active:scale-95 transition-all cursor-pointer uppercase tracking-wider"
               >
                 Dashboard-ka
@@ -343,7 +343,7 @@ export default function GameRoomView({
 
         {/* Header */}
         <header className="sticky top-0 z-30 bg-white/5 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center justify-between relative z-10">
-          <button onClick={onLeave} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-all cursor-pointer">
+          <button onClick={() => onLeave(isSpectator)} className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-all cursor-pointer">
             <ArrowLeft className="w-4 h-4" /> Exit
           </button>
           <div className="text-center">
@@ -385,7 +385,7 @@ export default function GameRoomView({
             </div>
 
             <button
-              onClick={onLeave}
+              onClick={() => onLeave(isSpectator)}
               className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 border border-red-500/20 font-black text-xs py-2.5 rounded-xl active:scale-95 transition-all cursor-pointer uppercase tracking-wider mt-4"
             >
               Cancel Request & Exit
@@ -558,7 +558,7 @@ export default function GameRoomView({
         {/* Bottom CTAs */}
         <div className="w-full max-w-sm z-10 mt-6 space-y-2">
           <button
-            onClick={onLeave}
+            onClick={() => onLeave(isSpectator)}
             className="w-full bg-gradient-to-r from-yellow-400 to-amber-500 hover:from-yellow-300 hover:to-amber-400 text-black font-black text-xs py-4 rounded-2xl active:scale-95 transition-all uppercase tracking-widest shadow-lg shadow-yellow-500/10 cursor-pointer"
           >
             Ciyaar kale Bilow (Play Another Game) ⚔️
@@ -593,7 +593,7 @@ export default function GameRoomView({
       {/* 1. ROOM HEADER */}
       <header className="sticky top-0 z-30 bg-white/5 backdrop-blur-xl border-b border-white/10 px-4 py-3 flex items-center justify-between relative z-10">
         <button
-          onClick={onLeave}
+          onClick={() => onLeave(isSpectator)}
           className="flex items-center gap-1.5 text-xs font-bold text-slate-400 hover:text-white transition-all cursor-pointer"
         >
           <ArrowLeft className="w-4 h-4" /> Exit
