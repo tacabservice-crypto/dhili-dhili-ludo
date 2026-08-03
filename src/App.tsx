@@ -973,35 +973,77 @@ export default function App() {
       </>
       );
   }
+  
+  const renderAppContent = () => {
+    if (activeRoom) {
+      return (
+        <VoiceChatProvider>
+          <GameRoomView
+            room={activeRoom}
+            user={user}
+            userId={user.id}
+            onLeave={handleLeaveRoom}
+            onLogout={handleLogout}
+            onToggleReady={handleToggleReady}
+            onAddBot={handleAddBot}
+            onStartMatch={handleStartMatch}
+            onRollDice={handleRollDice}
+            onMoveToken={handleMoveToken}
+            onSendChat={handleSendChat}
+            onProfileUpdate={handleProfileUpdate}
+            onRetryJoin={() => {
+              if (activeRoom) {
+                setActiveRoom(prev => prev ? { ...prev, rejectionReason: undefined } : null);
+                handleJoinPrivateRoom(activeRoom.id);
+              }
+            }}
+          />
+          {isWalletOpen && (
+            <WalletModal
+              user={user}
+              onClose={() => setIsWalletOpen(false)}
+              onBalanceUpdated={handleRefreshBalance}
+            />
+          )}
+          {renderOverlays()}
+          <Toaster />
+        </VoiceChatProvider>
+      );
+    }
+
+    return (
+      <VoiceChatProvider>
+          <Dashboard
+            user={user}
+            onOpenWallet={() => setIsWalletOpen(true)}
+            onLogout={handleLogout}
+            onCreatePrivateRoom={handleCreatePrivateRoom}
+            onJoinPrivateRoom={handleJoinPrivateRoom}
+            onStartMatchmaking={handleStartMatchmaking}
+            onLeaveMatchmaking={handleLeaveMatchmaking}
+            matchmakingState={matchmakingState}
+            rejoinableRoom={rejoinableRoom}
+            onRejoin={handleRejoin}
+            onDismissRejoin={handleDismissRejoin}
+            onProfileUpdate={handleProfileUpdate}
+          />
+          {isWalletOpen && (
+            <WalletModal
+              user={user}
+              onClose={() => setIsWalletOpen(false)}
+              onBalanceUpdated={handleRefreshBalance}
+            />
+          )}
+          {renderOverlays()}
+          <Toaster />
+        </VoiceChatProvider>
+    );
+  };
 
   return (
-    <>
-      <VoiceChatProvider>
-        <Dashboard
-          user={user}
-          onOpenWallet={() => setIsWalletOpen(true)}
-          onLogout={handleLogout}
-          onCreatePrivateRoom={handleCreatePrivateRoom}
-          onJoinPrivateRoom={handleJoinPrivateRoom}
-          onStartMatchmaking={handleStartMatchmaking}
-          onLeaveMatchmaking={handleLeaveMatchmaking}
-          matchmakingState={matchmakingState}
-          rejoinableRoom={rejoinableRoom}
-          onRejoin={handleRejoin}
-          onDismissRejoin={handleDismissRejoin}
-          onProfileUpdate={handleProfileUpdate}
-        />
-        {isWalletOpen && (
-          <WalletModal
-            user={user}
-            onClose={() => setIsWalletOpen(false)}
-            onBalanceUpdated={handleRefreshBalance}
-          />
-        )}
-        {renderOverlays()}
-        <Toaster />
-      </VoiceChatProvider>
+    <div id="app-root">
+      {renderAppContent()}
       <InstallPwaPrompt />
-    </>
-  );
+    </div>
+  )
 }
