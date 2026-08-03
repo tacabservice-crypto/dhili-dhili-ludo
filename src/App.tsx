@@ -11,7 +11,6 @@ import GameRoomView from './components/GameRoom';
 import WalletModal from './components/WalletModal';
 import RejoinPrompt from './components/RejoinPrompt';
 import AdminDashboard from './components/AdminDashboard';
-import InstallPwaPrompt from './components/InstallPwaPrompt';
 import { Toaster } from 'react-hot-toast';
 import { VoiceChatProvider } from './context/VoiceChatContext';
 import { auth } from './firebase-client';
@@ -984,7 +983,6 @@ export default function App() {
       )}
       {renderOverlays()}
       <Toaster />
-      <InstallPwaPrompt />
     </VoiceChatProvider>
   );
 }
