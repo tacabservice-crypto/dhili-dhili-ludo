@@ -3,7 +3,7 @@ import './InstallPwaPrompt.css';
 
 const InstallPwaPrompt = () => {
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
