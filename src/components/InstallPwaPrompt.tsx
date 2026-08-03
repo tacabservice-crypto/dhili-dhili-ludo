@@ -23,6 +23,7 @@ const InstallPwaPrompt = () => {
     if (!installPrompt) {
       return;
     }
+    // Typescript doesn't know about the prompt() method on the event
     (installPrompt as any).prompt();
 
     (installPrompt as any).userChoice.then((choiceResult: { outcome: string }) => {
@@ -49,9 +50,8 @@ const InstallPwaPrompt = () => {
       <div className="install-pwa-prompt-content">
         <h3>Install App</h3>
         <p>Install this application on your phone or desktop for the best experience.</p>
-        
         <div className="install-pwa-prompt-buttons">
-          <button onClick={handleInstallClick} disabled={!installPrompt}>Install</button>
+          <button onClick={handleInstallClick}>Install</button>
           <button onClick={handleDismissClick}>Later</button>
         </div>
       </div>
