@@ -51,6 +51,9 @@ const DB_FILE = path.join(process.cwd(), 'db_store.json');
 
 app.use(express.json());
 
+// Serve static files from the 'public' directory
+app.use(express.static(path.join(process.cwd(), 'public')));
+
 // ==========================================
 // FIREBASE FIRESTORE PERSISTENCE SETUP
 // ==========================================

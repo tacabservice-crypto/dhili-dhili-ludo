@@ -11,7 +11,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'logo.svg'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'logo.svg', 'pwa-192x192.png', 'pwa-512x512.png'],
         manifest: {
           name: 'Dhili-Dhili Ludo',
           short_name: 'DhiliLudo',
@@ -20,6 +20,22 @@ export default defineConfig(() => {
           start_url: '/',
           display: 'standalone',
           background_color: '#0f052d',
+          id: '/',
+          screenshots: [
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              form_factor: 'wide',
+              label: 'Ludo Board'
+            },
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              label: 'Ludo Gameplay'
+            }
+          ],
           icons: [
             {
               src: 'pwa-192x192.png',
