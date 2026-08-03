@@ -4,6 +4,7 @@ import './InstallPwaPrompt.css';
 const InstallPwaPrompt = () => {
   const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
   const [isVisible, setIsVisible] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
 
   useEffect(() => {
     const handleBeforeInstallPrompt = (event: Event) => {
@@ -37,7 +38,7 @@ const InstallPwaPrompt = () => {
   };
 
   const handleDismissClick = () => {
-    setIsVisible(false);
+    setIsExpanded(false);
   };
 
   if (!isVisible) {
@@ -46,15 +47,22 @@ const InstallPwaPrompt = () => {
 
   return (
     <div className="install-pwa-prompt">
-      <div className="install-pwa-prompt-content">
-        <h3>Install App</h3>
-        <p>Install this application on your phone or desktop for the best experience.</p>
-        
-        <div className="install-pwa-prompt-buttons">
-          <button onClick={handleInstallClick} disabled={!installPrompt}>Install</button>
-          <button onClick={handleDismissClick}>Later</button>
-        </div>
+      <div className="install-pwa-prompt-icon" onClick={() => setIsExpanded(!isExpanded)}>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+        </svg>
       </div>
+      {isExpanded && (
+        <div className="install-pwa-prompt-content">
+          <h3>Install App</h3>
+          <p>Install this application on your phone or desktop for the best experience.</p>
+          
+          <div className="install-pwa-prompt-buttons">
+            <button onClick={handleInstallClick} disabled={!installPrompt}>Install</button>
+            <button onClick={handleDismissClick}>Later</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
