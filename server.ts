@@ -30,7 +30,8 @@ const allowedOrigins = [
   'https://dhili-dhili-ludo.onrender.com',
   'https://dhilidhili.onrender.com',
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
+  'http://127.0.0.1:5173',
+  'http://localhost:3000'
 ];
 app.use(cors({
   origin: allowedOrigins,
@@ -46,7 +47,7 @@ app.use(cors({
   credentials: true
 }));
 
-const PORT = 3002;
+const PORT = 3000;
 const DB_FILE = path.join(process.cwd(), 'db_store.json');
 
 app.use(express.json());
@@ -2852,6 +2853,37 @@ async function startServer() {
       appType: "spa",
     });
     app.use(vite.middlewares);
+
+    // Add a catch-all handler for SPA development
+    app.get('*', async (req, res, next) => {
+      // Exclude API routes from the catch-all
+      if (req.originalUrl.startsWith('/api')) {
+        return next();
+      }
+      
+      try {
+        const url = req.originalUrl;
+        
+        // 1. Read index.html
+        const template = fs.readFileSync(
+          path.resolve(process.cwd(), 'index.html'),
+          'utf-8',
+        );
+    
+        // 2. Apply Vite HTML transforms. This injects the Vite HMR client, and
+        //    also applies HTML transforms from Vite plugins, e.g. global preambles
+        //    from @vitejs/plugin-react
+        const html = await vite!.transformIndexHtml(url, template);
+    
+        // 3. Send the transformed HTML to the browser.
+        res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+      } catch (e) {
+        // If an error is caught, let Vite fix the stack trace so it maps back
+        // to your actual source code.
+        vite!.ssrFixStacktrace(e as Error);
+        next(e);
+      }
+    });
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));

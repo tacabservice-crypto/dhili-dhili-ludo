@@ -30,7 +30,7 @@ Kani waa mashruuc Ludo game ah oo leh real-time multiplayer, matchmaking, wallet
     ```bash
     npm run dev
     ```
-    App-ka wuxuu ka shaqayn doonaa `http://localhost:3002`.
+    App-ka wuxuu ka shaqayn doonaa `http://localhost:3000`.
 
 ## Sida Loo Deploy-gareeyo (Deploying to Production)
 

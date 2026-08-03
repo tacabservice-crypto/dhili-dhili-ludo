@@ -24,7 +24,7 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenProps) {
-  const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
+  const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3000';
   const { t } = useLanguage();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');

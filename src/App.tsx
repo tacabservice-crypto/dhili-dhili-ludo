@@ -11,7 +11,6 @@ import GameRoomView from './components/GameRoom';
 import WalletModal from './components/WalletModal';
 import RejoinPrompt from './components/RejoinPrompt';
 import AdminDashboard from './components/AdminDashboard';
-import InstallPwaPrompt from './components/InstallPwaPrompt';
 import { Toaster } from 'react-hot-toast';
 import { VoiceChatProvider } from './context/VoiceChatContext';
 import { auth } from './firebase-client';
@@ -20,7 +19,7 @@ import { onAuthStateChanged, signOut } from 'firebase/auth';
 export default function App() {
   const { roomId } = useParams<{ roomId: string }>();
   const location = useLocation();
-  const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
+  const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3000';
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true); // Add a loading state for auth
   const [activeRoom, setActiveRoom] = useState<GameRoom | null>(null);
@@ -1043,7 +1042,6 @@ export default function App() {
   return (
     <div id="app-root">
       {renderAppContent()}
-      <InstallPwaPrompt />
     </div>
   )
 }

@@ -53,6 +53,7 @@ app.use((0, import_cors.default)({
 var PORT = 3002;
 var DB_FILE = import_path.default.join(process.cwd(), "db_store.json");
 app.use(import_express.default.json());
+app.use(import_express.default.static(import_path.default.join(process.cwd(), "public")));
 var db = null;
 var auth = null;
 var serviceAccountPath = import_path.default.join(process.cwd(), "firebase-admin-key.json");
@@ -861,12 +862,12 @@ app.post("/api/auth/login", verifyFirebaseToken, async (req, res) => {
     username: cleanUsername,
     email: email || void 0,
     avatar: avatar || "\u{1F338}",
-    balance: 100,
+    balance: 10,
     winCount: 0,
     lossCount: 0
   };
   store.users[userId] = newUser;
-  addTransaction(userId, "deposit", 100, void 0, "Welcome signup bonus.");
+  addTransaction(userId, "deposit", 10, void 0, "Welcome signup bonus.");
   await saveStoreAndWait();
   res.json(newUser);
 });
@@ -924,6 +925,9 @@ app.post("/api/wallet/withdraw", (req, res) => {
   const withAmt = parseFloat(amount);
   if (isNaN(withAmt) || withAmt <= 0) {
     return res.status(400).json({ error: "Invalid withdrawal amount" });
+  }
+  if (withAmt < 20) {
+    return res.status(400).json({ error: "Minimum withdrawal amount is $20" });
   }
   if (user.balance < withAmt) {
     return res.status(400).json({ error: "Insufficient funds" });
