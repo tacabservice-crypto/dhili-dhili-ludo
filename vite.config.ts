@@ -17,6 +17,9 @@ export default defineConfig(() => {
           short_name: 'DhiliLudo',
           description: 'A modern online Ludo game with real-time multiplayer and betting features.',
           theme_color: '#ffffff',
+          start_url: '/',
+          display: 'standalone',
+          background_color: '#0f052d',
           icons: [
             {
               src: 'pwa-192x192.png',
