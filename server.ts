@@ -400,6 +400,12 @@ const START_OFFSETS: Record<PlayerColor, number> = {
 };
 
 const SAFE_GLOBAL_SQUARES = [0, 8, 13, 21, 26, 34, 39, 47];
+const HOME_ENTRY_POSITIONS: Record<PlayerColor, number> = {
+  green: 50,
+  yellow: 11,
+  blue: 24,
+  red: 37
+};
 
 // Translate a player's relative position to global coordinate on common track
 function getGlobalPosition(color: PlayerColor, relativePos: number): number | null {
@@ -424,7 +430,17 @@ function isMoveValid(token: LudoToken, roll: number): boolean {
   if (token.position === -1) {
     return roll === 6; // Releases from home base on rolling 6
   }
-  return token.position + roll <= 56; // Cannot overshoot finished goal
+
+  // Check for moves on the main track that cross into the home stretch
+  const homeEntry = HOME_ENTRY_POSITIONS[token.color];
+  if (token.position <= homeEntry && token.position + roll > homeEntry) {
+    const stepsIntoHomeStretch = (token.position + roll) - homeEntry;
+    const finalHomePosition = 50 + stepsIntoHomeStretch;
+    return finalHomePosition <= 56;
+  }
+
+  // Standard move on the main track or within the home stretch
+  return token.position + roll <= 56;
 }
 
 // Auto-advance turn to next player
@@ -573,11 +589,23 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
   const activePlayer = room.players[gs.turn];
   const oldPos = token.position;
 
+  // Calculate new position
   if (token.position === -1 && diceValue === 6) {
     token.position = 0;
     addLog(room, `${activePlayer.username} moved token out of base onto start!`);
   } else {
-    token.position += diceValue;
+    const homeEntry = HOME_ENTRY_POSITIONS[token.color];
+    let newPos = token.position;
+
+    // Check if move crosses into the home stretch
+    if (token.position <= homeEntry && token.position + diceValue > homeEntry) {
+      const stepsIntoHomeStretch = (token.position + diceValue) - homeEntry;
+      newPos = 50 + stepsIntoHomeStretch;
+    } else {
+      // Standard move
+      newPos += diceValue;
+    }
+    token.position = newPos;
     addLog(room, `${activePlayer.username} moved token by ${diceValue} spaces (from ${oldPos} to ${token.position}).`);
   }
 

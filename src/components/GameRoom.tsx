@@ -723,77 +723,98 @@ export default function GameRoomView({
         {/* ==========================================
             TEAM ALLIANCE & ACTIVE PLAYERS BOARD
            ========================================== */}
-        {room.status === 'playing' && (
-          <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-2xl p-3">
-            <div className="flex justify-between items-center mb-2">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Active Players</h3>
-                
-
-            </div>
-            
-            <div className={`grid grid-cols-2 gap-2 relative z-10`}>
-              {room.players.length === 2 && room.gameMode === 'solo' ? (
-                <>
-                  {room.players.map(pl => {
-                    const isCurrent = activePlayer?.color === pl.color;
-                    return (
-                      <div key={pl.userId} className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                        <div className="flex items-center gap-1 text-[10px] truncate">
-                          <span className="text-sm shrink-0">{pl.avatar}</span>
-                          <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
-                        </div>
-                        <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+        {room.status === 'playing' && room.players.length === 2 && room.gameMode === 'solo' && (
+          <div className={`grid grid-cols-2 gap-2 relative z-10`}>
+            {/* Render players directly */}
+            {room.players.map(pl => {
+              const isCurrent = activePlayer?.color === pl.color;
+              return (
+                <div key={pl.userId} className={`p-2.5 rounded-xl border transition-all duration-300 bg-black/20 border-white/5`}>
+                  <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
+                    <span className={`${COLOR_TEXT_MAP[pl.color]} tracking-widest font-black text-[9px]`}>
+                      CIYAARTOY {pl.color.toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                      <div className="flex items-center gap-1 text-[10px] truncate">
+                        <span className="text-sm shrink-0">{pl.avatar}</span>
+                        <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
                       </div>
-                    )
-                  })}
-                </>
-              ) : (
-                <>
-                      {['red', 'yellow'].map((color) => {
-                        const pl = room.players.find(p => p.color === color);
-                        const isCurrent = activePlayer?.color === color;
-                        if (!pl) {
-                          return (
-                            <div key={color} className="flex items-center justify-between p-1.5 rounded-lg bg-black/20 border border-dashed border-white/5 text-[9px] text-slate-600 font-bold">
-                              <span>Ma Jiro</span>
-                              <span className={`w-2.5 h-2.5 rounded-full ${color === 'red' ? 'bg-red-950' : 'bg-yellow-950'}`} />
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={pl.color} className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                            <div className="flex items-center gap-1 text-[10px] truncate">
-                              <span className="text-sm shrink-0">{pl.avatar}</span>
-                              <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
-                            </div>
-                            <span className={`w-2.5 h-2.5 rounded-full ${pl.color === 'red' ? 'bg-red-500' : 'bg-yellow-500'} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
-                          </div>
-                        );
-                      })}
+                      <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
-                      {['green', 'blue'].map((color) => {
-                        const pl = room.players.find(p => p.color === color);
-                        const isCurrent = activePlayer?.color === color;
-                        if (!pl) {
-                          return (
-                            <div key={color} className="flex items-center justify-between p-1.5 rounded-lg bg-black/20 border border-dashed border-white/5 text-[9px] text-slate-600 font-bold">
-                              <span>Ma Jiro</span>
-                              <span className={`w-2.5 h-2.5 rounded-full ${color === 'green' ? 'bg-green-950' : 'bg-blue-950'}`} />
-                            </div>
-                          );
-                        }
-                        return (
-                          <div key={pl.color} className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
-                            <div className="flex items-center gap-1 text-[10px] truncate">
-                              <span className="text-sm shrink-0">{pl.avatar}</span>
-                              <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
-                            </div>
-                            <span className={`w-2.5 h-2.5 rounded-full ${pl.color === 'green' ? 'bg-green-500' : 'bg-blue-500'} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
-                          </div>
-                        );
-                      })}
-                </>
-              )}
+        {room.status === 'playing' && (room.players.length !== 2 || room.gameMode !== 'solo') && (
+          // The original 4-player and teams rendering logic
+          <div className={`grid grid-cols-2 gap-2 relative z-10`}>
+            {/* Player Group 1 (Green / Red+Yellow) */}
+            <>
+              {['red', 'yellow'].map((color) => {
+                const pl = room.players.find(p => p.color === color);
+                const isCurrent = activePlayer?.color === color;
+                if (!pl) {
+                  return (
+                    <div key={color} className="flex items-center justify-between p-1.5 rounded-lg bg-black/20 border border-dashed border-white/5 text-[9px] text-slate-600 font-bold">
+                      <span>Ma Jiro</span>
+                      <span className={`w-2.5 h-2.5 rounded-full ${color === 'red' ? 'bg-red-950' : 'bg-yellow-950'}`} />
+                    </div>
+                  );
+                }
+                return (
+                  <div key={pl.color} className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                    <div className="flex items-center gap-1 text-[10px] truncate">
+                      <span className="text-sm shrink-0">{pl.avatar}</span>
+                      <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+                    </div>
+                    <span className={`w-2.5 h-2.5 rounded-full ${pl.color === 'red' ? 'bg-red-500' : 'bg-yellow-500'} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+                  </div>
+                );
+              })}
+            </>
+
+            {/* Player Group 2 (Yellow / Green+Blue) */}
+            <div className={`p-2.5 rounded-xl border transition-all duration-300 ${
+              room.gameMode === 'team' 
+                ? 'bg-gradient-to-br from-green-500/5 to-blue-500/5 border-green-500/20 shadow-lg shadow-green-500/5' 
+                : 'bg-black/20 border-white/5'
+            }`}>
+              <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-wider mb-2">
+                <span className="text-green-400 tracking-widest font-black text-[9px]">
+                  {room.gameMode === 'team' ? 'TEAM CAGAAR & BULUUG' : 'TEAM CAGAAR & BULUUG'}
+                </span>
+                {room.gameMode === 'team' && (
+                  <span className="text-blue-400 bg-blue-400/10 px-1.5 py-0.5 rounded text-[8px] font-bold">🤝 XULAFA</span>
+                )}
+              </div>
+              <div className="space-y-1.5">
+                {['green', 'blue'].map((color) => {
+                  const pl = room.players.find(p => p.color === color);
+                  const isCurrent = activePlayer?.color === color;
+                  if (!pl) {
+                    return (
+                      <div key={color} className="flex items-center justify-between p-1.5 rounded-lg bg-black/20 border border-dashed border-white/5 text-[9px] text-slate-600 font-bold">
+                        <span>Ma Jiro</span>
+                        <span className={`w-2.5 h-2.5 rounded-full ${color === 'green' ? 'bg-green-950' : 'bg-blue-950'}`} />
+                      </div>
+                    );
+                  }
+                  return (
+                    <div key={pl.color} className={`flex items-center justify-between p-1 rounded-lg transition-all ${activePlayer?.color === pl.color ? 'bg-white/5 border border-blue-500/30 shadow-md shadow-blue-500/5' : 'bg-black/30 border border-transparent'}`}>
+                      <div className="flex items-center gap-1 text-[10px] truncate">
+                        <span className="text-sm shrink-0">{pl.avatar}</span>
+                        <span className="font-semibold text-white text-[10px] truncate max-w-[70px]">{pl.userId === userId ? 'You' : pl.username}</span>
+                      </div>
+                      <span className={`w-2.5 h-2.5 rounded-full ${COLOR_MAP[pl.color]} ${isCurrent ? 'animate-pulse ring-2 ring-white shadow-[0_0_8px_currentColor]' : ''}`} />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         )}
