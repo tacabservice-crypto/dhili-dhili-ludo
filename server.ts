@@ -26,14 +26,29 @@ import {
 const app = express();
 
 // Enable CORS for the frontend origin
-const allowedOrigins = [
+const configuredAllowedOrigins = [
+  process.env.VITE_APP_URL,
+  process.env.PUBLIC_URL,
+  process.env.RENDER_EXTERNAL_URL,
+  process.env.ALLOWED_ORIGINS,
+].flatMap(value => {
+  if (!value) return [];
+  return value.split(',').map(v => v.trim()).filter(Boolean);
+});
+
+const allowedOrigins = Array.from(new Set([
   'https://dhili-dhili-ludo.onrender.com',
   'https://dhilidhili.onrender.com',
+  'http://localhost:3000',
+  'http://localhost:3002',
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:3002',
   'http://localhost:5173',
-  'http://127.0.0.1:5173'
-];
+  'http://127.0.0.1:5173',
+  ...configuredAllowedOrigins,
+]));
+
 app.use(cors({
-  origin: allowedOrigins,
   origin: function (origin, callback) {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -46,7 +61,7 @@ app.use(cors({
   credentials: true
 }));
 
-const PORT = 3002;
+const PORT = Number(process.env.PORT) || 3002;
 const DB_FILE = path.join(process.cwd(), 'db_store.json');
 
 app.use(express.json());
@@ -59,16 +74,43 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 // ==========================================
 let db: Firestore | null = null;
 let auth: Auth | null = null;
-const serviceAccountPath = path.join(process.cwd(), 'firebase-admin-key.json');
-if (fs.existsSync(serviceAccountPath)) {
+
+function getFirebaseServiceAccount() {
+  const envValue = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
+
+  if (envValue) {
+    try {
+      const parsed = JSON.parse(envValue);
+      if (parsed && parsed.project_id && parsed.private_key) {
+        return parsed;
+      }
+      console.warn('FIREBASE_SERVICE_ACCOUNT was set but did not contain project_id/private_key.');
+    } catch (error) {
+      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON:', error);
+    }
+  }
+
+  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+    ? process.env.FIREBASE_SERVICE_ACCOUNT_PATH
+    : path.join(process.cwd(), 'firebase-admin-key.json');
+
+  if (!fs.existsSync(serviceAccountPath)) {
+    return null;
+  }
+
   try {
     const serviceAccountFile = fs.readFileSync(serviceAccountPath, 'utf8');
-    const serviceAccount = JSON.parse(serviceAccountFile);
-    
-    // The private_key from the JSON file has its newlines escaped (e.g., "").
-    // The Firebase Admin SDK's crypto library expects actual newline characters.
-    // We need to "un-escape" them before passing the credential to Firebase.
-    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
+    return JSON.parse(serviceAccountFile);
+  } catch (error) {
+    console.error('Failed to read Firebase service account JSON file:', error);
+    return null;
+  }
+}
+
+const serviceAccount = getFirebaseServiceAccount();
+if (serviceAccount) {
+  try {
+    serviceAccount.private_key = (serviceAccount.private_key || '').replace(/\\n/g, '\n');
 
     try {
       getApp();
@@ -85,7 +127,7 @@ if (fs.existsSync(serviceAccountPath)) {
     console.error('Failed to initialize Firebase Admin SDK:', err);
   }
 } else {
-  console.log('No firebase-admin-key.json found. Running offline.');
+  console.log('No Firebase Admin credentials configured. Set FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json for login/auth to work.');
 }
 
 // ==========================================

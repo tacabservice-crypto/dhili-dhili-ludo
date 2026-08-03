@@ -1,0 +1,16 @@
+<svg width="512" height="512" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background with rounded corners -->
+  <rect width="100" height="100" rx="20" ry="20" fill="#f0f0f0"/>
+
+  <!-- Ludo Colors as Dice Dots -->
+  <g transform="translate(50, 50)">
+    <!-- Red (bottom-left) -->
+    <circle cx="-25" cy="25" r="12" fill="#d9534f"/>
+    <!-- Green (top-left) -->
+    <circle cx="-25" cy="-25" r="12" fill="#5cb85c"/>
+    <!-- Yellow (top-right) -->
+    <circle cx="25" cy="-25" r="12" fill="#f0ad4e"/>
+    <!-- Blue (bottom-right) -->
+    <circle cx="25" cy="25" r="12" fill="#428bca"/>
+  </g>
+</svg>

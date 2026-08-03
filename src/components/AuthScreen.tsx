@@ -24,7 +24,15 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenProps) {
-  const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
+  const API_BASE_URL = (() => {
+    if (typeof window === 'undefined') return 'http://localhost:3002';
+    const host = window.location.hostname;
+    const configured = import.meta.env.VITE_APP_URL || '';
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return window.location.origin || 'http://localhost:3000';
+    }
+    return configured || window.location.origin || 'http://localhost:3002';
+  })();
   const { t } = useLanguage();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
