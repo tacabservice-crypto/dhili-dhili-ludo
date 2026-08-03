@@ -4,7 +4,6 @@
  */
 import { useLocation, useParams } from 'react-router-dom';
 import React, { useState, useEffect, useRef } from 'react';
-// import { useRegisterSW } from 'virtual:pwa-register/react';
 import { UserProfile, GameRoom } from './types/game';
 import AuthScreen from './components/AuthScreen';
 import Dashboard from './components/Dashboard';
@@ -19,7 +18,6 @@ import { auth } from './firebase-client';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 export default function App() {
-  // useRegisterSW();
   const { roomId } = useParams<{ roomId: string }>();
   const location = useLocation();
   const API_BASE_URL = import.meta.env.VITE_APP_URL || 'http://localhost:3002';
