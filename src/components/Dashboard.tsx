@@ -73,36 +73,6 @@ export default function Dashboard({
   const [isSettingsDropdownOpen, setIsSettingsDropdownOpen] = useState<boolean>(false);
   const [showAboutUs, setShowAboutUs] = useState<boolean>(false);
   const [showHelp, setShowHelp] = useState<boolean>(false);
-  const [installPrompt, setInstallPrompt] = useState<Event | null>(null);
-
-  useEffect(() => {
-    const handleBeforeInstallPrompt = (event: Event) => {
-      event.preventDefault();
-      setInstallPrompt(event);
-    };
-
-    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-
-    return () => {
-      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-    };
-  }, []);
-
-  const handleInstallClick = () => {
-    if (!installPrompt) {
-      return;
-    }
-    (installPrompt as any).prompt();
-
-    (installPrompt as any).userChoice.then((choiceResult: { outcome: string }) => {
-      if (choiceResult.outcome === 'accepted') {
-        console.log('User accepted the install prompt');
-      } else {
-        console.log('User dismissed the install prompt');
-      }
-      setInstallPrompt(null);
-    });
-  };
 
   const STAKE_TIERS = [
     {
@@ -763,15 +733,6 @@ export default function Dashboard({
                     <HelpCircle className="w-3.5 h-3.5" />
                     <span>{t('help')}</span>
                   </button>
-                  {installPrompt && (
-                    <button
-                      onClick={handleInstallClick}
-                      className="w-full text-left flex items-center gap-2 p-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-white/5 hover:text-white transition-all"
-                    >
-                      <LogIn className="w-3.5 h-3.5" />
-                      <span>Install App</span>
-                    </button>
-                  )}
                   <button
                     onClick={() => {
                       onLogout();

@@ -11,6 +11,7 @@ import GameRoomView from './components/GameRoom';
 import WalletModal from './components/WalletModal';
 import RejoinPrompt from './components/RejoinPrompt';
 import AdminDashboard from './components/AdminDashboard';
+import InstallPwaPrompt from './components/InstallPwaPrompt';
 import { Toaster } from 'react-hot-toast';
 import { VoiceChatProvider } from './context/VoiceChatContext';
 import { auth } from './firebase-client';
@@ -816,61 +817,28 @@ export default function App() {
     }
   }, [errorToast]);
 
-  // --- Main Render Logic ---
-
-  let pageContent;
+  // Rendering orchestration
   if (authLoading) {
-    pageContent = (
+    return (
       <div className="min-h-screen bg-gradient-to-b from-[#2e1065] via-[#0f052d] to-[#020012] text-white flex items-center justify-center">
         <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
-  } else if (window.location.pathname === '/admin') {
-    pageContent = <AdminDashboard />;
-  } else if (rejoinableRoom) {
-    pageContent = <RejoinPrompt rejoinableRoom={rejoinableRoom} onRejoin={handleRejoin} onDismissRejoin={handleDismissRejoin} />;
-  } else if (!user) {
-    pageContent = <AuthScreen onLoginSuccess={handleLoginSuccess} initialError={error} />;
-  } else if (activeRoom) {
-    pageContent = (
-      <GameRoomView
-        room={activeRoom}
-        user={user}
-        userId={user.id}
-        onLeave={handleLeaveRoom}
-        onLogout={handleLogout}
-        onToggleReady={handleToggleReady}
-        onAddBot={handleAddBot}
-        onStartMatch={handleStartMatch}
-        onRollDice={handleRollDice}
-        onMoveToken={handleMoveToken}
-        onSendChat={handleSendChat}
-        onProfileUpdate={handleProfileUpdate}
-        onRetryJoin={() => {
-          if (activeRoom) {
-            setActiveRoom(prev => prev ? { ...prev, rejectionReason: undefined } : null);
-            handleJoinPrivateRoom(activeRoom.id);
-          }
-        }}
-      />
-    );
-  } else {
-    pageContent = (
-      <Dashboard
-        user={user}
-        onOpenWallet={() => setIsWalletOpen(true)}
-        onLogout={handleLogout}
-        onCreatePrivateRoom={handleCreatePrivateRoom}
-        onJoinPrivateRoom={handleJoinPrivateRoom}
-        onStartMatchmaking={handleStartMatchmaking}
-        onLeaveMatchmaking={handleLeaveMatchmaking}
-        matchmakingState={matchmakingState}
-        rejoinableRoom={rejoinableRoom}
-        onRejoin={handleRejoin}
-        onDismissRejoin={handleDismissRejoin}
-        onProfileUpdate={handleProfileUpdate}
-      />
-    );
+  }
+
+  if (window.location.pathname === '/admin') {
+    return <AdminDashboard />;
+  }
+  
+  if (rejoinableRoom) {
+    return <RejoinPrompt rejoinableRoom={rejoinableRoom} onRejoin={handleRejoin} onDismissRejoin={handleDismissRejoin} />;
+  }
+
+  if (!user) {
+    return <>
+      <AuthScreen onLoginSuccess={handleLoginSuccess} initialError={error} />
+      <InstallPwaPrompt />
+    </>;
   }
 
   const renderOverlays = () => (
@@ -969,20 +937,73 @@ export default function App() {
     </>
   );
 
+  if (activeRoom) {
+    return (
+      <>
+        <VoiceChatProvider>
+          <GameRoomView
+            room={activeRoom}
+            user={user}
+            userId={user.id}
+            onLeave={handleLeaveRoom}
+            onLogout={handleLogout}
+            onToggleReady={handleToggleReady}
+            onAddBot={handleAddBot}
+            onStartMatch={handleStartMatch}
+            onRollDice={handleRollDice}
+            onMoveToken={handleMoveToken}
+            onSendChat={handleSendChat}
+            onProfileUpdate={handleProfileUpdate}
+            onRetryJoin={() => {
+              if (activeRoom) {
+                // Clear the rejection reason and retry joining
+                setActiveRoom(prev => prev ? { ...prev, rejectionReason: undefined } : null);
+                handleJoinPrivateRoom(activeRoom.id);
+              }
+            }}
+          />
+        {isWalletOpen && (
+          <WalletModal
+            user={user}
+            onClose={() => setIsWalletOpen(false)}
+            onBalanceUpdated={handleRefreshBalance}
+          />
+        )}
+        {renderOverlays()}
+        <Toaster />
+      </VoiceChatProvider>
+      </>
+      );
+      }
+
   return (
-    <VoiceChatProvider>
-      {pageContent}
-      
-      {/* Global components that should be available on all pages */}
-      {isWalletOpen && user && (
-        <WalletModal
+    <>
+      <VoiceChatProvider>
+        <Dashboard
           user={user}
-          onClose={() => setIsWalletOpen(false)}
-          onBalanceUpdated={handleRefreshBalance}
+          onOpenWallet={() => setIsWalletOpen(true)}
+          onLogout={handleLogout}
+          onCreatePrivateRoom={handleCreatePrivateRoom}
+          onJoinPrivateRoom={handleJoinPrivateRoom}
+          onStartMatchmaking={handleStartMatchmaking}
+          onLeaveMatchmaking={handleLeaveMatchmaking}
+          matchmakingState={matchmakingState}
+          rejoinableRoom={rejoinableRoom}
+          onRejoin={handleRejoin}
+          onDismissRejoin={handleDismissRejoin}
+          onProfileUpdate={handleProfileUpdate}
         />
-      )}
-      {renderOverlays()}
-      <Toaster />
-    </VoiceChatProvider>
+        {isWalletOpen && (
+          <WalletModal
+            user={user}
+            onClose={() => setIsWalletOpen(false)}
+            onBalanceUpdated={handleRefreshBalance}
+          />
+        )}
+        {renderOverlays()}
+        <Toaster />
+        <InstallPwaPrompt />
+      </VoiceChatProvider>
+    </>
   );
 }
