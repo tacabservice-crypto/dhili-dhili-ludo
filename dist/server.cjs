@@ -31,14 +31,27 @@ var import_app = require("firebase-admin/app");
 var import_firestore = require("firebase-admin/firestore");
 var import_auth = require("firebase-admin/auth");
 var app = (0, import_express.default)();
-var allowedOrigins = [
+var configuredAllowedOrigins = [
+  process.env.VITE_APP_URL,
+  process.env.PUBLIC_URL,
+  process.env.RENDER_EXTERNAL_URL,
+  process.env.ALLOWED_ORIGINS
+].flatMap((value) => {
+  if (!value) return [];
+  return value.split(",").map((v) => v.trim()).filter(Boolean);
+});
+var allowedOrigins = Array.from(/* @__PURE__ */ new Set([
   "https://dhili-dhili-ludo.onrender.com",
   "https://dhilidhili.onrender.com",
+  "http://localhost:3000",
+  "http://localhost:3002",
+  "http://127.0.0.1:3000",
+  "http://127.0.0.1:3002",
   "http://localhost:5173",
-  "http://127.0.0.1:5173"
-];
+  "http://127.0.0.1:5173",
+  ...configuredAllowedOrigins
+]));
 app.use((0, import_cors.default)({
-  origin: allowedOrigins,
   origin: function(origin, callback) {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -50,18 +63,41 @@ app.use((0, import_cors.default)({
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
 }));
-var PORT = 3002;
+var PORT = Number(process.env.PORT) || 3002;
 var DB_FILE = import_path.default.join(process.cwd(), "db_store.json");
 app.use(import_express.default.json());
 app.use(import_express.default.static(import_path.default.join(process.cwd(), "public")));
 var db = null;
 var auth = null;
-var serviceAccountPath = import_path.default.join(process.cwd(), "firebase-admin-key.json");
-if (import_fs.default.existsSync(serviceAccountPath)) {
+function getFirebaseServiceAccount() {
+  const envValue = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
+  if (envValue) {
+    try {
+      const parsed = JSON.parse(envValue);
+      if (parsed && parsed.project_id && parsed.private_key) {
+        return parsed;
+      }
+      console.warn("FIREBASE_SERVICE_ACCOUNT was set but did not contain project_id/private_key.");
+    } catch (error) {
+      console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON:", error);
+    }
+  }
+  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH ? process.env.FIREBASE_SERVICE_ACCOUNT_PATH : import_path.default.join(process.cwd(), "firebase-admin-key.json");
+  if (!import_fs.default.existsSync(serviceAccountPath)) {
+    return null;
+  }
   try {
     const serviceAccountFile = import_fs.default.readFileSync(serviceAccountPath, "utf8");
-    const serviceAccount = JSON.parse(serviceAccountFile);
-    serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, "\n");
+    return JSON.parse(serviceAccountFile);
+  } catch (error) {
+    console.error("Failed to read Firebase service account JSON file:", error);
+    return null;
+  }
+}
+var serviceAccount = getFirebaseServiceAccount();
+if (serviceAccount) {
+  try {
+    serviceAccount.private_key = (serviceAccount.private_key || "").replace(/\\n/g, "\n");
     try {
       (0, import_app.getApp)();
     } catch (error) {
@@ -77,7 +113,7 @@ if (import_fs.default.existsSync(serviceAccountPath)) {
     console.error("Failed to initialize Firebase Admin SDK:", err);
   }
 } else {
-  console.log("No firebase-admin-key.json found. Running offline.");
+  console.log("No Firebase Admin credentials configured. Set FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json for login/auth to work.");
 }
 var store = {
   users: {},
