@@ -835,12 +835,10 @@ export default function App() {
   }
 
   if (!user) {
-    return <>
-      <AuthScreen onLoginSuccess={handleLoginSuccess} initialError={error} />
-      <InstallPwaPrompt />
-    </>;
+    return <AuthScreen onLoginSuccess={handleLoginSuccess} initialError={error} />;
   }
 
+  // This function renders overlays that should appear above the main content.
   const renderOverlays = () => (
     <>
       {activeReaction && (
@@ -974,7 +972,7 @@ export default function App() {
       </VoiceChatProvider>
       </>
       );
-      }
+  }
 
   return (
     <>
@@ -1002,8 +1000,8 @@ export default function App() {
         )}
         {renderOverlays()}
         <Toaster />
-        <InstallPwaPrompt />
       </VoiceChatProvider>
+      <InstallPwaPrompt />
     </>
   );
 }
