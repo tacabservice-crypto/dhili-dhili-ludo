@@ -330,6 +330,12 @@ var START_OFFSETS = {
   red: 39
 };
 var SAFE_GLOBAL_SQUARES = [0, 8, 13, 21, 26, 34, 39, 47];
+var HOME_ENTRY_POSITIONS = {
+  green: 50,
+  yellow: 11,
+  blue: 24,
+  red: 37
+};
 function getGlobalPosition(color, relativePos) {
   if (relativePos < 0 || relativePos > 50) return null;
   const offset = START_OFFSETS[color];
@@ -348,6 +354,12 @@ function isMoveValid(token, roll) {
   if (token.position === 56) return false;
   if (token.position === -1) {
     return roll === 6;
+  }
+  const homeEntry = HOME_ENTRY_POSITIONS[token.color];
+  if (token.position <= homeEntry && token.position + roll > homeEntry) {
+    const stepsIntoHomeStretch = token.position + roll - homeEntry;
+    const finalHomePosition = 50 + stepsIntoHomeStretch;
+    return finalHomePosition <= 56;
   }
   return token.position + roll <= 56;
 }
@@ -463,7 +475,15 @@ function moveTokenLogic(room, tokenId, diceValue) {
     token.position = 0;
     addLog(room, `${activePlayer.username} moved token out of base onto start!`);
   } else {
-    token.position += diceValue;
+    const homeEntry = HOME_ENTRY_POSITIONS[token.color];
+    let newPos = token.position;
+    if (token.position <= homeEntry && token.position + diceValue > homeEntry) {
+      const stepsIntoHomeStretch = token.position + diceValue - homeEntry;
+      newPos = 50 + stepsIntoHomeStretch;
+    } else {
+      newPos += diceValue;
+    }
+    token.position = newPos;
     addLog(room, `${activePlayer.username} moved token by ${diceValue} spaces (from ${oldPos} to ${token.position}).`);
   }
   let bonusTurn = diceValue === 6;

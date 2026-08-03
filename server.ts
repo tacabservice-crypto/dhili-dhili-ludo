@@ -1103,13 +1103,13 @@ app.post('/api/auth/login', verifyFirebaseToken, async (req: any, res) => {
     username: cleanUsername,
     email: email || undefined,
     avatar: avatar || '🌸',
-    balance: 100.0,
+    balance: 10.0,
     winCount: 0,
     lossCount: 0
   };
 
   store.users[userId] = newUser;
-  addTransaction(userId, 'deposit', 100.0, undefined, 'Welcome signup bonus.');
+  addTransaction(userId, 'deposit', 10.0, undefined, 'Welcome signup bonus.');
   await saveStoreAndWait();
 
   res.json(newUser);
@@ -1185,6 +1185,10 @@ app.post('/api/wallet/withdraw', (req, res) => {
   const withAmt = parseFloat(amount);
   if (isNaN(withAmt) || withAmt <= 0) {
     return res.status(400).json({ error: 'Invalid withdrawal amount' });
+  }
+
+  if (withAmt < 20) { // New condition for minimum withdrawal
+    return res.status(400).json({ error: 'Minimum withdrawal amount is $20' });
   }
 
   if (user.balance < withAmt) {
