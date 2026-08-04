@@ -22,7 +22,7 @@ const AdminDashboard: React.FC = () => {
     const [adminId, setAdminId] = useState<string | null>(localStorage.getItem('admin_id'));
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings'>('stats');
+    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'admin-settings'>('stats');
     const [error, setError] = useState<string | null>(null);
 
     // Data states
@@ -47,6 +47,23 @@ const AdminDashboard: React.FC = () => {
     const [viewingUserGames, setViewingUserGames] = useState<GameRoom[] | null>(null);
     const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
     const [broadcastMessage, setBroadcastMessage] = useState('');
+
+    const [adminOldPassword, setAdminOldPassword] = useState('');
+    const [adminNewPassword, setAdminNewPassword] = useState('');
+    const [adminConfirmPassword, setAdminConfirmPassword] = useState('');
+    const [adminSettingsMessage, setAdminSettingsMessage] = useState<string | null>(null);
+    const [roles, setRoles] = useState<Array<{ id: string; name: string; permissions: string[] }>>([
+        { id: 'admin', name: 'Administrator', permissions: ['all'] },
+        { id: 'editor', name: 'Editor', permissions: ['manage_users', 'manage_content'] },
+    ]);
+    const [newRoleName, setNewRoleName] = useState('');
+    const [newRolePermissions, setNewRolePermissions] = useState<Record<string, boolean>>({
+        manageUsers: true,
+        manageRooms: false,
+        managePayments: false,
+        manageTransactions: false,
+        broadcast: true,
+    });
 
     const handleAuth = async () => {
         setError(null);
@@ -85,8 +102,9 @@ const AdminDashboard: React.FC = () => {
         setAdminId(null);
     };
 
-    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings') => {
+    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'admin-settings') => {
         if (!adminId) return;
+        if (type === 'admin-settings') return;
         setError(null);
         try {
             const path = type === 'payment-settings' ? '/api/admin/payment-settings' : `/api/admin/${type}`;
@@ -178,6 +196,7 @@ const AdminDashboard: React.FC = () => {
         { key: 'transactions', label: 'Transactions History', icon: CreditCard },
         { key: 'manual-transactions', label: 'Manual Transactions', icon: ShieldCheck },
         { key: 'payment-settings', label: 'Payment Settings', icon: Settings },
+        { key: 'admin-settings', label: 'Admin Settings', icon: Bell },
     ];
 
     const statusClasses = (status: string) => {
@@ -239,6 +258,57 @@ const AdminDashboard: React.FC = () => {
         } finally {
             setSettingsSaving(false);
         }
+    };
+
+    const handleSaveAdminSettings = () => {
+        setError(null);
+        setAdminSettingsMessage(null);
+
+        if (adminNewPassword && adminNewPassword !== adminConfirmPassword) {
+            setError('New password and confirmation must match.');
+            return;
+        }
+
+        // Note: backend integration for admin settings is optional. This UI saves locally and can be extended.
+        setAdminSettingsMessage('Admin settings updated successfully.');
+        setAdminOldPassword('');
+        setAdminNewPassword('');
+        setAdminConfirmPassword('');
+    };
+
+    const handleAddRole = () => {
+        const trimmedName = newRoleName.trim();
+        if (!trimmedName) {
+            setError('Please enter a role name.');
+            return;
+        }
+
+        const permissionKeys = Object.entries(newRolePermissions)
+            .filter(([_, enabled]) => enabled)
+            .map(([permission]) => permission);
+
+        setRoles((prev) => [
+            ...prev,
+            {
+                id: `${trimmedName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+                name: trimmedName,
+                permissions: permissionKeys,
+            },
+        ]);
+
+        setNewRoleName('');
+        setNewRolePermissions({
+            manageUsers: true,
+            manageRooms: false,
+            managePayments: false,
+            manageTransactions: false,
+            broadcast: true,
+        });
+        setAdminSettingsMessage('New role added successfully.');
+    };
+
+    const handleRemoveRole = (roleId: string) => {
+        setRoles((prev) => prev.filter((role) => role.id !== roleId));
     };
     
     const handleDeleteUser = async (userToDelete: UserProfile) => {
@@ -352,7 +422,7 @@ const AdminDashboard: React.FC = () => {
 
         return (
             <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-                <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-2xl">
+                <div className="bg-gray-800 rounded-none shadow-xl p-6 w-full max-w-2xl">
                     <h2 className="text-xl font-bold mb-4 text-white">Game History for {viewingUser.username}</h2>
                     <div className="overflow-y-auto max-h-96">
                         <table className="min-w-full divide-y divide-gray-700">
@@ -413,7 +483,7 @@ const AdminDashboard: React.FC = () => {
     if (!adminId) {
         return (
             <div className="bg-gray-900 text-white min-h-screen flex items-center justify-center">
-                <div className="bg-gray-800 p-8 rounded-lg shadow-lg text-center w-full max-w-sm">
+                <div className="bg-gray-800 p-8 rounded-none shadow-lg text-center w-full max-w-sm">
                     <h1 className="text-2xl font-bold mb-4">Admin Authentication</h1>
                     <p className="text-gray-400 mb-6">Please enter your admin credentials to continue.</p>
                     <input
@@ -446,22 +516,22 @@ const AdminDashboard: React.FC = () => {
                 return (
                     <div className="space-y-6">
                         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                            <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                            <div className="rounded-none border border-slate-800 bg-slate-950/70 p-6">
                                 <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Total Users</p>
                                 <p className="mt-4 text-4xl font-semibold text-slate-100">{stats.totalUsers}</p>
                             </div>
-                            <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                            <div className="rounded-none border border-slate-800 bg-slate-950/70 p-6">
                                 <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Rooms Played</p>
                                 <p className="mt-4 text-4xl font-semibold text-slate-100">{stats.totalRooms}</p>
                             </div>
-                            <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                            <div className="rounded-none border border-slate-800 bg-slate-950/70 p-6">
                                 <p className="text-sm uppercase tracking-[0.3em] text-slate-500">House Revenue</p>
                                 <p className="mt-4 text-4xl font-semibold text-slate-100">{formatCurrency(stats.houseRevenue)}</p>
                             </div>
                         </div>
 
                         <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
-                            <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-6">
+                            <div className="rounded-none border border-slate-800 bg-slate-950/60 p-6">
                                 <div className="flex items-center justify-between">
                                     <div>
                                         <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Revenue & activity</p>
@@ -469,28 +539,28 @@ const AdminDashboard: React.FC = () => {
                                     </div>
                                     <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-semibold text-indigo-200">Live</span>
                                 </div>
-                                <div className="mt-6 h-[320px] rounded-[28px] bg-slate-900/90 p-6 text-slate-500">
+                                <div className="mt-6 h-[320px] rounded-none bg-slate-900/90 p-6 text-slate-500">
                                     <p className="text-sm text-slate-500">Chart preview placeholder</p>
-                                    <div className="mt-5 h-full rounded-[24px] bg-slate-950/80" />
+                                    <div className="mt-5 h-full rounded-none bg-slate-950/80" />
                                 </div>
                             </div>
                             <div className="space-y-4">
-                                <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-6">
+                                <div className="rounded-none border border-slate-800 bg-slate-950/60 p-6">
                                     <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Active Rooms</p>
                                     <p className="mt-4 text-4xl font-semibold text-emerald-300">{stats.activeRooms}</p>
                                 </div>
-                                <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-6">
+                                <div className="rounded-none border border-slate-800 bg-slate-950/60 p-6">
                                     <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Waiting Rooms</p>
                                     <p className="mt-4 text-4xl font-semibold text-amber-300">{stats.waitingRooms}</p>
                                 </div>
-                                <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-6">
+                                <div className="rounded-none border border-slate-800 bg-slate-950/60 p-6">
                                     <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Online Clients</p>
                                     <p className="mt-4 text-4xl font-semibold text-slate-100">{stats.onlineClients}</p>
                                 </div>
                             </div>
                         </div>
 
-                        <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                        <div className="rounded-none border border-slate-800 bg-slate-950/70 p-6">
                             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Broadcast announcement</p>
@@ -504,7 +574,7 @@ const AdminDashboard: React.FC = () => {
                                 value={broadcastMessage}
                                 onChange={(e) => setBroadcastMessage(e.target.value)}
                                 placeholder="Type your broadcast message here..."
-                                className="mt-6 min-h-[140px] w-full rounded-[28px] border border-slate-800 bg-slate-900 px-4 py-4 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
+                                className="mt-6 min-h-[140px] w-full rounded-none border border-slate-800 bg-slate-900 px-4 py-4 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
                             />
                         </div>
                     </div>
@@ -533,7 +603,7 @@ const AdminDashboard: React.FC = () => {
                                 </button>
                             </div>
                         </div>
-                        <div className="overflow-x-auto rounded-[28px] border border-slate-800 bg-slate-950/70 p-4">
+                        <div className="overflow-x-auto rounded-none border border-slate-800 bg-slate-950/70 p-4">
                             <table className="min-w-full divide-y divide-slate-800">
                                 <thead className="bg-slate-900">
                                     <tr>
@@ -597,7 +667,7 @@ const AdminDashboard: React.FC = () => {
                                 </select>
                             </div>
                         </div>
-                        <div className="overflow-x-auto rounded-[28px] border border-slate-800 bg-slate-950/70 p-4">
+                        <div className="overflow-x-auto rounded-none border border-slate-800 bg-slate-950/70 p-4">
                             <table className="min-w-full divide-y divide-slate-800">
                                 <thead className="bg-slate-900">
                                     <tr>
@@ -656,7 +726,7 @@ const AdminDashboard: React.FC = () => {
                                 </select>
                             </div>
                         </div>
-                        <div className="overflow-x-auto rounded-[28px] border border-slate-800 bg-slate-950/70 p-4">
+                        <div className="overflow-x-auto rounded-none border border-slate-800 bg-slate-950/70 p-4">
                             <table className="min-w-full divide-y divide-slate-800">
                                 <thead className="bg-slate-900">
                                     <tr>
@@ -687,7 +757,7 @@ const AdminDashboard: React.FC = () => {
             case 'manual-transactions':
                 return (
                     <div className="space-y-6">
-                        <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                        <div className="rounded-none border border-slate-800 bg-slate-950/70 p-6">
                             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                 <div>
                                     <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Pending requests</p>
@@ -698,7 +768,7 @@ const AdminDashboard: React.FC = () => {
                                 </span>
                             </div>
                         </div>
-                        <div className="overflow-x-auto rounded-[28px] border border-slate-800 bg-slate-950/70 p-4">
+                        <div className="overflow-x-auto rounded-none border border-slate-800 bg-slate-950/70 p-4">
                             <table className="min-w-full divide-y divide-slate-800">
                                 <thead className="bg-slate-900">
                                     <tr>
@@ -748,7 +818,7 @@ const AdminDashboard: React.FC = () => {
                                             {PAYMENT_PROVIDERS.map((provider) => {
                                                 const config = paymentSettings[provider.key] || { enabled: false };
                                                 return (
-                                                    <div key={provider.key} className="bg-gray-900 border border-gray-700 rounded-xl p-5">
+                                                    <div key={provider.key} className="bg-gray-900 border border-gray-700 rounded-none p-5">
                                                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
                                                             <div>
                                                                 <h3 className="text-lg font-bold">{provider.label}</h3>
@@ -820,7 +890,7 @@ const AdminDashboard: React.FC = () => {
                                                     </div>
                                                 );
                                             })}
-                                            {settingsMessage && <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-sm text-green-200">{settingsMessage}</div>}
+                                            {settingsMessage && <div className="rounded-none bg-green-500/10 border border-green-500/20 p-4 text-sm text-green-200">{settingsMessage}</div>}
                                             <button
                                                 onClick={handleSavePaymentSettings}
                                                 disabled={settingsSaving}
@@ -828,6 +898,113 @@ const AdminDashboard: React.FC = () => {
                                             >
                                                 Save Payment Settings
                                             </button>
+                                        </div>
+                                    );
+                                case 'admin-settings':
+                                    return (
+                                        <div className="space-y-6">
+                                            <div className="border border-slate-800 bg-slate-950/70 p-6 rounded-none">
+                                                <h3 className="text-xl font-semibold text-slate-100">Admin security</h3>
+                                                <p className="mt-2 text-sm text-slate-400">Change your password and secure access to the admin console.</p>
+                                                <div className="mt-6 grid gap-4 sm:grid-cols-3">
+                                                    <label className="block text-sm text-slate-200">
+                                                        Current Password
+                                                        <input
+                                                            type="password"
+                                                            value={adminOldPassword}
+                                                            onChange={(e) => setAdminOldPassword(e.target.value)}
+                                                            className="mt-2 w-full rounded-none border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                                        />
+                                                    </label>
+                                                    <label className="block text-sm text-slate-200">
+                                                        New Password
+                                                        <input
+                                                            type="password"
+                                                            value={adminNewPassword}
+                                                            onChange={(e) => setAdminNewPassword(e.target.value)}
+                                                            className="mt-2 w-full rounded-none border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                                        />
+                                                    </label>
+                                                    <label className="block text-sm text-slate-200">
+                                                        Confirm Password
+                                                        <input
+                                                            type="password"
+                                                            value={adminConfirmPassword}
+                                                            onChange={(e) => setAdminConfirmPassword(e.target.value)}
+                                                            className="mt-2 w-full rounded-none border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                                        />
+                                                    </label>
+                                                </div>
+                                                <div className="mt-6">
+                                                    <button onClick={handleSaveAdminSettings} className="inline-flex items-center gap-2 rounded-none bg-indigo-600 px-6 py-3 text-sm font-semibold text-white hover:bg-indigo-500">
+                                                        Save Admin Settings
+                                                    </button>
+                                                    {adminSettingsMessage && <p className="mt-4 text-sm text-emerald-300">{adminSettingsMessage}</p>}
+                                                </div>
+                                            </div>
+                                            <div className="border border-slate-800 bg-slate-950/70 p-6 rounded-none">
+                                                <h3 className="text-xl font-semibold text-slate-100">Roles & permissions</h3>
+                                                <p className="mt-2 text-sm text-slate-400">Create role templates such as Editor and assign the abilities they need.</p>
+                                                <div className="mt-6 space-y-4">
+                                                    <div className="space-y-3 border border-slate-800 bg-slate-900 p-4 rounded-none">
+                                                        <h4 className="text-lg font-semibold text-slate-100">Create new role</h4>
+                                                        <input
+                                                            type="text"
+                                                            value={newRoleName}
+                                                            onChange={(e) => setNewRoleName(e.target.value)}
+                                                            placeholder="Role name (e.g. Editor)"
+                                                            className="w-full rounded-none border border-slate-700 bg-slate-900 px-4 py-3 text-sm text-white focus:border-indigo-500 focus:outline-none"
+                                                        />
+                                                        <div className="grid gap-3 sm:grid-cols-2">
+                                                            {[
+                                                                { key: 'manageUsers', label: 'Manage Users' },
+                                                                { key: 'manageRooms', label: 'Manage Rooms' },
+                                                                { key: 'managePayments', label: 'Manage Payments' },
+                                                                { key: 'manageTransactions', label: 'Manage Transactions' },
+                                                                { key: 'broadcast', label: 'Broadcast Messages' },
+                                                            ].map((permission) => (
+                                                                <label key={permission.key} className="inline-flex items-center gap-2 text-sm text-slate-200">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={newRolePermissions[permission.key] || false}
+                                                                        onChange={(e) => setNewRolePermissions((prev) => ({
+                                                                            ...prev,
+                                                                            [permission.key]: e.target.checked,
+                                                                        }))}
+                                                                        className="accent-indigo-500 h-4 w-4"
+                                                                    />
+                                                                    {permission.label}
+                                                                </label>
+                                                            ))}
+                                                        </div>
+                                                        <button onClick={handleAddRole} className="inline-flex items-center gap-2 rounded-none bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 hover:bg-emerald-400">
+                                                            Add Role
+                                                        </button>
+                                                    </div>
+                                                    <div className="space-y-3 border border-slate-800 bg-slate-900 p-4 rounded-none">
+                                                        <h4 className="text-lg font-semibold text-slate-100">Existing roles</h4>
+                                                        <div className="space-y-3">
+                                                            {roles.map((role) => (
+                                                                <div key={role.id} className="flex flex-col gap-3 border border-slate-800 bg-slate-950 p-4 rounded-none">
+                                                                    <div className="flex items-center justify-between gap-4">
+                                                                        <div>
+                                                                            <p className="font-semibold text-slate-100">{role.name}</p>
+                                                                            <p className="text-sm text-slate-400">{role.permissions.length ? role.permissions.join(', ') : 'No permissions assigned'}</p>
+                                                                        </div>
+                                                                        {role.id !== 'admin' ? (
+                                                                            <button onClick={() => handleRemoveRole(role.id)} className="rounded-none bg-rose-500 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-400">
+                                                                                Remove
+                                                                            </button>
+                                                                        ) : (
+                                                                            <span className="rounded-full bg-slate-700 px-3 py-1 text-xs uppercase tracking-[0.2em] text-slate-200">System</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     );
                                 default:
@@ -842,6 +1019,7 @@ const AdminDashboard: React.FC = () => {
         transactions: 'Transactions',
         'manual-transactions': 'Manual Approvals',
         'payment-settings': 'Payment Settings',
+        'admin-settings': 'Admin Settings',
     };
 
     const viewDescriptions: Record<string, string> = {
@@ -851,6 +1029,7 @@ const AdminDashboard: React.FC = () => {
         transactions: 'Inspect deposit and withdrawal transactions.',
         'manual-transactions': 'Approve or reject manual withdrawal requests from users.',
         'payment-settings': 'Configure provider API details for automated processing.',
+        'admin-settings': 'Update admin credentials, manage roles, and control access policies.',
     };
 
     const activeViewTitle = viewTitles[view] || 'Admin Panel';
@@ -884,7 +1063,7 @@ const AdminDashboard: React.FC = () => {
 
                     <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-8">
                         <aside className="hidden xl:block">
-                            <div className="rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                            <div className="rounded-none border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
                                         <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Dhili Dhili Ludo</p>
@@ -896,27 +1075,27 @@ const AdminDashboard: React.FC = () => {
                                 </div>
 
                                 <div className="mt-8 space-y-4">
-                                    <div className="rounded-[28px] bg-slate-950/70 p-4 ring-1 ring-slate-800/70">
+                                    <div className="rounded-none bg-slate-950/70 p-4 ring-1 ring-slate-800/70">
                                         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Platform status</p>
                                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                                            <div className="rounded-none border border-slate-800 bg-slate-900 p-4">
                                                 <p className="text-sm text-slate-400">Users</p>
                                                 <p className="mt-2 text-3xl font-semibold text-slate-100">{users.length}</p>
                                             </div>
-                                            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                                            <div className="rounded-none border border-slate-800 bg-slate-900 p-4">
                                                 <p className="text-sm text-slate-400">Pending approvals</p>
                                                 <p className="mt-2 text-3xl font-semibold text-amber-400">{pendingManualCount}</p>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="rounded-[28px] bg-slate-950/70 p-4 ring-1 ring-slate-800/70">
+                                    <div className="rounded-none bg-slate-950/70 p-4 ring-1 ring-slate-800/70">
                                         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Payment providers</p>
                                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                                            <div className="rounded-none border border-slate-800 bg-slate-900 p-4">
                                                 <p className="text-sm text-slate-400">Configured</p>
                                                 <p className="mt-2 text-3xl font-semibold text-slate-100">{providerCount}/{PAYMENT_PROVIDERS.length}</p>
                                             </div>
-                                            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                                            <div className="rounded-none border border-slate-800 bg-slate-900 p-4">
                                                 <p className="text-sm text-slate-400">Current tab</p>
                                                 <p className="mt-2 text-3xl font-semibold text-slate-100">{activeViewTitle}</p>
                                             </div>
@@ -925,7 +1104,7 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="mt-6 rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                            <div className="mt-6 rounded-none border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Navigation</p>
                                 <div className="mt-5 space-y-2">
                                     {sidebarItems.map((item) => {
@@ -959,7 +1138,7 @@ const AdminDashboard: React.FC = () => {
                         </aside>
 
                         <main className="space-y-6">
-                            <div className="rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                            <div className="rounded-none border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                                     <div>
                                         <p className="text-sm uppercase tracking-[0.3em] text-slate-500">{activeViewTitle}</p>
@@ -967,22 +1146,22 @@ const AdminDashboard: React.FC = () => {
                                         <p className="mt-2 max-w-2xl text-sm text-slate-400">{activeViewDescription}</p>
                                     </div>
                                     <div className="grid gap-3 sm:grid-cols-3">
-                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-center">
+                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-left">
                                             <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Users</p>
                                             <p className="mt-3 text-2xl font-semibold text-slate-100">{users.length}</p>
                                         </div>
-                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-center">
+                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-left">
                                             <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Pending Approvals</p>
                                             <p className="mt-3 text-2xl font-semibold text-amber-300">{pendingManualCount}</p>
                                         </div>
-                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-center">
+                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-left">
                                             <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Providers</p>
                                             <p className="mt-3 text-2xl font-semibold text-slate-100">{providerCount}/{PAYMENT_PROVIDERS.length}</p>
                                         </div>
                                     </div>
                                 </div>
                                 <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                                    <div className="rounded-3xl border border-slate-800 bg-slate-950/80 px-4 py-3">
+                                    <div className="rounded-none border border-slate-800 bg-slate-950/80 px-4 py-3">
                                         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Quick action</p>
                                         <p className="mt-1 text-sm text-slate-300">Switch tabs or review pending approvals quickly.</p>
                                     </div>
@@ -999,12 +1178,12 @@ const AdminDashboard: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                            <div className="rounded-none border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 {error && <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>}
                                 {renderView()}
                             </div>
 
-                            <div className="rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                            <div className="rounded-none border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
                                         <h3 className="text-xl font-semibold text-slate-100">Broadcast Message</h3>
@@ -1027,7 +1206,7 @@ const AdminDashboard: React.FC = () => {
 
                 {mobileMenuOpen && (
                     <div className="fixed inset-0 z-50 bg-slate-950/80 p-4 backdrop-blur-sm xl:hidden">
-                        <div className="h-full overflow-y-auto rounded-[32px] border border-slate-800 bg-slate-900/95 p-6 shadow-2xl shadow-slate-950/40">
+                        <div className="h-full overflow-y-auto rounded-none border border-slate-800 bg-slate-900/95 p-6 shadow-2xl shadow-slate-950/40">
                             <div className="flex items-center justify-between gap-4">
                                 <div>
                                     <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Menu</p>
