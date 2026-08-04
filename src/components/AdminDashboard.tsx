@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Activity, CreditCard, Users, Layers, ShieldCheck, RefreshCw, LogOut, Settings, Bell } from 'lucide-react';
 import { UserProfile, GameRoom } from '../types/game';
 import UserEditModal from './UserEditModal';
 import { formatCurrency } from '../utils/number';
@@ -611,51 +612,155 @@ const AdminDashboard: React.FC = () => {
                             }
     };
 
+    const viewTitles: Record<string, string> = {
+        stats: 'Overview',
+        users: 'Users',
+        rooms: 'Rooms',
+        transactions: 'Transactions',
+        'manual-transactions': 'Manual Approvals',
+        'payment-settings': 'Payment Settings',
+    };
+
+    const viewDescriptions: Record<string, string> = {
+        stats: 'See overall platform performance and latest activity at a glance.',
+        users: 'Browse and manage registered users, including status and history.',
+        rooms: 'Review active game rooms and manage room state.',
+        transactions: 'Inspect deposit and withdrawal transactions.',
+        'manual-transactions': 'Approve or reject manual withdrawal requests from users.',
+        'payment-settings': 'Configure provider API details for automated processing.',
+    };
+
+    const activeViewTitle = viewTitles[view] || 'Admin Panel';
+    const activeViewDescription = viewDescriptions[view] || '';
+    const providerCount = PAYMENT_PROVIDERS.filter((provider) => paymentSettings[provider.key]?.enabled).length;
+    const pendingManualCount = manualTransactions.filter((tx) => tx.status === 'pending').length;
+
     return (
         <>
-            <div className="bg-gray-900 text-white min-h-screen p-8">
-                <div className="max-w-7xl mx-auto">
-                    <div className="flex justify-between items-center mb-8">
-                        <h1 className="text-3xl font-bold">Admin Dashboard</h1>
-                        <div>
-                            <button onClick={() => fetchData(view)} className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mr-4">Refresh</button>
-                            <button onClick={handleLogout} className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded">
-                                Logout
-                            </button>
-                        </div>
-                    </div>
+            <div className="min-h-screen bg-slate-950 text-slate-100">
+                <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col px-4 py-6 sm:px-6 lg:px-8">
+                    <div className="grid flex-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
+                        <aside className="space-y-6">
+                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                                <div className="flex items-start justify-between gap-4">
+                                    <div>
+                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Admin Panel</p>
+                                        <h1 className="mt-2 text-3xl font-semibold">Dashboard</h1>
+                                    </div>
+                                    <div className="rounded-2xl bg-slate-800 p-3 text-slate-300">
+                                        <Bell className="h-5 w-5" />
+                                    </div>
+                                </div>
+                                <div className="mt-6 space-y-4">
+                                    <div className="rounded-3xl bg-slate-950/80 p-4">
+                                        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Platform status</p>
+                                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                                                <p className="text-sm text-slate-400">Users</p>
+                                                <p className="mt-2 text-2xl font-semibold">{users.length}</p>
+                                            </div>
+                                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                                                <p className="text-sm text-slate-400">Manual approvals</p>
+                                                <p className="mt-2 text-2xl font-semibold">{pendingManualCount}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="rounded-3xl bg-slate-950/80 p-4">
+                                        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Payment providers</p>
+                                        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                                                <p className="text-sm text-slate-400">Configured</p>
+                                                <p className="mt-2 text-2xl font-semibold">{providerCount}/{PAYMENT_PROVIDERS.length}</p>
+                                            </div>
+                                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                                                <p className="text-sm text-slate-400">Selected view</p>
+                                                <p className="mt-2 text-2xl font-semibold">{activeViewTitle}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <div className="bg-gray-800 rounded-lg p-1 flex space-x-1 mb-6">
-                        <button onClick={() => setView('stats')} className={`w-full py-2 rounded ${view === 'stats' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Stats</button>
-                        <button onClick={() => setView('users')} className={`w-full py-2 rounded ${view === 'users' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Users</button>
-                        <button onClick={() => setView('rooms')} className={`w-full py-2 rounded ${view === 'rooms' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Rooms</button>
-                        <button onClick={() => setView('transactions')} className={`w-full py-2 rounded ${view === 'transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Transactions</button>
-                        <button onClick={() => setView('manual-transactions')} className={`w-full py-2 rounded ${view === 'manual-transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Manual Transactions</button>
-                        <button onClick={() => setView('payment-settings')} className={`w-full py-2 rounded ${view === 'payment-settings' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Payment Settings</button>
-                    </div>
+                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                                <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Navigation</p>
+                                <div className="mt-5 space-y-2">
+                                    <button onClick={() => setView('stats')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'stats' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
+                                        <Activity className="h-4 w-4" />
+                                        Stats
+                                    </button>
+                                    <button onClick={() => setView('users')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'users' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
+                                        <Users className="h-4 w-4" />
+                                        Users
+                                    </button>
+                                    <button onClick={() => setView('rooms')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'rooms' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
+                                        <Layers className="h-4 w-4" />
+                                        Rooms
+                                    </button>
+                                    <button onClick={() => setView('transactions')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'transactions' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
+                                        <CreditCard className="h-4 w-4" />
+                                        Transactions
+                                    </button>
+                                    <button onClick={() => setView('manual-transactions')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'manual-transactions' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
+                                        <ShieldCheck className="h-4 w-4" />
+                                        Manual Transactions
+                                    </button>
+                                    <button onClick={() => setView('payment-settings')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'payment-settings' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
+                                        <Settings className="h-4 w-4" />
+                                        Payment Settings
+                                    </button>
+                                </div>
+                            </div>
+                        </aside>
 
-                    <div className="bg-gray-800 p-6 rounded-lg">
-                        {error && <p className="text-red-500 mb-4">{error}</p>}
-                        {renderView()}
-                    </div>
+                        <main className="space-y-6">
+                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Current view</p>
+                                        <h2 className="mt-2 text-3xl font-semibold">{activeViewTitle}</h2>
+                                        <p className="mt-2 text-sm text-slate-400">{activeViewDescription}</p>
+                                    </div>
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <button onClick={() => fetchData(view)} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950/80 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-900">
+                                            <RefreshCw className="h-4 w-4" />
+                                            Refresh
+                                        </button>
+                                        <button onClick={handleLogout} className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-500">
+                                            <LogOut className="h-4 w-4" />
+                                            Logout
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
 
-                    <div className="bg-gray-800 p-6 rounded-lg mt-6">
-                        <h2 className="text-xl font-bold mb-4">Broadcast Message</h2>
-                        <textarea
-                            value={broadcastMessage}
-                            onChange={(e) => setBroadcastMessage(e.target.value)}
-                            placeholder="Enter message to broadcast to all users"
-                            className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1"
-                            rows={3}
-                        />
-                        <button onClick={handleBroadcast} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded mt-2">
-                            Broadcast
-                        </button>
+                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                                {error && <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>}
+                                {renderView()}
+                            </div>
+
+                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                                    <div>
+                                        <h3 className="text-xl font-semibold">Broadcast Message</h3>
+                                        <p className="mt-1 text-sm text-slate-400">Send an announcement to every user from the admin panel.</p>
+                                    </div>
+                                    <button onClick={handleBroadcast} className="inline-flex items-center rounded-2xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-500">
+                                        Broadcast
+                                    </button>
+                                </div>
+                                <textarea
+                                    value={broadcastMessage}
+                                    onChange={(e) => setBroadcastMessage(e.target.value)}
+                                    placeholder="Type your broadcast message here..."
+                                    className="mt-4 min-h-[120px] w-full rounded-3xl border border-slate-800 bg-slate-950/80 px-4 py-4 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                                />
+                            </div>
+                        </main>
                     </div>
                 </div>
             </div>
             {editingUser && (
-                <UserEditModal 
+                <UserEditModal
                     user={editingUser}
                     onClose={() => setEditingUser(null)}
                     onSave={handleSaveUser}
