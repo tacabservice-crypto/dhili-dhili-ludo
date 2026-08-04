@@ -332,36 +332,42 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                         </button>
                     </div>
                     
-                    {activeTab === 'deposit' && (
-                        <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                            {confirmationRequested ? (
-                                <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4 shrink-0" />
-                                    <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
-                                </div>
-                            ) : (
-                                <>
-                                    <p className="text-xs text-slate-300 font-semibold">
-                                        {language === 'so' ? 'Marka aad lacagta dirto, taabo badhanka hoose si aad u codsato xaqiijin.' : 'After sending the money, press the button below to request confirmation.'}
-                                    </p>
-                                    <button
-                                        onClick={handleRequestConfirmation}
-                                        disabled={confirmationLoading}
-                                        className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {confirmationLoading ? (
-                                            <>
-                                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                                {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
-                                            </>
-                                        ) : (
-                                            language === 'so' ? 'Waan Diray Lacagta, Ii Xaqiiji' : 'I Sent The Money, Please Confirm'
-                                        )}
-                                    </button>
-                                </>
-                            )}
-                        </div>
-                    )}
+                    <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                        {confirmationRequested ? (
+                            <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
+                                <CheckCircle className="w-4 h-4 shrink-0" />
+                                <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
+                            </div>
+                        ) : (
+                            <>
+                                <p className="text-xs text-slate-300 font-semibold">
+                                    {activeTab === 'deposit'
+                                        ? language === 'so'
+                                            ? 'Marka aad lacagta dirto, taabo badhanka hoose si aad u codsato xaqiijin.'
+                                            : 'After sending the money, press the button below to request confirmation.'
+                                        : language === 'so'
+                                            ? 'Marka aad koodhka USSD ka dhameysato, taabo badhanka hoose si aad u codsato xaqiijin ka timid maamulka.'
+                                            : 'After completing the USSD withdrawal, press the button below to request admin approval.'}
+                                </p>
+                                <button
+                                    onClick={handleRequestConfirmation}
+                                    disabled={confirmationLoading}
+                                    className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                    {confirmationLoading ? (
+                                        <>
+                                            <RefreshCw className="w-4 h-4 animate-spin" />
+                                            {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
+                                        </>
+                                    ) : activeTab === 'deposit' ? (
+                                        language === 'so' ? 'Waan Diray Lacagta, Ii Xaqiiji' : 'I Sent The Money, Please Confirm'
+                                    ) : (
+                                        language === 'so' ? 'Waxaan Codsaday Kala-bixid, Fadlan Xaqiiji' : 'I Requested Withdrawal, Please Confirm'
+                                    )}
+                                </button>
+                            </>
+                        )}
+                    </div>
 
                     <div className="text-[10px] text-yellow-400 leading-relaxed bg-yellow-500/10 p-3 rounded-xl border border-yellow-500/20">
                         <p className='font-bold uppercase'>{language === 'so' ? 'Ogeysiis Muhiim Ah' : 'Important Notice'}</p>

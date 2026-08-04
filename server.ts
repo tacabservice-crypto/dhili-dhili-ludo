@@ -2917,8 +2917,12 @@ app.post('/api/admin/manual-transactions/:transactionId/approve', isAdmin, async
     if (tx.transactionType === 'deposit') {
         user.balance += tx.amount;
         addTransaction(user.id, 'deposit', tx.amount, undefined, `Manual deposit approved by admin. Request ID: ${tx.id}`);
-    } else { // withdrawal
-        // This was already deducted, so we just confirm it
+    } else {
+        if (user.balance < tx.amount) {
+            return res.status(400).json({ error: 'Insufficient balance to approve this withdrawal request.' });
+        }
+        user.balance -= tx.amount;
+        addTransaction(user.id, 'withdrawal', tx.amount, undefined, `Manual withdrawal approved by admin. Request ID: ${tx.id}`);
     }
 
     tx.status = 'approved';
