@@ -44,6 +44,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
   const [isCopied, setIsCopied] = useState(false);
   const [confirmationRequested, setConfirmationRequested] = useState(false);
   const [confirmationLoading, setConfirmationLoading] = useState(false);
+  const [withdrawPreviewVisible, setWithdrawPreviewVisible] = useState(false);
 
   const fetchTransactions = async () => {
     try {
@@ -189,7 +190,11 @@ const handleProcessApiPayment = async () => {
 const handleGenerateUssd = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setApiError('');
+    setApiMessage('');
     setUssdString('');
+    setConfirmationRequested(false);
+    setWithdrawPreviewVisible(false);
 
     const amtFloat = parseFloat(amount);
 
@@ -207,6 +212,9 @@ const handleGenerateUssd = (e: React.FormEvent) => {
         setError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta kula baxayso.' : 'Please enter the phone number for the withdrawal.');
         return;
       }
+
+      setWithdrawPreviewVisible(true);
+      return;
     }
 
     if (activeTab === 'deposit') {
@@ -215,7 +223,7 @@ const handleGenerateUssd = (e: React.FormEvent) => {
             return;
         }
     }
-    
+      
     // Disable USSD generation for Premier Bank unless API is configured.
     if (provider === 'premier' && !isProviderApiConfigured) {
         setError(language === 'so' ? 'Kani waa hab bangi oo u baahan is-dhexgalka API. Fadlan dooro bixiye kale oo USSD ah ama ku xidh API Settings-ka.' : 'This is a bank method that requires API integration. Please select another USSD provider or configure API settings.' );
@@ -302,36 +310,32 @@ const handleGenerateUssd = (e: React.FormEvent) => {
           )}
 
           {activeTab !== 'history' ? (
-             ussdString ? (
+             (activeTab === 'withdraw' && withdrawPreviewVisible) ? (
                 <div className="py-6 text-center space-y-4 animate-in fade-in duration-300">
                     <h3 className="text-sm font-black text-yellow-400 uppercase tracking-widest">
-                        {language === 'so' ? 'Habee Koodhka USSD' : 'Process USSD Code'}
+                        {language === 'so' ? 'Codsiga Kala-Bixidda' : 'Withdrawal Request'}
                     </h3>
                     <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
-                        {language === 'so' ? 'Taabo badhanka Wicitaanka si aad u furto telefoonkaaga, ama koobi garee koodhka.' : 'Press the Dial button to open your dialer, or copy the code.'}
+                        {language === 'so'
+                            ? 'Fadlan hubi xogta hoos ka muuqata ka hor intaadan codsiga u dirin maamulka.'
+                            : 'Please review the details below before submitting your withdrawal request to admin.'}
                     </p>
-                    
-                    <div className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-lg font-black text-center text-white font-mono">
-                        {ussdString}
+
+                    <div className="bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-left text-sm text-white space-y-2">
+                        <div className="flex justify-between gap-4">
+                            <span className="font-semibold text-slate-200">{language === 'so' ? 'Lacag' : 'Amount'}:</span>
+                            <span className="font-mono">${parseFloat(amount).toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                            <span className="font-semibold text-slate-200">{language === 'so' ? 'Lambarka' : 'Phone'}:</span>
+                            <span>{phone}</span>
+                        </div>
+                        <div className="flex justify-between gap-4">
+                            <span className="font-semibold text-slate-200">{language === 'so' ? 'Bixiyaha' : 'Provider'}:</span>
+                            <span className="uppercase">{provider}</span>
+                        </div>
                     </div>
 
-                    <div className="flex items-center justify-center gap-2">
-                        <a 
-                            href={`tel:${ussdString}`}
-                            className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2"
-                        >
-                            <Phone className="w-4 h-4" />
-                            {language === 'so' ? 'Wac' : 'Dial'}
-                        </a>
-                        <button 
-                            onClick={() => copyToClipboard(ussdString)} 
-                            className="p-3 bg-black/30 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
-                            aria-label="Copy USSD Code"
-                        >
-                            {isCopied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5 text-slate-400" />}
-                        </button>
-                    </div>
-                    
                     <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
                         {confirmationRequested ? (
                             <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
@@ -341,13 +345,9 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                         ) : (
                             <>
                                 <p className="text-xs text-slate-300 font-semibold">
-                                    {activeTab === 'deposit'
-                                        ? language === 'so'
-                                            ? 'Marka aad lacagta dirto, taabo badhanka hoose si aad u codsato xaqiijin.'
-                                            : 'After sending the money, press the button below to request confirmation.'
-                                        : language === 'so'
-                                            ? 'Marka aad koodhka USSD ka dhameysato, taabo badhanka hoose si aad u codsato xaqiijin ka timid maamulka.'
-                                            : 'After completing the USSD withdrawal, press the button below to request admin approval.'}
+                                    {language === 'so'
+                                        ? 'Haddii aad diyaar tahay, riix "Please Confirm" si uu codsigaagu u gaaro maamulka.'
+                                        : 'When ready, press "Please Confirm" to send your request to admin.'}
                                 </p>
                                 <button
                                     onClick={handleRequestConfirmation}
@@ -359,10 +359,8 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                                             <RefreshCw className="w-4 h-4 animate-spin" />
                                             {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
                                         </>
-                                    ) : activeTab === 'deposit' ? (
-                                        language === 'so' ? 'Waan Diray Lacagta, Ii Xaqiiji' : 'I Sent The Money, Please Confirm'
                                     ) : (
-                                        language === 'so' ? 'Waxaan Codsaday Kala-bixid, Fadlan Xaqiiji' : 'I Requested Withdrawal, Please Confirm'
+                                        language === 'so' ? 'Fadlan Xaqiiji' : 'Please Confirm'
                                     )}
                                 </button>
                             </>
@@ -371,15 +369,15 @@ const handleGenerateUssd = (e: React.FormEvent) => {
 
                     <div className="text-[10px] text-yellow-400 leading-relaxed bg-yellow-500/10 p-3 rounded-xl border border-yellow-500/20">
                         <p className='font-bold uppercase'>{language === 'so' ? 'Ogeysiis Muhiim Ah' : 'Important Notice'}</p>
-                        <p>{language === 'so' ? 'Kani waa hab gacan-ku-qabasho ah. Haraagaaga wallet-ka si toos ah looma cusbooneysiin doono. Fadlan xaqiiji in macaamilku guulaystay ka hor intaadan xirin.' : 'This is a manual process. Your wallet balance will NOT be updated automatically. Please confirm the transaction is successful before closing.'}</p>
+                        <p>{language === 'so' ? 'Codsigan waa codsi gacanta lagu xaqiijinayo. Haraagaaga wallet-ka wuxuu ka jarmaa kaliya marka maamulka uu ansixiyo.' : 'This request is pending admin approval. Your wallet balance will only be deducted after admin approval.'}</p>
                     </div>
 
                     <button
                         type="button"
-                        onClick={resetForm}
+                        onClick={() => setWithdrawPreviewVisible(false)}
                         className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
-                        >
-                        {language === 'so' ? 'Samee Macaamil Kale' : 'New Transaction'}
+                    >
+                        {language === 'so' ? 'Wax Ka Beddel Codsiga' : 'Edit Request'}
                     </button>
                 </div>
              ) : (
