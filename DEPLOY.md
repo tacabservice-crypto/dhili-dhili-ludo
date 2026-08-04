@@ -80,6 +80,20 @@ Hadda wax walba waa diyaar!
     *   Hoos ugu soco bogga oo guji badhanka buluugga ah ee **"Create Web Service"**.
 
 2.  **Sug Inta uu Dhismayo:**
+        *   **Key:** `ADMIN_USERNAME`
+        *   **Value:** Magaca admin-ka aad rabto.
+    *   **Variable 4 (Optional):**
+        *   **Key:** `ADMIN_PASSWORD`
+        *   **Value:** Password-ka admin-ka aad rabto.
+
+## Qaybta 4: Daah-furka (Deployment)
+
+Hadda wax walba waa diyaar!
+
+1.  **Guji "Create Web Service":**
+    *   Hoos ugu soco bogga oo guji badhanka buluugga ah ee **"Create Web Service"**.
+
+2.  **Sug Inta uu Dhismayo:**
     *   Render wuxuu bilaabi doonaa inuu koodhkaaga soo dejiyo, `npm install` sameeyo, `npm run build` sameeyo, kadibna `npm start` ku kiciyo.
     *   Waxaad arki doontaa log-ga (qoraalka shaqada) oo shaashadda ka muuqanaya. Sug ilaa aad ka aragto fariin u eg **"Your service is live 🎉"** ama **"Betting Ludo Game Full-Stack App listening at..."**.
 

@@ -115,6 +115,21 @@ if (serviceAccount) {
 } else {
   console.log("No Firebase Admin credentials configured. Set FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json for login/auth to work.");
 }
+var DEFAULT_PAYMENT_PROVIDERS = {
+  evc: { enabled: false },
+  edahab: { enabled: false },
+  sahal: { enabled: false },
+  premier: { enabled: false }
+};
+var DEFAULT_ADMIN_ROLES = [
+  { id: "admin", name: "Administrator", permissions: ["all"] },
+  { id: "editor", name: "Editor", permissions: ["manage_users", "manage_content"] }
+];
+var DEFAULT_ADMIN_SETTINGS = {
+  username: process.env.ADMIN_USERNAME || "admin",
+  password: process.env.ADMIN_PASSWORD || "password",
+  roles: DEFAULT_ADMIN_ROLES
+};
 var store = {
   users: {},
   transactions: [],
@@ -127,7 +142,10 @@ var store = {
     25: [],
     50: []
   },
-  houseRevenue: 0
+  houseRevenue: 0,
+  pendingManualTransactions: [],
+  paymentProviders: { ...DEFAULT_PAYMENT_PROVIDERS },
+  adminSettings: { ...DEFAULT_ADMIN_SETTINGS }
 };
 function loadStore() {
   try {
@@ -146,6 +164,17 @@ function loadStore() {
         50: []
       };
       store.houseRevenue = parsed.houseRevenue || 0;
+      store.pendingManualTransactions = parsed.pendingManualTransactions || [];
+      store.paymentProviders = {
+        ...DEFAULT_PAYMENT_PROVIDERS,
+        ...parsed.paymentProviders || {}
+      };
+      const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
+      store.adminSettings = {
+        username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
+        password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || "password",
+        roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES
+      };
       console.log("Database loaded successfully from disk.");
     } else {
       saveStoreAndWait();
@@ -179,6 +208,17 @@ async function loadStoreFromFirestore() {
           50: []
         };
         store.houseRevenue = parsed.houseRevenue || 0;
+        store.pendingManualTransactions = parsed.pendingManualTransactions || [];
+        store.paymentProviders = {
+          ...DEFAULT_PAYMENT_PROVIDERS,
+          ...parsed.paymentProviders || {}
+        };
+        const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
+        store.adminSettings = {
+          username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
+          password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || "password",
+          roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES
+        };
         console.log("Database loaded successfully from Firebase Firestore.");
         import_fs.default.writeFileSync(DB_FILE, payload.data, "utf8");
         return;
@@ -973,9 +1013,88 @@ app.post("/api/wallet/withdraw", (req, res) => {
   broadcastUserUpdate(userId);
   res.json({ success: true, balance: user.balance });
 });
+app.post("/api/wallet/request-manual-confirmation", async (req, res) => {
+  const { userId, amount, phone, senderPhone, provider, transactionType } = req.body;
+  if (!userId || !amount || !provider || !transactionType) {
+    return res.status(400).json({ error: "Missing required fields for manual confirmation." });
+  }
+  const user = store.users[userId];
+  if (!user) {
+    return res.status(404).json({ error: "User not found." });
+  }
+  if (transactionType === "withdraw" && !phone) {
+    return res.status(400).json({ error: "Phone number is required for withdrawal requests." });
+  }
+  if (transactionType === "deposit" && !senderPhone) {
+    return res.status(400).json({ error: "Sender phone number is required for deposit requests." });
+  }
+  const newRequest = {
+    id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    userId,
+    username: user.username,
+    amount: parseFloat(amount),
+    phone,
+    // This will be the destination for withdrawals, or the company number for deposits
+    senderPhone,
+    // This is the new field for the source number for deposits
+    provider,
+    transactionType,
+    status: "pending",
+    createdAt: Date.now()
+  };
+  store.pendingManualTransactions.unshift(newRequest);
+  await saveStoreAndWait();
+  res.json({ success: true, message: "Your request has been submitted for review." });
+});
 app.get("/api/wallet/transactions/:userId", (req, res) => {
   const txs = store.transactions.filter((t) => t.userId === req.params.userId);
   res.json(txs);
+});
+app.get("/api/payment/settings", (req, res) => {
+  res.json(store.paymentProviders);
+});
+app.post("/api/wallet/process-api-payment", async (req, res) => {
+  const { userId, amount, phone, senderPhone, provider, transactionType } = req.body;
+  if (!userId || !amount || !provider || !transactionType) {
+    return res.status(400).json({ error: "Missing required api payment fields." });
+  }
+  const providerKey = provider;
+  const config = store.paymentProviders[providerKey];
+  if (!config || !config.enabled || !config.apiKey) {
+    return res.status(400).json({ error: "API is not configured for this provider." });
+  }
+  const user = store.users[userId];
+  if (!user) {
+    return res.status(404).json({ error: "User not found." });
+  }
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    return res.status(400).json({ error: "Invalid amount." });
+  }
+  if (transactionType === "withdraw") {
+    if (!phone) {
+      return res.status(400).json({ error: "Phone number is required for withdrawal requests." });
+    }
+    if (user.balance < parsedAmount) {
+      return res.status(400).json({ error: "Insufficient funds." });
+    }
+    user.balance -= parsedAmount;
+    addTransaction(userId, "withdrawal", parsedAmount, void 0, `API withdrawal via ${providerKey}.`);
+    broadcastUserUpdate(userId);
+    await saveStoreAndWait();
+    return res.json({ success: true, balance: user.balance, message: "Withdrawal processed via API." });
+  }
+  if (transactionType === "deposit") {
+    if (!senderPhone) {
+      return res.status(400).json({ error: "Sender phone number is required for deposit requests." });
+    }
+    user.balance += parsedAmount;
+    addTransaction(userId, "deposit", parsedAmount, void 0, `API deposit via ${providerKey}.`);
+    broadcastUserUpdate(userId);
+    await saveStoreAndWait();
+    return res.json({ success: true, balance: user.balance, message: "Deposit processed via API." });
+  }
+  return res.status(400).json({ error: "Unsupported transaction type." });
 });
 app.get("/api/rooms/active", (req, res) => {
   const activeGames = Object.values(store.rooms).filter((r) => r.status === "playing").map((r) => ({
@@ -2046,8 +2165,8 @@ app.get("/api/rooms/check-status/:roomId", (req, res) => {
 });
 app.post("/api/admin/login", (req, res) => {
   const { username, password } = req.body;
-  const adminUsername = process.env.ADMIN_USERNAME || "admin";
-  const adminPassword = process.env.ADMIN_PASSWORD || "password";
+  const adminUsername = store.adminSettings?.username || process.env.ADMIN_USERNAME || "admin";
+  const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || "password";
   if (username === adminUsername && password === adminPassword) {
     const adminUserId = "internal_admin_user_id";
     res.json({ success: true, userId: adminUserId });
@@ -2066,6 +2185,55 @@ function isAdmin(req, res, next) {
   }
   res.status(403).json({ error: "Access denied. You do not have admin privileges." });
 }
+app.get("/api/admin/settings", isAdmin, (req, res) => {
+  res.json({
+    username: store.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
+    passwordConfigured: Boolean(store.adminSettings?.password),
+    roles: store.adminSettings?.roles || DEFAULT_ADMIN_ROLES
+  });
+});
+app.post("/api/admin/settings", isAdmin, async (req, res) => {
+  const { currentPassword, newPassword, confirmPassword, roles } = req.body;
+  const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || "password";
+  if (typeof newPassword === "string" && newPassword.trim()) {
+    if (typeof currentPassword === "string" && currentPassword.trim() && currentPassword !== adminPassword) {
+      return res.status(400).json({ error: "Current password is incorrect." });
+    }
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ error: "New password and confirmation must match." });
+    }
+    if (newPassword.length < 4) {
+      return res.status(400).json({ error: "Password should be at least 4 characters." });
+    }
+    store.adminSettings.password = newPassword;
+  }
+  if (Array.isArray(roles)) {
+    const normalizedRoles = roles.filter((role) => role && typeof role.name === "string" && role.name.trim()).map((role) => ({
+      id: role.id || `${role.name.toLowerCase().replace(/\s+/g, "-")}-${Date.now()}`,
+      name: role.name.trim(),
+      permissions: Array.isArray(role.permissions) ? role.permissions.filter((permission) => typeof permission === "string") : []
+    }));
+    if (normalizedRoles.length > 0) {
+      const hasAdminRole = normalizedRoles.some((role) => role.id === "admin" || role.name.toLowerCase() === "administrator");
+      if (!hasAdminRole) {
+        normalizedRoles.unshift({ id: "admin", name: "Administrator", permissions: ["all"] });
+      }
+      store.adminSettings.roles = normalizedRoles;
+    }
+  }
+  if (typeof req.body.username === "string" && req.body.username.trim()) {
+    store.adminSettings.username = req.body.username.trim();
+  }
+  await saveStoreAndWait();
+  res.json({
+    success: true,
+    settings: {
+      username: store.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
+      passwordConfigured: Boolean(store.adminSettings?.password),
+      roles: store.adminSettings?.roles || DEFAULT_ADMIN_ROLES
+    }
+  });
+});
 app.get("/api/admin/stats", isAdmin, (req, res) => {
   res.json({
     totalUsers: Object.keys(store.users).length,
@@ -2084,6 +2252,68 @@ app.get("/api/admin/rooms", isAdmin, (req, res) => {
 });
 app.get("/api/admin/transactions", isAdmin, (req, res) => {
   res.json(store.transactions);
+});
+app.get("/api/admin/manual-transactions", isAdmin, (req, res) => {
+  res.json(store.pendingManualTransactions || []);
+});
+app.get("/api/admin/payment-settings", isAdmin, (req, res) => {
+  res.json(store.paymentProviders);
+});
+app.post("/api/admin/payment-settings", isAdmin, async (req, res) => {
+  const paymentProviders = req.body.paymentProviders;
+  if (!paymentProviders || typeof paymentProviders !== "object") {
+    return res.status(400).json({ error: "Invalid payment settings payload." });
+  }
+  store.paymentProviders = {
+    ...DEFAULT_PAYMENT_PROVIDERS,
+    ...paymentProviders
+  };
+  await saveStoreAndWait();
+  res.json({ success: true, paymentProviders: store.paymentProviders });
+});
+app.post("/api/admin/manual-transactions/:transactionId/approve", isAdmin, async (req, res) => {
+  const { transactionId } = req.params;
+  const tx = store.pendingManualTransactions.find((t) => t.id === transactionId);
+  if (!tx || tx.status !== "pending") {
+    return res.status(404).json({ error: "Pending transaction not found or already processed." });
+  }
+  const user = store.users[tx.userId];
+  if (!user) {
+    return res.status(404).json({ error: "User associated with transaction not found." });
+  }
+  if (tx.transactionType === "deposit") {
+    user.balance += tx.amount;
+    addTransaction(user.id, "deposit", tx.amount, void 0, `Manual deposit approved by admin. Request ID: ${tx.id}`);
+  } else {
+    if (user.balance < tx.amount) {
+      return res.status(400).json({ error: "Insufficient balance to approve this withdrawal request." });
+    }
+    user.balance -= tx.amount;
+    addTransaction(user.id, "withdrawal", tx.amount, void 0, `Manual withdrawal approved by admin. Request ID: ${tx.id}`);
+  }
+  tx.status = "approved";
+  await saveStoreAndWait();
+  broadcastUserUpdate(user.id);
+  res.json({ success: true, transaction: tx });
+});
+app.post("/api/admin/manual-transactions/:transactionId/reject", isAdmin, async (req, res) => {
+  const { transactionId } = req.params;
+  const tx = store.pendingManualTransactions.find((t) => t.id === transactionId);
+  if (!tx || tx.status !== "pending") {
+    return res.status(404).json({ error: "Pending transaction not found or already processed." });
+  }
+  const user = store.users[tx.userId];
+  if (!user) {
+    return res.status(404).json({ error: "User associated with transaction not found." });
+  }
+  if (tx.transactionType === "withdraw") {
+    user.balance += tx.amount;
+    addTransaction(user.id, "refund", tx.amount, void 0, `Withdrawal request ${tx.id} rejected, funds returned.`);
+  }
+  tx.status = "rejected";
+  await saveStoreAndWait();
+  broadcastUserUpdate(user.id);
+  res.json({ success: true, transaction: tx });
 });
 app.post("/api/admin/impersonate", isAdmin, (req, res) => {
   const { userId } = req.body;

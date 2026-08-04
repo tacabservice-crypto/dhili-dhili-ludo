@@ -149,6 +149,18 @@ const DEFAULT_PAYMENT_PROVIDERS: Record<PaymentProviderKey, PaymentProviderConfi
   premier: { enabled: false },
 };
 
+interface AdminRoleTemplate {
+  id: string;
+  name: string;
+  permissions: string[];
+}
+
+interface AdminSettings {
+  username: string;
+  password: string;
+  roles: AdminRoleTemplate[];
+}
+
 interface DBStore {
   users: Record<string, UserProfile>;
   transactions: WalletTransaction[];
@@ -157,7 +169,19 @@ interface DBStore {
   houseRevenue: number;
   pendingManualTransactions: ManualTransactionRequest[];
   paymentProviders: Record<PaymentProviderKey, PaymentProviderConfig>;
+  adminSettings: AdminSettings;
 }
+
+const DEFAULT_ADMIN_ROLES: AdminRoleTemplate[] = [
+  { id: 'admin', name: 'Administrator', permissions: ['all'] },
+  { id: 'editor', name: 'Editor', permissions: ['manage_users', 'manage_content'] },
+];
+
+const DEFAULT_ADMIN_SETTINGS: AdminSettings = {
+  username: process.env.ADMIN_USERNAME || 'admin',
+  password: process.env.ADMIN_PASSWORD || 'password',
+  roles: DEFAULT_ADMIN_ROLES,
+};
 
 let store: DBStore = {
   users: {},
@@ -173,7 +197,8 @@ let store: DBStore = {
   },
   houseRevenue: 0,
   pendingManualTransactions: [],
-  paymentProviders: { ...DEFAULT_PAYMENT_PROVIDERS }
+  paymentProviders: { ...DEFAULT_PAYMENT_PROVIDERS },
+  adminSettings: { ...DEFAULT_ADMIN_SETTINGS }
 };
 
 // Load store from disk (local backup/fallback)
@@ -194,6 +219,12 @@ function loadStore() {
       store.paymentProviders = {
         ...DEFAULT_PAYMENT_PROVIDERS,
         ...(parsed.paymentProviders || {})
+      };
+      const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
+      store.adminSettings = {
+        username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
+        password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password',
+        roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES,
       };
       console.log('Database loaded successfully from disk.');
     } else {
@@ -229,6 +260,12 @@ async function loadStoreFromFirestore() {
         store.paymentProviders = {
           ...DEFAULT_PAYMENT_PROVIDERS,
           ...(parsed.paymentProviders || {})
+        };
+        const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
+        store.adminSettings = {
+          username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
+          password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password',
+          roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES,
         };
         console.log('Database loaded successfully from Firebase Firestore.');
         // Update local file backup
@@ -2821,8 +2858,8 @@ app.get('/api/rooms/check-status/:roomId', (req, res) => {
 // Login endpoint for admin
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
-    const adminUsername = process.env.ADMIN_USERNAME || 'admin';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'password';
+    const adminUsername = store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin';
+    const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password';
 
     if (username === adminUsername && password === adminPassword) {
         // In a real app, you'd create a secure session.
@@ -2848,6 +2885,64 @@ function isAdmin(req: express.Request, res: express.Response, next: express.Next
     }
     res.status(403).json({ error: 'Access denied. You do not have admin privileges.' });
 }
+
+app.get('/api/admin/settings', isAdmin, (req, res) => {
+    res.json({
+        username: store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
+        passwordConfigured: Boolean(store.adminSettings?.password),
+        roles: store.adminSettings?.roles || DEFAULT_ADMIN_ROLES,
+    });
+});
+
+app.post('/api/admin/settings', isAdmin, async (req, res) => {
+    const { currentPassword, newPassword, confirmPassword, roles } = req.body;
+    const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password';
+
+    if (typeof newPassword === 'string' && newPassword.trim()) {
+        if (typeof currentPassword === 'string' && currentPassword.trim() && currentPassword !== adminPassword) {
+            return res.status(400).json({ error: 'Current password is incorrect.' });
+        }
+        if (newPassword !== confirmPassword) {
+            return res.status(400).json({ error: 'New password and confirmation must match.' });
+        }
+        if (newPassword.length < 4) {
+            return res.status(400).json({ error: 'Password should be at least 4 characters.' });
+        }
+        store.adminSettings.password = newPassword;
+    }
+
+    if (Array.isArray(roles)) {
+        const normalizedRoles = roles
+            .filter((role: any) => role && typeof role.name === 'string' && role.name.trim())
+            .map((role: any) => ({
+                id: role.id || `${role.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+                name: role.name.trim(),
+                permissions: Array.isArray(role.permissions) ? role.permissions.filter((permission: any) => typeof permission === 'string') : [],
+            }));
+
+        if (normalizedRoles.length > 0) {
+            const hasAdminRole = normalizedRoles.some((role) => role.id === 'admin' || role.name.toLowerCase() === 'administrator');
+            if (!hasAdminRole) {
+                normalizedRoles.unshift({ id: 'admin', name: 'Administrator', permissions: ['all'] });
+            }
+            store.adminSettings.roles = normalizedRoles;
+        }
+    }
+
+    if (typeof req.body.username === 'string' && req.body.username.trim()) {
+        store.adminSettings.username = req.body.username.trim();
+    }
+
+    await saveStoreAndWait();
+    res.json({
+        success: true,
+        settings: {
+            username: store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
+            passwordConfigured: Boolean(store.adminSettings?.password),
+            roles: store.adminSettings?.roles || DEFAULT_ADMIN_ROLES,
+        },
+    });
+});
 
 // Get all runtime stats
 app.get('/api/admin/stats', isAdmin, (req, res) => {

@@ -104,10 +104,11 @@ const AdminDashboard: React.FC = () => {
 
     const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'admin-settings') => {
         if (!adminId) return;
-        if (type === 'admin-settings') return;
         setError(null);
         try {
-            const path = type === 'payment-settings' ? '/api/admin/payment-settings' : `/api/admin/${type}`;
+            const path = type === 'payment-settings' || type === 'admin-settings'
+                ? `/api/admin/${type === 'payment-settings' ? 'payment-settings' : 'settings'}`
+                : `/api/admin/${type}`;
             const response = await fetch(`${path}?userId=${adminId}`);
             if (!response.ok) {
                 let errMessage = `Failed to fetch ${type}`;
@@ -141,6 +142,9 @@ const AdminDashboard: React.FC = () => {
                 case 'payment-settings':
                     setPaymentSettings(data);
                     break;
+                case 'admin-settings':
+                    setRoles(Array.isArray(data.roles) ? data.roles : []);
+                    break;
             }
         } catch (err: any) {
             setError(err.message);
@@ -150,6 +154,9 @@ const AdminDashboard: React.FC = () => {
     useEffect(() => {
         if (adminId) {
             fetchData(view);
+            if (view !== 'admin-settings') {
+                void fetchData('admin-settings');
+            }
         }
     }, [adminId, view]);
 
@@ -260,23 +267,60 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const handleSaveAdminSettings = () => {
+    const persistAdminSettings = async (overrides?: { currentPassword?: string; newPassword?: string; confirmPassword?: string; rolesOverride?: Array<{ id: string; name: string; permissions: string[] }> }) => {
+        if (!adminId) return;
         setError(null);
         setAdminSettingsMessage(null);
 
+        try {
+            const payload = {
+                currentPassword: overrides?.currentPassword,
+                newPassword: overrides?.newPassword,
+                confirmPassword: overrides?.confirmPassword,
+                roles: overrides?.rolesOverride ?? roles,
+            };
+
+            const response = await fetch(`/api/admin/settings?userId=${adminId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to save admin settings');
+            }
+
+            const data = await response.json();
+            setRoles(Array.isArray(data.settings?.roles) ? data.settings.roles : []);
+            setAdminSettingsMessage('Admin settings updated successfully.');
+        } catch (err: any) {
+            setError(err.message);
+            throw err;
+        }
+    };
+
+    const handleSaveAdminSettings = async () => {
         if (adminNewPassword && adminNewPassword !== adminConfirmPassword) {
             setError('New password and confirmation must match.');
             return;
         }
 
-        // Note: backend integration for admin settings is optional. This UI saves locally and can be extended.
-        setAdminSettingsMessage('Admin settings updated successfully.');
-        setAdminOldPassword('');
-        setAdminNewPassword('');
-        setAdminConfirmPassword('');
+        try {
+            await persistAdminSettings({
+                currentPassword: adminOldPassword,
+                newPassword: adminNewPassword || undefined,
+                confirmPassword: adminConfirmPassword,
+            });
+            setAdminOldPassword('');
+            setAdminNewPassword('');
+            setAdminConfirmPassword('');
+        } catch (err) {
+            // error is already surfaced
+        }
     };
 
-    const handleAddRole = () => {
+    const handleAddRole = async () => {
         const trimmedName = newRoleName.trim();
         if (!trimmedName) {
             setError('Please enter a role name.');
@@ -287,15 +331,16 @@ const AdminDashboard: React.FC = () => {
             .filter(([_, enabled]) => enabled)
             .map(([permission]) => permission);
 
-        setRoles((prev) => [
-            ...prev,
+        const nextRoles = [
+            ...roles,
             {
                 id: `${trimmedName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
                 name: trimmedName,
                 permissions: permissionKeys,
             },
-        ]);
+        ];
 
+        setRoles(nextRoles);
         setNewRoleName('');
         setNewRolePermissions({
             manageUsers: true,
@@ -304,11 +349,22 @@ const AdminDashboard: React.FC = () => {
             manageTransactions: false,
             broadcast: true,
         });
-        setAdminSettingsMessage('New role added successfully.');
+
+        try {
+            await persistAdminSettings({ rolesOverride: nextRoles });
+        } catch (err) {
+            // error is already surfaced
+        }
     };
 
-    const handleRemoveRole = (roleId: string) => {
-        setRoles((prev) => prev.filter((role) => role.id !== roleId));
+    const handleRemoveRole = async (roleId: string) => {
+        const nextRoles = roles.filter((role) => role.id !== roleId);
+        setRoles(nextRoles);
+        try {
+            await persistAdminSettings({ rolesOverride: nextRoles });
+        } catch (err) {
+            // error is already surfaced
+        }
     };
     
     const handleDeleteUser = async (userToDelete: UserProfile) => {
@@ -1133,6 +1189,13 @@ const AdminDashboard: React.FC = () => {
                                             </button>
                                         );
                                     })}
+                                    <button
+                                        onClick={handleLogout}
+                                        className="mt-4 flex w-full items-center justify-center gap-2 rounded-3xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-left text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20"
+                                    >
+                                        <LogOut className="h-4 w-4" />
+                                        Logout
+                                    </button>
                                 </div>
                             </div>
                         </aside>
@@ -1241,6 +1304,13 @@ const AdminDashboard: React.FC = () => {
                                         </button>
                                     );
                                 })}
+                                <button
+                                    onClick={handleLogout}
+                                    className="flex w-full items-center justify-center gap-2 rounded-3xl border border-rose-500/30 bg-rose-500/10 px-4 py-4 text-left text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20"
+                                >
+                                    <LogOut className="h-4 w-4" />
+                                    Logout
+                                </button>
                             </div>
                         </div>
                     </div>
