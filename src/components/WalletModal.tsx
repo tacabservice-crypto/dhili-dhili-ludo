@@ -310,75 +310,122 @@ const handleGenerateUssd = (e: React.FormEvent) => {
           )}
 
           {activeTab !== 'history' ? (
-             (activeTab === 'withdraw' && withdrawPreviewVisible) ? (
+             ((activeTab === 'withdraw' && withdrawPreviewVisible) || (activeTab === 'deposit' && ussdString)) ? (
                 <div className="py-6 text-center space-y-4 animate-in fade-in duration-300">
                     <h3 className="text-sm font-black text-yellow-400 uppercase tracking-widest">
-                        {language === 'so' ? 'Codsiga Kala-Bixidda' : 'Withdrawal Request'}
+                        {activeTab === 'withdraw'
+                            ? language === 'so' ? 'Codsiga Kala-Bixid' : 'Withdrawal Request'
+                            : language === 'so' ? 'Koodhka Dhigaalka' : 'Deposit Code'}
                     </h3>
-                    <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
-                        {language === 'so'
-                            ? 'Fadlan hubi xogta hoos ka muuqata ka hor intaadan codsiga u dirin maamulka.'
-                            : 'Please review the details below before submitting your withdrawal request to admin.'}
-                    </p>
+                    {activeTab === 'deposit' ? (
+                      <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
+                          {language === 'so'
+                              ? 'Fadlan isticmaal koodhka hoose si aad u dhameystirto dhigashada.'
+                              : 'Use the code below to complete your deposit.'}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
+                          {language === 'so'
+                              ? 'Fadlan hubi xogta hoos ka muuqata ka hor intaadan codsiga u dirin maamulka.'
+                              : 'Please review the details below before submitting your withdrawal request to admin.'}
+                      </p>
+                    )}
 
                     <div className="bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-left text-sm text-white space-y-2">
-                        <div className="flex justify-between gap-4">
-                            <span className="font-semibold text-slate-200">{language === 'so' ? 'Lacag' : 'Amount'}:</span>
-                            <span className="font-mono">${parseFloat(amount).toFixed(2)}</span>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                            <span className="font-semibold text-slate-200">{language === 'so' ? 'Lambarka' : 'Phone'}:</span>
-                            <span>{phone}</span>
-                        </div>
-                        <div className="flex justify-between gap-4">
-                            <span className="font-semibold text-slate-200">{language === 'so' ? 'Bixiyaha' : 'Provider'}:</span>
-                            <span className="uppercase">{provider}</span>
-                        </div>
-                    </div>
-
-                    <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                        {confirmationRequested ? (
-                            <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
-                                <CheckCircle className="w-4 h-4 shrink-0" />
-                                <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
-                            </div>
+                        {activeTab === 'deposit' ? (
+                          <div className="text-lg font-black text-center font-mono">
+                              {ussdString}
+                          </div>
                         ) : (
-                            <>
-                                <p className="text-xs text-slate-300 font-semibold">
-                                    {language === 'so'
-                                        ? 'Haddii aad diyaar tahay, riix "Please Confirm" si uu codsigaagu u gaaro maamulka.'
-                                        : 'When ready, press "Please Confirm" to send your request to admin.'}
-                                </p>
-                                <button
-                                    onClick={handleRequestConfirmation}
-                                    disabled={confirmationLoading}
-                                    className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                    {confirmationLoading ? (
-                                        <>
-                                            <RefreshCw className="w-4 h-4 animate-spin" />
-                                            {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
-                                        </>
-                                    ) : (
-                                        language === 'so' ? 'Fadlan Xaqiiji' : 'Please Confirm'
-                                    )}
-                                </button>
-                            </>
+                          <>
+                            <div className="flex justify-between gap-4">
+                                <span className="font-semibold text-slate-200">{language === 'so' ? 'Lacag' : 'Amount'}:</span>
+                                <span className="font-mono">${parseFloat(amount).toFixed(2)}</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                                <span className="font-semibold text-slate-200">{language === 'so' ? 'Lambarka' : 'Phone'}:</span>
+                                <span>{phone}</span>
+                            </div>
+                            <div className="flex justify-between gap-4">
+                                <span className="font-semibold text-slate-200">{language === 'so' ? 'Bixiyaha' : 'Provider'}:</span>
+                                <span className="uppercase">{provider}</span>
+                            </div>
+                          </>
                         )}
                     </div>
 
-                    <div className="text-[10px] text-yellow-400 leading-relaxed bg-yellow-500/10 p-3 rounded-xl border border-yellow-500/20">
-                        <p className='font-bold uppercase'>{language === 'so' ? 'Ogeysiis Muhiim Ah' : 'Important Notice'}</p>
-                        <p>{language === 'so' ? 'Codsigan waa codsi gacanta lagu xaqiijinayo. Haraagaaga wallet-ka wuxuu ka jarmaa kaliya marka maamulka uu ansixiyo.' : 'This request is pending admin approval. Your wallet balance will only be deducted after admin approval.'}</p>
-                    </div>
+                    {activeTab === 'withdraw' ? (
+                      <>
+                        <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                            {confirmationRequested ? (
+                                <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4 shrink-0" />
+                                    <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="text-xs text-slate-300 font-semibold">
+                                        {language === 'so'
+                                            ? 'Haddii aad diyaar tahay, riix "Fadlan Xaqiiji" si uu codsigaagu u gaaro maamulka.'
+                                            : 'When ready, press "Please Confirm" to send your request to admin.'}
+                                    </p>
+                                    <button
+                                        onClick={handleRequestConfirmation}
+                                        disabled={confirmationLoading}
+                                        className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {confirmationLoading ? (
+                                            <>
+                                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                                {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
+                                            </>
+                                        ) : (
+                                            language === 'so' ? 'Fadlan Xaqiiji' : 'Please Confirm'
+                                        )}
+                                    </button>
+                                </>
+                            )}
+                        </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setWithdrawPreviewVisible(false)}
-                        className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
-                    >
-                        {language === 'so' ? 'Wax Ka Beddel Codsiga' : 'Edit Request'}
-                    </button>
+                        <div className="text-[10px] text-yellow-400 leading-relaxed bg-yellow-500/10 p-3 rounded-xl border border-yellow-500/20">
+                            <p className='font-bold uppercase'>{language === 'so' ? 'Ogeysiis Muhiim Ah' : 'Important Notice'}</p>
+                            <p>{language === 'so' ? 'Codsigan waa codsi gacanta lagu xaqiijinayo. Haraagaaga wallet-ka wuxuu ka jarmaa kaliya marka maamulka uu ansixiyo.' : 'This request is pending admin approval. Your wallet balance will only be deducted after admin approval.'}</p>
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setWithdrawPreviewVisible(false)}
+                            className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
+                        >
+                            {language === 'so' ? 'Wax Ka Beddel Codsiga' : 'Edit Request'}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                            <p className="text-xs text-slate-300 font-semibold">
+                                {language === 'so'
+                                    ? 'Koodhka dhigaalka waa diyaar. Nuqul ka samee si aad u isticmaasho.'
+                                    : 'Your deposit code is ready. Copy it to use as needed.'}
+                            </p>
+                            <button
+                                type="button"
+                                onClick={() => copyToClipboard(ussdString)}
+                                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2"
+                            >
+                                <Copy className="w-4 h-4" />
+                                {language === 'so' ? 'Nuqul Ka Samee Koodhka' : 'Copy Deposit Code'}
+                            </button>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setUssdString('')}
+                            className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
+                        >
+                            {language === 'so' ? 'Tafatir macluumaadka' : 'Edit Details'}
+                        </button>
+                      </>
+                    )}
                 </div>
              ) : (
               <form className="space-y-4">
@@ -458,9 +505,6 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                             onChange={(e) => setSenderPhone(e.target.value)}
                             className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
                             />
-                        </div>
-                        <div className="text-xs text-slate-400 bg-black/20 p-2 rounded-lg border border-white/5 text-center">
-                            {language === 'so' ? 'Lacagta waxaad ku shubaysaa lambarka' : 'You will be depositing to the number'}: <span className='font-bold text-white'>{DEPOSIT_PHONE_NUMBER}</span>
                         </div>
                     </>
                 )}
