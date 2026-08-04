@@ -13,7 +13,7 @@ interface PhysicalDiceProps {
   color?: string;
 }
 
-export default function PhysicalDice({
+function PhysicalDice({
   value,
   isRolling,
   onClick,
@@ -166,3 +166,5 @@ export default function PhysicalDice({
     </div>
   );
 }
+
+export default React.memo(PhysicalDice);

@@ -38,8 +38,6 @@ import {
 import { toast } from 'react-hot-toast';
 
 import { useVoiceChat } from '../context/VoiceChatContext';
-import diceSoundURL from '/src/assets/dice.mp3';
-import winSoundURL from '/src/assets/win.mp3';
 import { formatCurrency } from '../utils/number';
 import { useLocation, useNavigate } from 'react-router-dom';
 
@@ -1219,8 +1217,8 @@ export default function GameRoomView({
         />
       )}
       {/* Audio elements for sound effects */}
-      <audio ref={diceAudioRef} src={diceSoundURL} preload="auto" />
-      <audio ref={winAudioRef} src={winSoundURL} preload="auto" />
+      <audio ref={diceAudioRef} src="/dice.mp3" preload="auto" />
+      <audio ref={winAudioRef} src="/win.mp3" preload="auto" />
     </div>
   );
 }
