@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw } from 'lucide-react';
+import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Copy, Check } from 'lucide-react';
 import { UserProfile, WalletTransaction } from '../types/game';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency } from '../utils/number';
@@ -12,22 +12,24 @@ import { formatCurrency } from '../utils/number';
 interface WalletModalProps {
   user: UserProfile;
   onClose: () => void;
-  onBalanceUpdated: () => void;
+  // onBalanceUpdated is kept for potential future API integration
+  onBalanceUpdated: () => void; 
 }
+
+const DEPOSIT_PHONE_NUMBER = '907243775';
 
 export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletModalProps) {
   const { t, language } = useLanguage();
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit');
   const [amount, setAmount] = useState('');
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [successMsg, setSuccessMsg] = useState('');
-
+  
   const [phone, setPhone] = useState('');
   const [provider, setProvider] = useState<'evc' | 'edahab' | 'sahal' | 'premier'>('evc');
-  const [paymentStep, setPaymentStep] = useState<'input' | 'processing' | 'success'>('input');
-  const [countdown, setCountdown] = useState(3);
+
+  const [ussdString, setUssdString] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
 
   const fetchTransactions = async () => {
     try {
@@ -42,13 +44,25 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
   };
 
   useEffect(() => {
-    fetchTransactions();
-  }, [user.id]);
+    if (activeTab === 'history') {
+      fetchTransactions();
+    }
+  }, [user.id, activeTab]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text).then(() => {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }, (err) => {
+      console.error('Could not copy text: ', err);
+    });
+  };
+
+  const handleGenerateUssd = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setSuccessMsg('');
+    setUssdString('');
+
     const amtFloat = parseFloat(amount);
 
     if (isNaN(amtFloat) || amtFloat <= 0) {
@@ -56,66 +70,54 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
       return;
     }
 
-    if (activeTab === 'withdraw' && amtFloat > user.balance) {
-      setError(language === 'so' ? 'Haraagaaga kuma filna kala bixiddaan.' : 'Insufficient balance for this withdrawal.');
-      return;
-    }
-
-    if (!phone.trim()) {
-      setError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka.' : 'Please enter your mobile phone number.');
-      return;
-    }
-
-    setPaymentStep('processing');
-    setCountdown(3);
-
-    let count = 3;
-    const interval = setInterval(() => {
-      count--;
-      setCountdown(count);
-      if (count <= 0) {
-        clearInterval(interval);
+    if (activeTab === 'withdraw') {
+      if (amtFloat > user.balance) {
+        setError(language === 'so' ? 'Haraagaaga kuma filna kala bixiddaan.' : 'Insufficient balance for this withdrawal.');
+        return;
       }
-    }, 1000);
-
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    setLoading(true);
-    try {
-      const endpoint = activeTab === 'deposit' ? '/api/wallet/deposit' : '/api/wallet/withdraw';
-      const response = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: user.id, amount: amtFloat }),
-      });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || (language === 'so' ? 'Mawduuca bixinta waa uu fashilmay.' : 'Payment failed.'));
+      if (!phone.trim()) {
+        setError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta kula baxayso.' : 'Please enter the phone number for the withdrawal.');
+        return;
       }
-
-      setAmount('');
-      setPaymentStep('success');
-      setSuccessMsg(
-        activeTab === 'deposit' 
-          ? (language === 'so' ? `Waxaad si guul leh ugu shubtay haraagaaga $${amtFloat.toFixed(2)}!` : `Successfully deposited $${amtFloat.toFixed(2)} to your balance!`)
-          : (language === 'so' ? `Kala bixidda $${amtFloat.toFixed(2)} waa ay guulaysatay!` : `Withdrawal of $${amtFloat.toFixed(2)} was successful!`)
-      );
-      onBalanceUpdated();
-      fetchTransactions();
-    } catch (err: any) {
-      setError(err.message || (language === 'so' ? 'Cilad farsamo ayaa dhacday.' : 'A technical error occurred.'));
-      setPaymentStep('input');
-    } finally {
-      setLoading(false);
     }
+    
+    // Disable USSD generation for Premier Bank for now
+    if (provider === 'premier') {
+        setError(language === 'so' ? 'Kani waa hab bangi oo u baahan is-dhexgalka API. Fadlan dooro bixiye kale oo USSD ah.' : 'This is a bank method that requires API integration. Please select another USSD provider.');
+        return;
+    }
+
+    let targetPhone = activeTab === 'deposit' ? DEPOSIT_PHONE_NUMBER : phone;
+    let code = '';
+
+    switch (provider) {
+      case 'evc':
+        code = `*712*${targetPhone}*${amtFloat}#`;
+        break;
+      case 'sahal':
+        code = `*883*${targetPhone}*${amtFloat}#`;
+        break;
+      case 'edahab':
+        code = `*110*${targetPhone}*${amtFloat}#`;
+        break;
+      default:
+        setError(language === 'so' ? 'Bixiye aan la aqoon.' : 'Unknown provider.');
+        return;
+    }
+
+    setUssdString(code);
   };
+  
+  const resetForm = () => {
+    setUssdString('');
+    setAmount('');
+    setError('');
+  }
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
       <div className="w-full sm:max-w-md bg-white/5 backdrop-blur-xl border-t sm:border border-white/10 rounded-t-2xl sm:rounded-2xl shadow-2xl overflow-hidden text-white flex flex-col max-h-[90vh]">
         
-        {/* Modal Header */}
         <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between bg-black/10">
           <div className="flex items-center gap-2">
             <Wallet className="w-5 h-5 text-blue-400" />
@@ -126,27 +128,21 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
           </button>
         </div>
 
-        {/* Balance Showcase */}
         <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-6 m-4 rounded-xl flex flex-col space-y-1 relative shadow-lg shadow-blue-500/10">
           <div className="absolute right-4 top-4 bg-white/15 px-2 py-1 rounded-md text-[10px] uppercase font-extrabold tracking-widest text-white/90">
             Escrow Secured
           </div>
           <span className="text-xs text-white/85 font-semibold tracking-wider uppercase">{t('availableBalance')}</span>
           <span className="text-3xl font-black font-mono">{formatCurrency(user.balance)}</span>
-          <div className="text-[10px] text-white/65 font-medium">
-            {language === 'so' ? "100% Khamaar La'aan & Damaanad Ku Jiro" : '100% Secure Virtual Betting Tokens'}
-          </div>
         </div>
 
-        {/* Tabs */}
         <div className="grid grid-cols-3 gap-1 px-4 text-sm font-bold border-b border-white/10">
           {(['deposit', 'withdraw', 'history'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => {
                 setActiveTab(tab);
-                setError('');
-                setSuccessMsg('');
+                resetForm();
               }}
               className={`py-3 text-center border-b-2 capitalize transition-all cursor-pointer ${
                 activeTab === tab
@@ -159,7 +155,6 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
           ))}
         </div>
 
-        {/* Modal Content body */}
         <div className="p-6 flex-1 overflow-y-auto space-y-4">
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-400 p-3 rounded-xl text-xs flex items-center gap-2">
@@ -168,69 +163,38 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
             </div>
           )}
 
-          {successMsg && (
-            <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 shrink-0" />
-              <span>{successMsg}</span>
-            </div>
-          )}
-
           {activeTab !== 'history' ? (
-            paymentStep === 'processing' ? (
-              <div className="py-8 text-center space-y-5 animate-pulse">
-                <div className="relative w-16 h-16 mx-auto">
-                  <div className="absolute inset-0 rounded-full border-4 border-t-yellow-400 border-r-transparent border-b-transparent border-l-transparent animate-spin" />
-                  <div className="absolute inset-1.5 rounded-full border-4 border-blue-400 animate-pulse" />
-                  <Wallet className="w-6 h-6 text-yellow-400 absolute top-1/2 left-1/2 -translate-y-1/2 -translate-x-1/2" />
+             ussdString ? (
+                <div className="py-6 text-center space-y-4 animate-in fade-in duration-300">
+                    <h3 className="text-sm font-black text-yellow-400 uppercase tracking-widest">
+                        {language === 'so' ? 'Habee Koodhka USSD' : 'Process USSD Code'}
+                    </h3>
+                    <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
+                        {language === 'so' ? 'Koobi garee koodhkan oo ku dheji telefoonkaaga si aad u dhammaystirto macaamilka.' : 'Copy this code and paste it into your phone dialer to complete the transaction.'}
+                    </p>
+                    
+                    <div className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-lg font-black text-center text-white font-mono flex items-center justify-between">
+                        <span>{ussdString}</span>
+                        <button onClick={() => copyToClipboard(ussdString)} className="p-2 hover:bg-white/10 rounded-lg transition-all">
+                            {isCopied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5 text-slate-400" />}
+                        </button>
+                    </div>
+
+                    <div className="text-[10px] text-yellow-400 leading-relaxed bg-yellow-500/10 p-3 rounded-xl border border-yellow-500/20">
+                        <p className='font-bold uppercase'>{language === 'so' ? 'Ogeysiis Muhiim Ah' : 'Important Notice'}</p>
+                        <p>{language === 'so' ? 'Kani waa hab gacan-ku-qabasho ah. Haraagaaga wallet-ka si toos ah looma cusbooneysiin doono. Fadlan xaqiiji in macaamilku guulaystay ka hor intaadan xirin.' : 'This is a manual process. Your wallet balance will NOT be updated automatically. Please confirm the transaction is successful before closing.'}</p>
+                    </div>
+
+                    <button
+                        type="button"
+                        onClick={resetForm}
+                        className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
+                        >
+                        {language === 'so' ? 'Samee Macaamil Kale' : 'New Transaction'}
+                    </button>
                 </div>
-                <div className="space-y-2">
-                  <h3 className="text-sm font-black text-yellow-400 uppercase tracking-widest">
-                    {language === 'so' ? 'USSD Push la diray...' : 'USSD Push Sent...'}
-                  </h3>
-                  <p className="text-xs text-slate-300 font-bold max-w-xs mx-auto leading-relaxed">
-                    {language === 'so' 
-                      ? <>Waxaan lambarkaaga <span className="text-white font-black">{phone}</span> u dirnay fariin bixineed oo {provider.toUpperCase()} ah.</>
-                      : <>We sent a {provider.toUpperCase()} payment request to your number <span className="text-white font-black">{phone}</span>.</>
-                    }
-                  </p>
-                  <p className="text-[10px] text-slate-400 font-semibold max-w-xs mx-auto">
-                    {language === 'so' 
-                      ? `Fadlan ku geli PIN-kaaga talefankaaga ${countdown}s gudahood si aad u fasaxdo bixinta.`
-                      : `Please enter your PIN on your mobile phone within ${countdown}s.`
-                    }
-                  </p>
-                </div>
-                <div className="w-full max-w-xs mx-auto bg-black/40 h-2 rounded-full overflow-hidden border border-white/5">
-                  <div 
-                    className="bg-gradient-to-r from-yellow-400 to-blue-500 h-full transition-all duration-1000"
-                    style={{ width: `${(countdown / 3) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ) : paymentStep === 'success' ? (
-              <div className="py-6 text-center space-y-4">
-                <div className="w-16 h-16 bg-green-500/20 border-2 border-green-500 rounded-full flex items-center justify-center mx-auto text-green-400 shadow-[0_0_20px_rgba(34,197,94,0.2)]">
-                  <CheckCircle className="w-8 h-8" />
-                </div>
-                <div className="space-y-1">
-                  <h3 className="text-sm font-black text-green-400 uppercase tracking-widest">
-                    {language === 'so' ? 'KALA-SHUBAAL SHAQAYNAYA ✓' : 'TRANSACTION SUCCESSFUL ✓'}
-                  </h3>
-                  <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
-                    {successMsg}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setPaymentStep('input')}
-                  className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
-                >
-                  {language === 'so' ? 'Ku Laabo Wallet-ka' : 'Back to Wallet'}
-                </button>
-              </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-4">
-                {/* Provider Selector Grid */}
+             ) : (
+              <form onSubmit={handleGenerateUssd} className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                     {language === 'so' ? 'Shirkadda Lacagta' : 'Payment Provider'}
@@ -263,20 +227,27 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                   </div>
                 </div>
 
-                {/* Phone Number Input */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                    {language === 'so' ? 'Lambarka Talefanka' : 'Phone Number'}
-                  </label>
-                  <input
-                    type="tel"
-                    required
-                    placeholder="e.g. 061XXXXXXX"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
-                  />
-                </div>
+                {activeTab === 'withdraw' && (
+                  <div className="space-y-1 animate-in fade-in duration-300">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                      {language === 'so' ? 'Lambarka Talefanka Kala Bax' : 'Withdrawal Phone Number'}
+                    </label>
+                    <input
+                      type="tel"
+                      required={activeTab === 'withdraw'}
+                      placeholder="e.g. 061XXXXXXX"
+                      value={phone}
+                      onChange={(e) => setPhone(e.target.value)}
+                      className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                    />
+                  </div>
+                )}
+                
+                {activeTab === 'deposit' && (
+                    <div className="text-xs text-slate-400 bg-black/20 p-2 rounded-lg border border-white/5 text-center">
+                        {language === 'so' ? 'Lacagta waxaad ku shubaysaa lambarka' : 'You will be depositing to the number'}: <span className='font-bold text-white'>{DEPOSIT_PHONE_NUMBER}</span>
+                    </div>
+                )}
 
                 <div className="space-y-1">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
@@ -297,7 +268,6 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                   </div>
                 </div>
 
-                {/* Presets */}
                 <div className="grid grid-cols-4 gap-2">
                   {[5, 10, 25, 50].map((preset) => (
                     <button
@@ -311,43 +281,23 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                   ))}
                 </div>
 
-                <div className="text-[10px] text-slate-400 leading-relaxed bg-black/30 p-3 rounded-xl border border-white/5">
-                  {activeTab === 'deposit' ? (
-                    <span>
-                      {language === 'so'
-                        ? '🔒 Shubaal degdeg ah. Dooro shirkaddaada, geli lambarkaaga talefanka iyo lacagta aad rabto si laguu soo diro USSD Push pin code xaqiijin ah.'
-                        : '🔒 Instant Deposit. Choose your operator, enter your mobile number and amount to receive a USSD Push confirmation PIN.'}
-                    </span>
-                  ) : (
-                    <span>
-                      {language === 'so'
-                        ? '🔒 Kala bixid degdeg ah. Lacagta aad guulaysato waxaad isla markiiba ugu wareejin kartaa akoonkaaga EVC Plus ama eDahab dhowr ilbiriqsi gudahood.'
-                        : '🔒 Instant Withdrawal. Your winnings will be directly transferred to your EVC Plus or eDahab account within seconds.'}
-                    </span>
-                  )}
-                </div>
-
                 <button
                   type="submit"
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-blue-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer uppercase tracking-wider"
+                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-blue-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
                 >
-                  {loading ? (
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                  ) : activeTab === 'deposit' ? (
+                  {activeTab === 'deposit' ? (
                     <>
-                      <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Dir Shubaalka' : 'Deposit Funds'}
+                      <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Samee Koodhka Dhigaalka' : 'Generate Deposit Code'}
                     </>
                   ) : (
                     <>
-                      <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Codso Kala-bixid' : 'Withdraw Funds'}
+                      <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Samee Koodhka Kala-bixidda' : 'Generate Withdraw Code'}
                     </>
                   )}
                 </button>
               </form>
             )
           ) : (
-            /* Transaction Ledger List */
             <div className="space-y-2">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
                 {language === 'so' ? 'Taariikhda Dhiganaha' : 'Transaction History'}
