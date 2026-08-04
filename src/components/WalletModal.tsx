@@ -324,11 +324,7 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                     )}
 
                     <div className="bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-left text-sm text-white space-y-2">
-                        {activeTab === 'deposit' ? (
-                          <div className="text-lg font-black text-center font-mono">
-                              {ussdString}
-                          </div>
-                        ) : (
+                        {activeTab === 'deposit' ? null : (
                           <>
                             <div className="flex justify-between gap-4">
                                 <span className="font-semibold text-slate-200">{language === 'so' ? 'Lacag' : 'Amount'}:</span>
@@ -394,60 +390,72 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                       </>
                     ) : (
                       <>
-                        <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                            <p className="text-xs text-slate-300 font-semibold">
-                                {language === 'so'
-                                    ? 'Koodhka dhigaalka waa diyaar. Taabo Dir si aad USSD-ga u furto.'
-                                    : 'Your deposit code is ready. Tap Dir to open the USSD dialer.'}
-                            </p>
-                            <a
-                                href={`tel:${ussdString}`}
-                                onClick={() => setDepositAwaitingConfirmation(true)}
-                                className="w-full inline-flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow gap-2"
-                            >
-                                <Phone className="w-4 h-4" />
-                                Dir
-                            </a>
-                        </div>
-                        {depositAwaitingConfirmation && (
-                          <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                            {confirmationRequested ? (
-                              <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
-                                <CheckCircle className="w-4 h-4 shrink-0" />
-                                <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
-                              </div>
-                            ) : (
-                              <>
+                        {!depositAwaitingConfirmation ? (
+                          <>
+                            <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
                                 <p className="text-xs text-slate-300 font-semibold">
-                                  {language === 'so'
-                                      ? 'Markaad lacagta dirto, riix Fadlan Xaqiiji si aad xogta ku siiso maamulka.'
-                                      : 'After sending the money, press Please Confirm to notify admin.'}
+                                    {language === 'so'
+                                        ? 'Koodhka dhigaalka waa diyaar. Taabo Dir si aad USSD-ga u furto.'
+                                        : 'Your deposit code is ready. Tap Dir to open the USSD dialer.'}
                                 </p>
-                                <button
-                                    onClick={handleRequestConfirmation}
-                                    disabled={confirmationLoading}
-                                    className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                <a
+                                    href={`tel:${ussdString}`}
+                                    onClick={() => setDepositAwaitingConfirmation(true)}
+                                    className="w-full inline-flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow gap-2"
                                 >
-                                    {confirmationLoading ? (
-                                      <>
-                                        <RefreshCw className="w-4 h-4 animate-spin" />
-                                        {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
-                                      </>
-                                    ) : (
-                                      language === 'so' ? 'Fadlan Xaqiiji' : 'Please Confirm'
-                                    )}
-                                </button>
-                              </>
-                            )}
-                          </div>
+                                    <Phone className="w-4 h-4" />
+                                    Dir
+                                </a>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setUssdString(''); setDepositAwaitingConfirmation(false); setConfirmationRequested(false); }}
+                                className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
+                            >
+                                {language === 'so' ? 'Tafatir macluumaadka' : 'Edit Details'}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                                {confirmationRequested ? (
+                                  <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4 shrink-0" />
+                                    <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p className="text-xs text-slate-300 font-semibold">
+                                      {language === 'so'
+                                          ? 'Markaad lacagta dirto, riix Fadlan Xaqiiji si aad xogta ku siiso maamulka.'
+                                          : 'After sending the money, press Please Confirm to notify admin.'}
+                                    </p>
+                                    <button
+                                        onClick={handleRequestConfirmation}
+                                        disabled={confirmationLoading}
+                                        className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {confirmationLoading ? (
+                                          <>
+                                            <RefreshCw className="w-4 h-4 animate-spin" />
+                                            {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
+                                          </>
+                                        ) : (
+                                          language === 'so' ? 'Fadlan Xaqiiji' : 'Please Confirm'
+                                        )}
+                                    </button>
+                                  </>
+                                )}
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => { setUssdString(''); setDepositAwaitingConfirmation(false); setConfirmationRequested(false); }}
+                                className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
+                            >
+                                {language === 'so' ? 'Tafatir macluumaadka' : 'Edit Details'}
+                            </button>
+                          </>
                         )}
-                        <button
-                            type="button"
-                            onClick={() => { setUssdString(''); setDepositAwaitingConfirmation(false); setConfirmationRequested(false); }}
-                            className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
-                        >
-                            {language === 'so' ? 'Tafatir macluumaadka' : 'Edit Details'}
-                        </button>
                       </>
                     )}
                 </div>
