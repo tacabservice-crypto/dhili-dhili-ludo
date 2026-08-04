@@ -392,12 +392,7 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                       <>
                         {!depositAwaitingConfirmation ? (
                           <>
-                            <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                                <p className="text-xs text-slate-300 font-semibold">
-                                    {language === 'so'
-                                        ? 'Koodhka dhigaalka waa diyaar. Taabo Dir si aad USSD-ga u furto.'
-                                        : 'Your deposit code is ready. Tap Dir to open the USSD dialer.'}
-                                </p>
+                            <div className="mt-4 pt-4 border-t border-white/10">
                                 <a
                                     href={`tel:${ussdString}`}
                                     onClick={() => setDepositAwaitingConfirmation(true)}
@@ -449,10 +444,10 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                             </div>
                             <button
                                 type="button"
-                                onClick={() => { setUssdString(''); setDepositAwaitingConfirmation(false); setConfirmationRequested(false); }}
+                                onClick={() => { setUssdString(''); setDepositAwaitingConfirmation(false); setConfirmationRequested(false); onClose(); }}
                                 className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
                             >
-                                {language === 'so' ? 'Tafatir macluumaadka' : 'Edit Details'}
+                                {language === 'so' ? 'Ku Noqo Hoyga' : 'Back to Home'}
                             </button>
                           </>
                         )}
