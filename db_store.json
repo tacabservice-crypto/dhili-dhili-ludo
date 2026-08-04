@@ -244,10 +244,11 @@
       "username": "casiiso",
       "email": "casiiso@gmail.com",
       "avatar": "🎲",
-      "balance": 89.69999999999999,
+      "balance": 89.39999999999999,
       "winCount": 9,
       "lossCount": 3,
-      "earnings": 9.7
+      "earnings": 9.7,
+      "seekingJoinedAt": 1785788884137
     },
     "user_1785575636907_a1f1e": {
       "id": "user_1785575636907_a1f1e",
@@ -332,6 +333,15 @@
     }
   },
   "transactions": [
+    {
+      "id": "tx_1785789306120_lejyb",
+      "userId": "user_1785393496443_rtmnd",
+      "type": "bet_escrow_locked",
+      "amount": 0.3,
+      "timestamp": 1785789306120,
+      "matchId": "MATCH_Z9IN6",
+      "description": "Escrow stake for Ludo Match MATCH_Z9IN6."
+    },
     {
       "id": "tx_1785788403827_qrmsl",
       "userId": "user_1784982586620_o40me",
@@ -51623,7 +51633,7 @@
     },
     "MATCH_8CGG7": {
       "id": "MATCH_8CGG7",
-      "status": "playing",
+      "status": "completed",
       "betAmount": 0.3,
       "players": [
         {
@@ -51633,10 +51643,11 @@
           "color": "green",
           "isHost": true,
           "isReady": true,
-          "status": "online",
+          "status": "left",
           "winCount": 52,
           "lossCount": 39,
-          "balance": 92.2
+          "balance": 92.2,
+          "inactivityTimer": 0
         },
         {
           "userId": "bot_match_1785788403826_1",
@@ -51657,7 +51668,7 @@
         "turn": 0,
         "diceRoll": null,
         "hasRolled": false,
-        "turnTimer": 30,
+        "turnTimer": 0,
         "tokens": [
           {
             "id": "token_green_0",
@@ -51708,8 +51719,8 @@
             "position": -1
           }
         ],
-        "winnerId": null,
-        "escrowBalance": 0.6,
+        "winnerId": "bot_match_1785788403826_1",
+        "escrowBalance": 0,
         "logs": [
           {
             "id": "1",
@@ -51720,12 +51731,178 @@
             "id": "2",
             "timestamp": 1785788403879,
             "text": "Stake of $0.3 locked in secure escrow pool ($0.60)"
+          },
+          {
+            "id": "log_1785788433562_sbkyg",
+            "timestamp": 1785788433562,
+            "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday khaalid. Ganaaxa daahitaanka ayaa bilaabanaya."
+          },
+          {
+            "id": "log_1785796106141_fiyxn",
+            "timestamp": 1785796106141,
+            "text": "🔌 khaalid has disconnected. They have time to reconnect before being forfeited."
+          },
+          {
+            "id": "log_1785797056958_a61cu",
+            "timestamp": 1785797056958,
+            "text": "🟢 khaalid has reconnected! Welcome back."
+          },
+          {
+            "id": "log_1785797058071_1yl2c",
+            "timestamp": 1785797058071,
+            "text": "🔌 khaalid has disconnected. They have time to reconnect before being forfeited."
+          },
+          {
+            "id": "log_1785823327353_c46ox",
+            "timestamp": 1785823327353,
+            "text": "🟢 khaalid has reconnected! Welcome back."
+          },
+          {
+            "id": "log_1785823386740_o7e8f",
+            "timestamp": 1785823386740,
+            "text": "⏱️ Digniin: khaalid waxaa u harsan 4 daqiiqo. (Warning: khaalid has 4 minutes left.)"
+          },
+          {
+            "id": "log_1785823446763_r83fv",
+            "timestamp": 1785823446763,
+            "text": "⏱️ Digniin: khaalid waxaa u harsan 3 daqiiqo. (Warning: khaalid has 3 minutes left.)"
+          },
+          {
+            "id": "log_1785823506794_q2li5",
+            "timestamp": 1785823506794,
+            "text": "⏱️ Digniin: khaalid waxaa u harsan 2 daqiiqo. (Warning: khaalid has 2 minutes left.)"
+          },
+          {
+            "id": "log_1785823566825_k769i",
+            "timestamp": 1785823566825,
+            "text": "⏱️ Digniin: khaalid waxaa u harsan 1 daqiiqo. (Warning: khaalid has 1 minutes left.)"
+          },
+          {
+            "id": "log_1785823626864_5wg6r",
+            "timestamp": 1785823626864,
+            "text": "⏱️ khaalid has been forfeited due to inactivity."
+          },
+          {
+            "id": "log_1785823626864_a86vk",
+            "timestamp": 1785823626864,
+            "text": "🏆 Game Over! LudoPro AI #41 wins by forfeit and takes the pot of $0.60!"
           }
         ],
         "chat": [],
         "lastActivity": 1785788403879
       },
       "createdAt": 1785788403879
+    },
+    "MATCH_Z9IN6": {
+      "id": "MATCH_Z9IN6",
+      "status": "playing",
+      "betAmount": 0.3,
+      "players": [
+        {
+          "userId": "user_1785393496443_rtmnd",
+          "username": "casiiso",
+          "avatar": "🎲",
+          "color": "green",
+          "isHost": true,
+          "isReady": true,
+          "status": "online",
+          "winCount": 9,
+          "lossCount": 3,
+          "balance": 89.69999999999999
+        },
+        {
+          "userId": "bot_match_1785789306119_1",
+          "username": "Dhili Master AI #86",
+          "avatar": "🦊",
+          "color": "blue",
+          "isHost": false,
+          "isReady": true,
+          "status": "online",
+          "winCount": 18,
+          "lossCount": 20,
+          "balance": 100
+        }
+      ],
+      "capacity": 2,
+      "gameMode": "solo",
+      "gameState": {
+        "turn": 0,
+        "diceRoll": null,
+        "hasRolled": false,
+        "turnTimer": 0,
+        "tokens": [
+          {
+            "id": "token_green_0",
+            "ownerId": "user_1785393496443_rtmnd",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_1",
+            "ownerId": "user_1785393496443_rtmnd",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_2",
+            "ownerId": "user_1785393496443_rtmnd",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_3",
+            "ownerId": "user_1785393496443_rtmnd",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_blue_0",
+            "ownerId": "bot_match_1785789306119_1",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_1",
+            "ownerId": "bot_match_1785789306119_1",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_2",
+            "ownerId": "bot_match_1785789306119_1",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_3",
+            "ownerId": "bot_match_1785789306119_1",
+            "color": "blue",
+            "position": -1
+          }
+        ],
+        "winnerId": null,
+        "escrowBalance": 0.6,
+        "logs": [
+          {
+            "id": "1",
+            "timestamp": 1785789306175,
+            "text": "Match found! Mode: Solo 2P"
+          },
+          {
+            "id": "2",
+            "timestamp": 1785789306175,
+            "text": "Stake of $0.3 locked in secure escrow pool ($0.60)"
+          },
+          {
+            "id": "log_1785789335362_tmpmw",
+            "timestamp": 1785789335362,
+            "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday casiiso. Ganaaxa daahitaanka ayaa bilaabanaya."
+          }
+        ],
+        "chat": [],
+        "lastActivity": 1785789306175
+      },
+      "createdAt": 1785789306175
     }
   },
   "matchmakingQueues": {
