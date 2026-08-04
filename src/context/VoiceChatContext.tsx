@@ -49,7 +49,9 @@ const getIceServers = (): RTCIceServer[] => {
       turnServer.credential = turnCredential;
     }
     iceServers.push(turnServer);
-    console.log(`${LOG_PREFIX} TURN server configured: ${turnUrl}`);
+    console.log(`${LOG_PREFIX} TURN server configured. URL: ${turnUrl}, Has Username: ${!!turnUsername}, Has Credential: ${!!turnCredential}`);
+  } else {
+    console.log(`${LOG_PREFIX} VITE_TURN_URL not found. Using STUN servers only.`);
   }
 
   return iceServers;
@@ -162,8 +164,11 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
           }
         };
         
-        // For players, they create the offer. Spectators wait for offers.
-        if (!isSpectator) {
+        // Resolve glare: only one peer (the one with the "smaller" userId) creates the offer.
+        const shouldMakeOffer = localUserId < p.userId;
+        
+        if (!isSpectator && shouldMakeOffer) {
+          console.log(`${LOG_PREFIX} I have the smaller ID. Creating offer for ${p.userId}.`);
           pc.createOffer()
             .then(offer => pc.setLocalDescription(offer))
             .then(() => {
@@ -172,6 +177,8 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
               }
             })
             .catch(e => console.error(`${LOG_PREFIX} Error creating offer for ${p.userId}:`, e));
+        } else {
+          console.log(`${LOG_PREFIX} I have the larger ID. Waiting for offer from ${p.userId}.`);
         }
 
         peerConnectionsRef.current[p.userId] = pc;
