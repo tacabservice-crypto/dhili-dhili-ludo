@@ -26,6 +26,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
   const [error, setError] = useState('');
   
   const [phone, setPhone] = useState('');
+  const [senderPhone, setSenderPhone] = useState('');
   const [provider, setProvider] = useState<'evc' | 'edahab' | 'sahal' | 'premier'>('evc');
 
   const [ussdString, setUssdString] = useState('');
@@ -71,6 +72,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                 userId: user.id,
                 amount: parseFloat(amount),
                 phone: activeTab === 'withdraw' ? phone : DEPOSIT_PHONE_NUMBER,
+                senderPhone: activeTab === 'deposit' ? senderPhone : undefined,
                 provider: provider,
                 transactionType: activeTab,
             }),
@@ -110,6 +112,13 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
         setError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta kula baxayso.' : 'Please enter the phone number for the withdrawal.');
         return;
       }
+    }
+
+    if (activeTab === 'deposit') {
+        if (!senderPhone.trim()) {
+            setError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta ka soo direyso.' : 'Please enter the phone number you are sending from.');
+            return;
+        }
     }
     
     // Disable USSD generation for Premier Bank for now
@@ -321,9 +330,24 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                 )}
                 
                 {activeTab === 'deposit' && (
-                    <div className="text-xs text-slate-400 bg-black/20 p-2 rounded-lg border border-white/5 text-center">
-                        {language === 'so' ? 'Lacagta waxaad ku shubaysaa lambarka' : 'You will be depositing to the number'}: <span className='font-bold text-white'>{DEPOSIT_PHONE_NUMBER}</span>
-                    </div>
+                    <>
+                        <div className="space-y-1 animate-in fade-in duration-300">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                            {language === 'so' ? 'Lambarkaaga Talefanka ee aad lacagta ka soo direyso' : 'Your Phone Number (Sending From)'}
+                            </label>
+                            <input
+                            type="tel"
+                            required={activeTab === 'deposit'}
+                            placeholder="e.g. 061XXXXXXX"
+                            value={senderPhone}
+                            onChange={(e) => setSenderPhone(e.target.value)}
+                            className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                            />
+                        </div>
+                        <div className="text-xs text-slate-400 bg-black/20 p-2 rounded-lg border border-white/5 text-center">
+                            {language === 'so' ? 'Lacagta waxaad ku shubaysaa lambarka' : 'You will be depositing to the number'}: <span className='font-bold text-white'>{DEPOSIT_PHONE_NUMBER}</span>
+                        </div>
+                    </>
                 )}
 
                 <div className="space-y-1">

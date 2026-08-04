@@ -35,7 +35,8 @@ export interface ManualTransactionRequest {
   userId: string;
   username: string;
   amount: number;
-  phone: string;
+  phone: string; // For withdrawals, this is the destination phone number
+  senderPhone?: string; // For deposits, this is the source phone number
   provider: string;
   transactionType: 'deposit' | 'withdraw';
   status: 'pending' | 'approved' | 'rejected';

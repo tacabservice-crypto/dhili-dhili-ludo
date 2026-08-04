@@ -439,7 +439,8 @@ const AdminDashboard: React.FC = () => {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Username</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Amount</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Phone</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Destination Phone</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Sender Phone</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Provider</th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
                                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
@@ -453,6 +454,7 @@ const AdminDashboard: React.FC = () => {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.transactionType}</td>
                                         <td className={`px-6 py-4 whitespace-nowrap text-sm ${tx.transactionType === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(tx.amount)}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.phone}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.senderPhone || 'N/A'}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.provider}</td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.status === 'pending' ? 'bg-yellow-800 text-yellow-100' : tx.status === 'approved' ? 'bg-green-800 text-green-100' : 'bg-red-800 text-red-100'}`}>{tx.status}</span></td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">

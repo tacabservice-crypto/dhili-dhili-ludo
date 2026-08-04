@@ -1252,7 +1252,7 @@ app.post('/api/wallet/withdraw', (req, res) => {
 });
 
 app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
-  const { userId, amount, phone, provider, transactionType } = req.body;
+  const { userId, amount, phone, senderPhone, provider, transactionType } = req.body;
 
   if (!userId || !amount || !provider || !transactionType) {
     return res.status(400).json({ error: 'Missing required fields for manual confirmation.' });
@@ -1267,12 +1267,17 @@ app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
     return res.status(400).json({ error: 'Phone number is required for withdrawal requests.' });
   }
 
+  if (transactionType === 'deposit' && !senderPhone) {
+    return res.status(400).json({ error: 'Sender phone number is required for deposit requests.' });
+  }
+
   const newRequest: ManualTransactionRequest = {
     id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     userId,
     username: user.username,
     amount: parseFloat(amount),
-    phone,
+    phone, // This will be the destination for withdrawals, or the company number for deposits
+    senderPhone, // This is the new field for the source number for deposits
     provider,
     transactionType,
     status: 'pending',
