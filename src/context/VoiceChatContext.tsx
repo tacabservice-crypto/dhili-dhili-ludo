@@ -29,6 +29,32 @@ interface VoiceChatProviderProps {
 
 const LOG_PREFIX = '[VOICE_CHAT]';
 
+const getIceServers = (): RTCIceServer[] => {
+  // Default Google STUN servers
+  const iceServers: RTCIceServer[] = [
+    { urls: 'stun:stun.l.google.com:19302' },
+    { urls: 'stun:stun1.l.google.com:19302' },
+    { urls: 'stun:stun2.l.google.com:19302' },
+  ];
+
+  // Add TURN server from environment variables if configured
+  const turnUrl = import.meta.env.VITE_TURN_URL;
+  const turnUsername = import.meta.env.VITE_TURN_USERNAME;
+  const turnCredential = import.meta.env.VITE_TURN_CREDENTIAL;
+
+  if (turnUrl) {
+    const turnServer: RTCIceServer = { urls: turnUrl };
+    if (turnUsername && turnCredential) {
+      turnServer.username = turnUsername;
+      turnServer.credential = turnCredential;
+    }
+    iceServers.push(turnServer);
+    console.log(`${LOG_PREFIX} TURN server configured: ${turnUrl}`);
+  }
+
+  return iceServers;
+};
+
 export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }) => {
   const localStreamRef = useRef<MediaStream | null>(null);
   const [isInitialized, setIsInitialized] = useState(false);
@@ -112,7 +138,7 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
       if (!peerConnectionsRef.current[p.userId]) {
         console.log(`${LOG_PREFIX} New player ${p.userId} joined. Setting up peer connection (Spectator: ${isSpectator}).`);
         const pc = new RTCPeerConnection({
-          iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+          iceServers: getIceServers()
         });
 
         pc.onconnectionstatechange = () => console.log(`${LOG_PREFIX} Connection state with ${p.userId}: ${pc.connectionState}`);
@@ -191,7 +217,7 @@ export const VoiceChatProvider: React.FC<VoiceChatProviderProps> = ({ children }
             console.log(`${LOG_PREFIX} Received offer from new peer ${senderId}. Setting up connection.`);
             
             pc = new RTCPeerConnection({
-              iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+              iceServers: getIceServers()
             });
 
             pc.onconnectionstatechange = () => console.log(`${LOG_PREFIX} Connection state with ${senderId}: ${pc.connectionState}`);
