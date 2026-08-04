@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, CreditCard, Users, Layers, ShieldCheck, RefreshCw, LogOut, Settings, Bell } from 'lucide-react';
+import { Activity, CreditCard, Users, Layers, ShieldCheck, RefreshCw, LogOut, Settings, Bell, Search, Menu, X } from 'lucide-react';
 import { UserProfile, GameRoom } from '../types/game';
 import UserEditModal from './UserEditModal';
 import { formatCurrency } from '../utils/number';
@@ -34,6 +34,13 @@ const AdminDashboard: React.FC = () => {
     const [paymentSettings, setPaymentSettings] = useState<Record<string, PaymentProviderConfig>>({});
     const [settingsSaving, setSettingsSaving] = useState(false);
     const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
+
+    const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+    const [userSearch, setUserSearch] = useState('');
+    const [roomSearch, setRoomSearch] = useState('');
+    const [roomFilter, setRoomFilter] = useState<'all' | 'waiting' | 'playing' | 'completed'>('all');
+    const [transactionSearch, setTransactionSearch] = useState('');
+    const [transactionTypeFilter, setTransactionTypeFilter] = useState<'all' | 'deposit' | 'withdrawal' | 'bet' | 'win'>('all');
 
     // Modal state
     const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -128,7 +135,67 @@ const AdminDashboard: React.FC = () => {
         }
     }, [adminId, view]);
 
-    const handleSaveUser = async (updatedData: Partial<UserProfile>) => {
+    const visibleUsers = users.filter((user) => {
+        const query = userSearch.toLowerCase();
+        return (
+            user.username.toLowerCase().includes(query) ||
+            user.id.toLowerCase().includes(query) ||
+            (user.phone || '').toLowerCase().includes(query)
+        );
+    });
+
+    const visibleRooms = rooms.filter((room) => {
+        const matchesQuery = roomSearch ? room.id.toLowerCase().includes(roomSearch.toLowerCase()) : true;
+        const matchesStatus = roomFilter === 'all' ? true : room.status === roomFilter;
+        return matchesQuery && matchesStatus;
+    });
+
+    const visibleTransactions = transactions.filter((tx) => {
+        const query = transactionSearch.toLowerCase();
+        const matchesQuery =
+            tx.userId?.toLowerCase().includes(query) ||
+            tx.description?.toLowerCase().includes(query) ||
+            tx.type?.toLowerCase().includes(query);
+        const matchesType =
+            transactionTypeFilter === 'all'
+                ? true
+                : transactionTypeFilter === 'deposit'
+                ? tx.type === 'deposit'
+                : transactionTypeFilter === 'withdrawal'
+                ? tx.type === 'withdrawal'
+                : transactionTypeFilter === 'bet'
+                ? tx.type?.includes('bet')
+                : transactionTypeFilter === 'win'
+                ? tx.type?.includes('win')
+                : true;
+        return matchesQuery && matchesType;
+    });
+
+    const sidebarItems = [
+        { key: 'stats', label: 'Stats', icon: Activity },
+        { key: 'users', label: 'Users Management', icon: Users },
+        { key: 'rooms', label: 'Rooms Management', icon: Layers },
+        { key: 'transactions', label: 'Transactions History', icon: CreditCard },
+        { key: 'manual-transactions', label: 'Manual Transactions', icon: ShieldCheck },
+        { key: 'payment-settings', label: 'Payment Settings', icon: Settings },
+    ];
+
+    const statusClasses = (status: string) => {
+        if (status === 'approved') return 'bg-emerald-500/15 text-emerald-300';
+        if (status === 'pending') return 'bg-amber-500/15 text-amber-300';
+        if (status === 'rejected') return 'bg-rose-500/15 text-rose-300';
+        if (status === 'playing') return 'bg-emerald-500/15 text-emerald-300';
+        if (status === 'waiting') return 'bg-amber-500/15 text-amber-300';
+        if (status === 'completed') return 'bg-slate-500/15 text-slate-300';
+        return 'bg-slate-700/20 text-slate-200';
+    };
+
+    const renderStatusBadge = (status: string) => (
+        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${statusClasses(status)}`}>{status}</span>
+    );
+
+
+    const handleSaveUser = async (updatedData: any) => {
         if (!editingUser || !adminId) return;
         
         try {
@@ -375,147 +442,303 @@ const AdminDashboard: React.FC = () => {
     const renderView = () => {
         switch (view) {
             case 'stats':
-                if (!stats) return <p>Loading stats...</p>
+                if (!stats) return <p className="text-slate-400">Loading stats...</p>;
                 return (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
-                        <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold">{stats.totalUsers}</p><p className="text-sm text-gray-400">Total Users</p></div>
-                        <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold">{stats.totalRooms}</p><p className="text-sm text-gray-400">Total Rooms</p></div>
-                        <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold text-green-400">{stats.activeRooms}</p><p className="text-sm text-gray-400">Active Rooms</p></div>
-                        <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold text-yellow-400">{stats.waitingRooms}</p><p className="text-sm text-gray-400">Waiting Rooms</p></div>
-                        <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold">{formatCurrency(stats.houseRevenue)}</p><p className="text-sm text-gray-400">House Revenue</p></div>
-                        <div className="bg-gray-700 p-4 rounded-lg"><p className="text-2xl font-bold">{stats.onlineClients}</p><p className="text-sm text-gray-400">Online Clients</p></div>
+                    <div className="space-y-6">
+                        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                            <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                                <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Total Users</p>
+                                <p className="mt-4 text-4xl font-semibold text-slate-100">{stats.totalUsers}</p>
+                            </div>
+                            <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                                <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Rooms Played</p>
+                                <p className="mt-4 text-4xl font-semibold text-slate-100">{stats.totalRooms}</p>
+                            </div>
+                            <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                                <p className="text-sm uppercase tracking-[0.3em] text-slate-500">House Revenue</p>
+                                <p className="mt-4 text-4xl font-semibold text-slate-100">{formatCurrency(stats.houseRevenue)}</p>
+                            </div>
+                        </div>
+
+                        <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+                            <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-6">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Revenue & activity</p>
+                                        <h3 className="mt-2 text-xl font-semibold text-slate-100">Daily performance</h3>
+                                    </div>
+                                    <span className="rounded-full bg-indigo-500/15 px-3 py-1 text-xs font-semibold text-indigo-200">Live</span>
+                                </div>
+                                <div className="mt-6 h-[320px] rounded-[28px] bg-slate-900/90 p-6 text-slate-500">
+                                    <p className="text-sm text-slate-500">Chart preview placeholder</p>
+                                    <div className="mt-5 h-full rounded-[24px] bg-slate-950/80" />
+                                </div>
+                            </div>
+                            <div className="space-y-4">
+                                <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-6">
+                                    <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Active Rooms</p>
+                                    <p className="mt-4 text-4xl font-semibold text-emerald-300">{stats.activeRooms}</p>
+                                </div>
+                                <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-6">
+                                    <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Waiting Rooms</p>
+                                    <p className="mt-4 text-4xl font-semibold text-amber-300">{stats.waitingRooms}</p>
+                                </div>
+                                <div className="rounded-[28px] border border-slate-800 bg-slate-950/60 p-6">
+                                    <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Online Clients</p>
+                                    <p className="mt-4 text-4xl font-semibold text-slate-100">{stats.onlineClients}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Broadcast announcement</p>
+                                    <h3 className="mt-2 text-xl font-semibold text-slate-100">Send a message to all users</h3>
+                                </div>
+                                <button onClick={handleBroadcast} className="inline-flex items-center rounded-3xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
+                                    Broadcast
+                                </button>
+                            </div>
+                            <textarea
+                                value={broadcastMessage}
+                                onChange={(e) => setBroadcastMessage(e.target.value)}
+                                placeholder="Type your broadcast message here..."
+                                className="mt-6 min-h-[140px] w-full rounded-[28px] border border-slate-800 bg-slate-900 px-4 py-4 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
+                            />
+                        </div>
                     </div>
                 );
             case 'users':
                 return (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-800">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Balance</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">W/L</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-gray-900 divide-y divide-gray-700">
-                                {users.map(user => (
-                                    <tr key={user.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white flex items-center"><span className="mr-2 text-xl">{user.avatar}</span> {user.username}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400">{formatCurrency(user.balance)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{user.winCount} / {user.lossCount}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-purple-400">{user.role || 'Player'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                            <button onClick={() => handleViewUserGames(user)} className="text-gray-400 hover:text-white">History</button>
-                                            <button onClick={() => handleImpersonate(user)} className="text-blue-400 hover:text-blue-600">Impersonate</button>
-                                            <button onClick={() => setEditingUser(user)} className="text-indigo-400 hover:text-indigo-600">Edit</button>
-                                            <button onClick={() => handleDeleteUser(user)} className="text-red-400 hover:text-red-600">Delete</button>
-                                        </td>
+                    <div className="space-y-6">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <p className="text-sm font-semibold text-slate-300">Search users</p>
+                                <p className="text-sm text-slate-500">Filter players by name, ID, or phone number.</p>
+                            </div>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <div className="relative">
+                                    <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+                                    <input
+                                        type="text"
+                                        value={userSearch}
+                                        onChange={(e) => setUserSearch(e.target.value)}
+                                        placeholder="Search username, ID or phone"
+                                        className="rounded-3xl border border-slate-800 bg-slate-950/80 py-3 pl-10 pr-4 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                    />
+                                </div>
+                                <button onClick={() => setUserSearch('')} className="rounded-3xl border border-slate-800 bg-slate-950/80 px-5 py-3 text-sm font-semibold text-slate-200 transition hover:bg-slate-900">
+                                    Clear
+                                </button>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-[28px] border border-slate-800 bg-slate-950/70 p-4">
+                            <table className="min-w-full divide-y divide-slate-800">
+                                <thead className="bg-slate-900">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">User ID</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Username</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Phone</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Balance</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Games Played</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Actions</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800 bg-slate-900">
+                                    {visibleUsers.map((user) => (
+                                        <tr key={user.id}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300 font-mono">{user.id}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100 flex items-center gap-2">
+                                                <span className="inline-flex h-8 w-8 items-center justify-center rounded-2xl bg-slate-800 text-slate-300">{user.avatar}</span>
+                                                {user.username}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{user.phone || '—'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-emerald-300">{formatCurrency(user.balance)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{user.gamesPlayed ?? user.winCount + user.lossCount}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">{renderStatusBadge(user.role || 'player')}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
+                                                <button onClick={() => handleViewUserGames(user)} className="text-slate-300 hover:text-white">History</button>
+                                                <button onClick={() => setEditingUser(user)} className="text-indigo-300 hover:text-indigo-100">Edit</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 );
             case 'rooms':
-                 return (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-800">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Room ID</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Players</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Bet</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Created At</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-gray-900 divide-y divide-gray-700">
-                                {rooms.map(room => (
-                                    <tr key={room.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white font-mono">{room.id}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${room.status === 'playing' ? 'bg-green-800 text-green-100' : 'bg-yellow-800 text-yellow-100'}`}>{room.status}</span></td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{room.players.length} / {room.capacity}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-400">${room.betAmount}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(room.createdAt).toLocaleString()}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                            <button onClick={() => handleCancelGame(room.id)} className="text-red-400 hover:text-red-600">Cancel Game</button>
-                                        </td>
+                return (
+                    <div className="space-y-6">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-100">Filter rooms</h3>
+                                <p className="text-sm text-slate-400">Search by room ID or filter by game status.</p>
+                            </div>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <input
+                                    type="text"
+                                    value={roomSearch}
+                                    onChange={(e) => setRoomSearch(e.target.value)}
+                                    placeholder="Search room ID"
+                                    className="rounded-3xl border border-slate-800 bg-slate-950/80 py-3 px-4 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                />
+                                <select
+                                    value={roomFilter}
+                                    onChange={(e) => setRoomFilter(e.target.value as any)}
+                                    className="rounded-3xl border border-slate-800 bg-slate-950/80 py-3 px-4 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                >
+                                    <option value="all">All rooms</option>
+                                    <option value="waiting">Waiting</option>
+                                    <option value="playing">Playing</option>
+                                    <option value="completed">Completed</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-[28px] border border-slate-800 bg-slate-950/70 p-4">
+                            <table className="min-w-full divide-y divide-slate-800">
+                                <thead className="bg-slate-900">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Room ID</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Players</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Bet</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Created</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Actions</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800 bg-slate-900">
+                                    {visibleRooms.map((room) => (
+                                        <tr key={room.id}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300 font-mono">{room.id}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">{renderStatusBadge(room.status)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{room.players.length} / {room.capacity || '-'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-emerald-300">${room.betAmount}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">{new Date(room.createdAt).toLocaleString()}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button onClick={() => handleCancelGame(room.id)} className="rounded-2xl bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-200 transition hover:bg-rose-500/20">Cancel</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 );
             case 'transactions':
                 return (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-800">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">User ID</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Amount</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Description</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-gray-900 divide-y divide-gray-700">
-                                {transactions.map(tx => (
-                                    <tr key={tx.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.timestamp).toLocaleString()}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white font-mono">{tx.userId}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.type}</td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${tx.type.includes('payout') || tx.type.includes('deposit') ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(tx.amount)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tx.description}</td>
+                    <div className="space-y-6">
+                        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-slate-100">Transaction history</h3>
+                                <p className="text-sm text-slate-400">Search and filter system transactions for audits and reporting.</p>
+                            </div>
+                            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                                <input
+                                    type="text"
+                                    value={transactionSearch}
+                                    onChange={(e) => setTransactionSearch(e.target.value)}
+                                    placeholder="Search user, type or description"
+                                    className="rounded-3xl border border-slate-800 bg-slate-950/80 py-3 px-4 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                />
+                                <select
+                                    value={transactionTypeFilter}
+                                    onChange={(e) => setTransactionTypeFilter(e.target.value as any)}
+                                    className="rounded-3xl border border-slate-800 bg-slate-950/80 py-3 px-4 text-sm text-slate-100 outline-none focus:border-indigo-500"
+                                >
+                                    <option value="all">All types</option>
+                                    <option value="deposit">Deposit</option>
+                                    <option value="withdrawal">Withdrawal</option>
+                                    <option value="bet">Bet</option>
+                                    <option value="win">Win</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-[28px] border border-slate-800 bg-slate-950/70 p-4">
+                            <table className="min-w-full divide-y divide-slate-800">
+                                <thead className="bg-slate-900">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Date</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">User</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Type</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Amount</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Description</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800 bg-slate-900">
+                                    {visibleTransactions.map((tx) => (
+                                        <tr key={tx.id}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">{new Date(tx.timestamp).toLocaleString()}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-white font-mono">{tx.userId}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{tx.type}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${tx.type === 'deposit' || tx.type === 'win_payout' ? 'text-emerald-300' : 'text-rose-300'}`}>{formatCurrency(tx.amount)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">{tx.description}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{tx.status || 'success'}</td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 );
             case 'manual-transactions':
                 return (
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-700">
-                            <thead className="bg-gray-800">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Username</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Amount</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Destination Phone</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Sender Phone</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Provider</th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
-                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-gray-900 divide-y divide-gray-700">
-                                {manualTransactions.map(tx => (
-                                    <tr key={tx.id}>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.createdAt).toLocaleString()}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{tx.username}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.transactionType}</td>
-                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${tx.transactionType === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(tx.amount)}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.phone}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.senderPhone || 'N/A'}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.provider}</td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-sm"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.status === 'pending' ? 'bg-yellow-800 text-yellow-100' : tx.status === 'approved' ? 'bg-green-800 text-green-100' : 'bg-red-800 text-red-100'}`}>{tx.status}</span></td>
-                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                                            {tx.status === 'pending' && (
-                                                <>
-                                                    <button onClick={() => handleApproveTransaction(tx.id)} className="text-green-400 hover:text-green-600">Approve</button>
-                                                    <button onClick={() => handleRejectTransaction(tx.id)} className="text-red-400 hover:text-red-600">Reject</button>
-                                                </>
-                                            )}
-                                        </td>
+                    <div className="space-y-6">
+                        <div className="rounded-[28px] border border-slate-800 bg-slate-950/70 p-6">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div>
+                                    <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Pending requests</p>
+                                    <h3 className="text-xl font-semibold text-slate-100">Manual transaction approvals</h3>
+                                </div>
+                                <span className="inline-flex rounded-full bg-amber-500/20 px-4 py-2 text-sm font-semibold text-amber-300">
+                                    {pendingManualCount} pending
+                                </span>
+                            </div>
+                        </div>
+                        <div className="overflow-x-auto rounded-[28px] border border-slate-800 bg-slate-950/70 p-4">
+                            <table className="min-w-full divide-y divide-slate-800">
+                                <thead className="bg-slate-900">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Date</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Username</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Type</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Amount</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Destination</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Sender</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Provider</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-slate-500">Status</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-slate-500">Actions</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-slate-800 bg-slate-900">
+                                    {manualTransactions.map((tx) => (
+                                        <tr key={tx.id}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-400">{new Date(tx.createdAt).toLocaleString()}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-100">{tx.username}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{tx.transactionType}</td>
+                                            <td className={`px-6 py-4 whitespace-nowrap text-sm ${tx.transactionType === 'deposit' ? 'text-emerald-300' : 'text-rose-300'}`}>{formatCurrency(tx.amount)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{tx.phone}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{tx.senderPhone || 'N/A'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-300">{tx.provider}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">{renderStatusBadge(tx.status)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                                {tx.status === 'pending' ? (
+                                                    <>
+                                                        <button onClick={() => handleApproveTransaction(tx.id)} className="rounded-2xl bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-300 transition hover:bg-emerald-500/20">Approve</button>
+                                                        <button onClick={() => handleRejectTransaction(tx.id)} className="rounded-2xl bg-rose-500/10 px-4 py-2 text-sm font-semibold text-rose-300 transition hover:bg-rose-500/20">Reject</button>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-slate-400">No actions</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 );
                                 case 'payment-settings':
@@ -638,113 +861,156 @@ const AdminDashboard: React.FC = () => {
     return (
         <>
             <div className="min-h-screen bg-slate-950 text-slate-100">
-                <div className="mx-auto flex min-h-screen max-w-[1600px] flex-col px-4 py-6 sm:px-6 lg:px-8">
-                    <div className="grid flex-1 gap-6 xl:grid-cols-[280px_minmax(0,1fr)]">
-                        <aside className="space-y-6">
-                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                <div className="mx-auto flex min-h-screen max-w-[1700px] flex-col px-4 py-4 sm:px-6 lg:px-8">
+                    <div className="flex items-center justify-between gap-4 lg:hidden">
+                        <button
+                            onClick={() => setMobileMenuOpen(true)}
+                            className="inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-slate-800 bg-slate-900 text-slate-100 shadow-sm shadow-slate-950/20"
+                        >
+                            <Menu className="h-5 w-5" />
+                        </button>
+                        <div>
+                            <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Dashboard</p>
+                            <h1 className="text-xl font-semibold">Dhili Dhili Ludo</h1>
+                        </div>
+                        <button
+                            onClick={handleLogout}
+                            className="inline-flex items-center gap-2 rounded-3xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white shadow-sm shadow-rose-900/20"
+                        >
+                            <LogOut className="h-4 w-4" />
+                            Logout
+                        </button>
+                    </div>
+
+                    <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)] xl:gap-8">
+                        <aside className="hidden xl:block">
+                            <div className="rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
-                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Admin Panel</p>
-                                        <h1 className="mt-2 text-3xl font-semibold">Dashboard</h1>
+                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Dhili Dhili Ludo</p>
+                                        <h2 className="mt-2 text-3xl font-semibold">Admin Console</h2>
                                     </div>
                                     <div className="rounded-2xl bg-slate-800 p-3 text-slate-300">
                                         <Bell className="h-5 w-5" />
                                     </div>
                                 </div>
-                                <div className="mt-6 space-y-4">
-                                    <div className="rounded-3xl bg-slate-950/80 p-4">
+
+                                <div className="mt-8 space-y-4">
+                                    <div className="rounded-[28px] bg-slate-950/70 p-4 ring-1 ring-slate-800/70">
                                         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Platform status</p>
                                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                                            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
                                                 <p className="text-sm text-slate-400">Users</p>
-                                                <p className="mt-2 text-2xl font-semibold">{users.length}</p>
+                                                <p className="mt-2 text-3xl font-semibold text-slate-100">{users.length}</p>
                                             </div>
-                                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                                                <p className="text-sm text-slate-400">Manual approvals</p>
-                                                <p className="mt-2 text-2xl font-semibold">{pendingManualCount}</p>
+                                            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                                                <p className="text-sm text-slate-400">Pending approvals</p>
+                                                <p className="mt-2 text-3xl font-semibold text-amber-400">{pendingManualCount}</p>
                                             </div>
                                         </div>
                                     </div>
-                                    <div className="rounded-3xl bg-slate-950/80 p-4">
+                                    <div className="rounded-[28px] bg-slate-950/70 p-4 ring-1 ring-slate-800/70">
                                         <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Payment providers</p>
                                         <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
+                                            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
                                                 <p className="text-sm text-slate-400">Configured</p>
-                                                <p className="mt-2 text-2xl font-semibold">{providerCount}/{PAYMENT_PROVIDERS.length}</p>
+                                                <p className="mt-2 text-3xl font-semibold text-slate-100">{providerCount}/{PAYMENT_PROVIDERS.length}</p>
                                             </div>
-                                            <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-                                                <p className="text-sm text-slate-400">Selected view</p>
-                                                <p className="mt-2 text-2xl font-semibold">{activeViewTitle}</p>
+                                            <div className="rounded-3xl border border-slate-800 bg-slate-900 p-4">
+                                                <p className="text-sm text-slate-400">Current tab</p>
+                                                <p className="mt-2 text-3xl font-semibold text-slate-100">{activeViewTitle}</p>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                            <div className="mt-6 rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Navigation</p>
                                 <div className="mt-5 space-y-2">
-                                    <button onClick={() => setView('stats')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'stats' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
-                                        <Activity className="h-4 w-4" />
-                                        Stats
-                                    </button>
-                                    <button onClick={() => setView('users')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'users' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
-                                        <Users className="h-4 w-4" />
-                                        Users
-                                    </button>
-                                    <button onClick={() => setView('rooms')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'rooms' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
-                                        <Layers className="h-4 w-4" />
-                                        Rooms
-                                    </button>
-                                    <button onClick={() => setView('transactions')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'transactions' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
-                                        <CreditCard className="h-4 w-4" />
-                                        Transactions
-                                    </button>
-                                    <button onClick={() => setView('manual-transactions')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'manual-transactions' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
-                                        <ShieldCheck className="h-4 w-4" />
-                                        Manual Transactions
-                                    </button>
-                                    <button onClick={() => setView('payment-settings')} className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm transition ${view === 'payment-settings' ? 'bg-blue-600 text-white' : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'}`}>
-                                        <Settings className="h-4 w-4" />
-                                        Payment Settings
-                                    </button>
+                                    {sidebarItems.map((item) => {
+                                        const Icon = item.icon;
+                                        const active = view === item.key;
+                                        return (
+                                            <button
+                                                key={item.key}
+                                                onClick={() => {
+                                                    setView(item.key as any);
+                                                    setMobileMenuOpen(false);
+                                                }}
+                                                className={`flex w-full items-center gap-3 rounded-3xl px-4 py-3 text-left text-sm font-semibold transition ${
+                                                    active
+                                                        ? 'bg-indigo-500 text-white shadow-lg shadow-indigo-500/10'
+                                                        : 'bg-slate-950/80 text-slate-200 hover:bg-slate-900'
+                                                }`}
+                                            >
+                                                <Icon className="h-4 w-4" />
+                                                {item.label}
+                                                {item.key === 'manual-transactions' && pendingManualCount > 0 && (
+                                                    <span className="ml-auto rounded-full bg-amber-500 px-2 py-1 text-[10px] font-bold uppercase tracking-[0.3em] text-slate-950">
+                                                        {pendingManualCount}
+                                                    </span>
+                                                )}
+                                            </button>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </aside>
 
                         <main className="space-y-6">
-                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
-                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                                <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                                     <div>
-                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Current view</p>
-                                        <h2 className="mt-2 text-3xl font-semibold">{activeViewTitle}</h2>
-                                        <p className="mt-2 text-sm text-slate-400">{activeViewDescription}</p>
+                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">{activeViewTitle}</p>
+                                        <h1 className="mt-2 text-3xl font-semibold text-slate-100">{activeViewTitle}</h1>
+                                        <p className="mt-2 max-w-2xl text-sm text-slate-400">{activeViewDescription}</p>
+                                    </div>
+                                    <div className="grid gap-3 sm:grid-cols-3">
+                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-center">
+                                            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Users</p>
+                                            <p className="mt-3 text-2xl font-semibold text-slate-100">{users.length}</p>
+                                        </div>
+                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-center">
+                                            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Pending Approvals</p>
+                                            <p className="mt-3 text-2xl font-semibold text-amber-300">{pendingManualCount}</p>
+                                        </div>
+                                        <div className="rounded-3xl border border-slate-800 bg-slate-950/80 p-4 text-center">
+                                            <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Providers</p>
+                                            <p className="mt-3 text-2xl font-semibold text-slate-100">{providerCount}/{PAYMENT_PROVIDERS.length}</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                                    <div className="rounded-3xl border border-slate-800 bg-slate-950/80 px-4 py-3">
+                                        <p className="text-xs uppercase tracking-[0.3em] text-slate-500">Quick action</p>
+                                        <p className="mt-1 text-sm text-slate-300">Switch tabs or review pending approvals quickly.</p>
                                     </div>
                                     <div className="flex flex-wrap items-center gap-3">
-                                        <button onClick={() => fetchData(view)} className="inline-flex items-center gap-2 rounded-2xl bg-slate-950/80 px-5 py-3 text-sm font-semibold text-slate-100 transition hover:bg-slate-900">
+                                        <button onClick={() => fetchData(view)} className="inline-flex items-center gap-2 rounded-3xl bg-indigo-500 px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-indigo-500/10 transition hover:bg-indigo-400">
                                             <RefreshCw className="h-4 w-4" />
                                             Refresh
                                         </button>
-                                        <button onClick={handleLogout} className="inline-flex items-center gap-2 rounded-2xl bg-red-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-red-500">
-                                            <LogOut className="h-4 w-4" />
-                                            Logout
+                                        <button onClick={() => setView('manual-transactions')} className="inline-flex items-center gap-2 rounded-3xl bg-amber-500 px-5 py-3 text-sm font-semibold text-slate-950 shadow-lg shadow-amber-500/10 transition hover:bg-amber-400">
+                                            <ShieldCheck className="h-4 w-4" />
+                                            Manual Approvals
                                         </button>
                                     </div>
                                 </div>
                             </div>
 
-                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                            <div className="rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 {error && <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">{error}</div>}
                                 {renderView()}
                             </div>
 
-                            <div className="rounded-3xl border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
+                            <div className="rounded-[32px] border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                                     <div>
-                                        <h3 className="text-xl font-semibold">Broadcast Message</h3>
-                                        <p className="mt-1 text-sm text-slate-400">Send an announcement to every user from the admin panel.</p>
+                                        <h3 className="text-xl font-semibold text-slate-100">Broadcast Message</h3>
+                                        <p className="mt-1 text-sm text-slate-400">Type a message to send immediately to all users.</p>
                                     </div>
-                                    <button onClick={handleBroadcast} className="inline-flex items-center rounded-2xl bg-green-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-green-500">
+                                    <button onClick={handleBroadcast} className="inline-flex items-center rounded-3xl bg-emerald-500 px-5 py-3 text-sm font-semibold text-slate-950 transition hover:bg-emerald-400">
                                         Broadcast
                                     </button>
                                 </div>
@@ -752,12 +1018,54 @@ const AdminDashboard: React.FC = () => {
                                     value={broadcastMessage}
                                     onChange={(e) => setBroadcastMessage(e.target.value)}
                                     placeholder="Type your broadcast message here..."
-                                    className="mt-4 min-h-[120px] w-full rounded-3xl border border-slate-800 bg-slate-950/80 px-4 py-4 text-sm text-slate-100 focus:border-blue-500 focus:outline-none"
+                                    className="mt-4 min-h-[140px] w-full rounded-[28px] border border-slate-800 bg-slate-950/80 px-4 py-4 text-sm text-slate-100 focus:border-indigo-500 focus:outline-none"
                                 />
                             </div>
                         </main>
                     </div>
                 </div>
+
+                {mobileMenuOpen && (
+                    <div className="fixed inset-0 z-50 bg-slate-950/80 p-4 backdrop-blur-sm xl:hidden">
+                        <div className="h-full overflow-y-auto rounded-[32px] border border-slate-800 bg-slate-900/95 p-6 shadow-2xl shadow-slate-950/40">
+                            <div className="flex items-center justify-between gap-4">
+                                <div>
+                                    <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Menu</p>
+                                    <h2 className="mt-1 text-xl font-semibold text-slate-100">Navigate</h2>
+                                </div>
+                                <button
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className="inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-slate-800 bg-slate-950 text-slate-100"
+                                >
+                                    <X className="h-5 w-5" />
+                                </button>
+                            </div>
+                            <div className="mt-6 space-y-3">
+                                {sidebarItems.map((item) => {
+                                    const Icon = item.icon;
+                                    const active = view === item.key;
+                                    return (
+                                        <button
+                                            key={item.key}
+                                            onClick={() => {
+                                                setView(item.key as any);
+                                                setMobileMenuOpen(false);
+                                            }}
+                                            className={`flex w-full items-center gap-3 rounded-3xl px-4 py-4 text-left text-sm font-semibold transition ${
+                                                active
+                                                    ? 'bg-indigo-500 text-white'
+                                                    : 'bg-slate-950/90 text-slate-200 hover:bg-slate-900'
+                                            }`}
+                                        >
+                                            <Icon className="h-4 w-4" />
+                                            {item.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
             {editingUser && (
                 <UserEditModal
