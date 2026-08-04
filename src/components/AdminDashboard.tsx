@@ -7,7 +7,7 @@ const AdminDashboard: React.FC = () => {
     const [adminId, setAdminId] = useState<string | null>(localStorage.getItem('admin_id'));
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions'>('stats');
+    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions'>('stats');
     const [error, setError] = useState<string | null>(null);
 
     // Data states
@@ -15,6 +15,7 @@ const AdminDashboard: React.FC = () => {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [rooms, setRooms] = useState<GameRoom[]>([]);
     const [transactions, setTransactions] = useState<any[]>([]);
+    const [manualTransactions, setManualTransactions] = useState<any[]>([]);
 
     // Modal state
     const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -59,7 +60,7 @@ const AdminDashboard: React.FC = () => {
         setAdminId(null);
     };
 
-    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions') => {
+    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions') => {
         if (!adminId) return;
         setError(null);
         try {
@@ -89,6 +90,9 @@ const AdminDashboard: React.FC = () => {
                     break;
                 case 'transactions':
                     setTransactions(data);
+                    break;
+                case 'manual-transactions':
+                    setManualTransactions(data);
                     break;
             }
         } catch (err: any) {
@@ -192,6 +196,38 @@ const AdminDashboard: React.FC = () => {
             const data = await response.json();
             setViewingUser(user);
             setViewingUserGames(data);
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
+    const handleApproveTransaction = async (transactionId: string) => {
+        if (!adminId || !window.confirm('Are you sure you want to approve this transaction?')) return;
+        try {
+            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/approve?userId=${adminId}`, {
+                method: 'POST',
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to approve transaction');
+            }
+            fetchData('manual-transactions');
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
+    const handleRejectTransaction = async (transactionId: string) => {
+        if (!adminId || !window.confirm('Are you sure you want to reject this transaction?')) return;
+        try {
+            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/reject?userId=${adminId}`, {
+                method: 'POST',
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to reject transaction');
+            }
+            fetchData('manual-transactions');
         } catch (err: any) {
             setError(err.message);
         }
@@ -393,6 +429,46 @@ const AdminDashboard: React.FC = () => {
                         </table>
                     </div>
                 );
+            case 'manual-transactions':
+                return (
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-700">
+                            <thead className="bg-gray-800">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Date</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Username</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Type</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Amount</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Phone</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Provider</th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-gray-900 divide-y divide-gray-700">
+                                {manualTransactions.map(tx => (
+                                    <tr key={tx.id}>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(tx.createdAt).toLocaleString()}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{tx.username}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.transactionType}</td>
+                                        <td className={`px-6 py-4 whitespace-nowrap text-sm ${tx.transactionType === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(tx.amount)}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.phone}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{tx.provider}</td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm"><span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.status === 'pending' ? 'bg-yellow-800 text-yellow-100' : tx.status === 'approved' ? 'bg-green-800 text-green-100' : 'bg-red-800 text-red-100'}`}>{tx.status}</span></td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                            {tx.status === 'pending' && (
+                                                <>
+                                                    <button onClick={() => handleApproveTransaction(tx.id)} className="text-green-400 hover:text-green-600">Approve</button>
+                                                    <button onClick={() => handleRejectTransaction(tx.id)} className="text-red-400 hover:text-red-600">Reject</button>
+                                                </>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                );
             default:
                 return null;
         }
@@ -417,6 +493,7 @@ const AdminDashboard: React.FC = () => {
                         <button onClick={() => setView('users')} className={`w-full py-2 rounded ${view === 'users' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Users</button>
                         <button onClick={() => setView('rooms')} className={`w-full py-2 rounded ${view === 'rooms' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Rooms</button>
                         <button onClick={() => setView('transactions')} className={`w-full py-2 rounded ${view === 'transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Transactions</button>
+                        <button onClick={() => setView('manual-transactions')} className={`w-full py-2 rounded ${view === 'manual-transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Manual Transactions</button>
                     </div>
 
                     <div className="bg-gray-800 p-6 rounded-lg">

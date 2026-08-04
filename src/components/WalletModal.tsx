@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Copy, Check } from 'lucide-react';
+import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Copy, Check, Phone } from 'lucide-react';
 import { UserProfile, WalletTransaction } from '../types/game';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency } from '../utils/number';
@@ -30,6 +30,8 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
 
   const [ussdString, setUssdString] = useState('');
   const [isCopied, setIsCopied] = useState(false);
+  const [confirmationRequested, setConfirmationRequested] = useState(false);
+  const [confirmationLoading, setConfirmationLoading] = useState(false);
 
   const fetchTransactions = async () => {
     try {
@@ -57,6 +59,35 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
       console.error('Could not copy text: ', err);
     });
   };
+  
+  const handleRequestConfirmation = async () => {
+    setConfirmationLoading(true);
+    setError('');
+    try {
+        const response = await fetch('/api/wallet/request-manual-confirmation', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                userId: user.id,
+                amount: parseFloat(amount),
+                phone: activeTab === 'withdraw' ? phone : DEPOSIT_PHONE_NUMBER,
+                provider: provider,
+                transactionType: activeTab,
+            }),
+        });
+        const data = await response.json();
+        if (response.ok) {
+            setConfirmationRequested(true);
+        } else {
+            setError(data.error || 'Failed to submit confirmation request.');
+        }
+    } catch (err) {
+        setError('An unexpected error occurred. Please try again.');
+        console.error('Confirmation request failed:', err);
+    } finally {
+        setConfirmationLoading(false);
+    }
+};
 
   const handleGenerateUssd = (e: React.FormEvent) => {
     e.preventDefault();
@@ -112,6 +143,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     setUssdString('');
     setAmount('');
     setError('');
+    setConfirmationRequested(false);
   }
 
   return (
@@ -170,15 +202,60 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                         {language === 'so' ? 'Habee Koodhka USSD' : 'Process USSD Code'}
                     </h3>
                     <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
-                        {language === 'so' ? 'Koobi garee koodhkan oo ku dheji telefoonkaaga si aad u dhammaystirto macaamilka.' : 'Copy this code and paste it into your phone dialer to complete the transaction.'}
+                        {language === 'so' ? 'Taabo badhanka Wicitaanka si aad u furto telefoonkaaga, ama koobi garee koodhka.' : 'Press the Dial button to open your dialer, or copy the code.'}
                     </p>
                     
-                    <div className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-lg font-black text-center text-white font-mono flex items-center justify-between">
-                        <span>{ussdString}</span>
-                        <button onClick={() => copyToClipboard(ussdString)} className="p-2 hover:bg-white/10 rounded-lg transition-all">
+                    <div className="bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-lg font-black text-center text-white font-mono">
+                        {ussdString}
+                    </div>
+
+                    <div className="flex items-center justify-center gap-2">
+                        <a 
+                            href={`tel:${ussdString}`}
+                            className="flex-1 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2"
+                        >
+                            <Phone className="w-4 h-4" />
+                            {language === 'so' ? 'Wac' : 'Dial'}
+                        </a>
+                        <button 
+                            onClick={() => copyToClipboard(ussdString)} 
+                            className="p-3 bg-black/30 border border-white/10 rounded-xl hover:bg-white/10 transition-all"
+                            aria-label="Copy USSD Code"
+                        >
                             {isCopied ? <Check className="w-5 h-5 text-green-400" /> : <Copy className="w-5 h-5 text-slate-400" />}
                         </button>
                     </div>
+                    
+                    {activeTab === 'deposit' && (
+                        <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                            {confirmationRequested ? (
+                                <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
+                                    <CheckCircle className="w-4 h-4 shrink-0" />
+                                    <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
+                                </div>
+                            ) : (
+                                <>
+                                    <p className="text-xs text-slate-300 font-semibold">
+                                        {language === 'so' ? 'Marka aad lacagta dirto, taabo badhanka hoose si aad u codsato xaqiijin.' : 'After sending the money, press the button below to request confirmation.'}
+                                    </p>
+                                    <button
+                                        onClick={handleRequestConfirmation}
+                                        disabled={confirmationLoading}
+                                        className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        {confirmationLoading ? (
+                                            <>
+                                                <RefreshCw className="w-4 h-4 animate-spin" />
+                                                {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
+                                            </>
+                                        ) : (
+                                            language === 'so' ? 'Waan Diray Lacagta, Ii Xaqiiji' : 'I Sent The Money, Please Confirm'
+                                        )}
+                                    </button>
+                                </>
+                            )}
+                        </div>
+                    )}
 
                     <div className="text-[10px] text-yellow-400 leading-relaxed bg-yellow-500/10 p-3 rounded-xl border border-yellow-500/20">
                         <p className='font-bold uppercase'>{language === 'so' ? 'Ogeysiis Muhiim Ah' : 'Important Notice'}</p>

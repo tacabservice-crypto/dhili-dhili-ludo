@@ -30,6 +30,19 @@ export interface WalletTransaction {
   description: string;
 }
 
+export interface ManualTransactionRequest {
+  id: string;
+  userId: string;
+  username: string;
+  amount: number;
+  phone: string;
+  provider: string;
+  transactionType: 'deposit' | 'withdraw';
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+}
+
+
 export type PlayerColor = 'red' | 'green' | 'yellow' | 'blue';
 
 export interface LudoPlayer {

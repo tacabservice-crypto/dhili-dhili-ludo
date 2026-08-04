@@ -139,6 +139,7 @@ interface DBStore {
   rooms: Record<string, GameRoom>;
   matchmakingQueues: Record<string, string[]>; // betAmount -> array of userIds
   houseRevenue: number;
+  pendingManualTransactions: ManualTransactionRequest[];
 }
 
 let store: DBStore = {
@@ -153,7 +154,8 @@ let store: DBStore = {
     25: [],
     50: []
   },
-  houseRevenue: 0
+  houseRevenue: 0,
+  pendingManualTransactions: []
 };
 
 // Load store from disk (local backup/fallback)
@@ -170,6 +172,7 @@ function loadStore() {
         0: [], 1: [], 5: [], 10: [], 25: [], 50: []
       };
       store.houseRevenue = parsed.houseRevenue || 0;
+      store.pendingManualTransactions = parsed.pendingManualTransactions || [];
       console.log('Database loaded successfully from disk.');
     } else {
       saveStoreAndWait();
@@ -200,6 +203,7 @@ async function loadStoreFromFirestore() {
           0: [], 1: [], 5: [], 10: [], 25: [], 50: []
         };
         store.houseRevenue = parsed.houseRevenue || 0;
+        store.pendingManualTransactions = parsed.pendingManualTransactions || [];
         console.log('Database loaded successfully from Firebase Firestore.');
         // Update local file backup
         fs.writeFileSync(DB_FILE, payload.data, 'utf8');
@@ -1247,9 +1251,131 @@ app.post('/api/wallet/withdraw', (req, res) => {
   res.json({ success: true, balance: user.balance });
 });
 
+app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
+  const { userId, amount, phone, provider, transactionType } = req.body;
+
+  if (!userId || !amount || !provider || !transactionType) {
+    return res.status(400).json({ error: 'Missing required fields for manual confirmation.' });
+  }
+
+  const user = store.users[userId];
+  if (!user) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+  
+  if (transactionType === 'withdraw' && !phone) {
+    return res.status(400).json({ error: 'Phone number is required for withdrawal requests.' });
+  }
+
+  const newRequest: ManualTransactionRequest = {
+    id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    userId,
+    username: user.username,
+    amount: parseFloat(amount),
+    phone,
+    provider,
+    transactionType,
+    status: 'pending',
+    createdAt: Date.now(),
+  };
+
+  store.pendingManualTransactions.unshift(newRequest);
+  await saveStoreAndWait();
+
+  res.json({ success: true, message: 'Your request has been submitted for review.' });
+});
+
 app.get('/api/wallet/transactions/:userId', (req, res) => {
   const txs = store.transactions.filter(t => t.userId === req.params.userId);
   res.json(txs);
+});
+
+
+// ==========================================
+// 6. ADMIN-ONLY ENDPOINTS
+// ==========================================
+
+// Middleware to verify if the requester is an admin
+const verifyAdmin = (req: any, res: any, next: any) => {
+  const { userId } = req.query;
+  if (!userId) {
+    return res.status(401).json({ error: 'Admin user ID is required for this operation.' });
+  }
+  const user = Object.values(store.users).find(u => u.id === userId);
+  if (!user || user.role !== 'admin') {
+    return res.status(403).json({ error: 'Forbidden: You do not have admin privileges.' });
+  }
+  req.adminUser = user; // Attach admin user to request for logging or further checks
+  next();
+};
+
+app.get('/api/admin/manual-transactions', verifyAdmin, (req, res) => {
+  // Return pending transactions first, then others, sorted by creation date
+  const sorted = [...store.pendingManualTransactions].sort((a, b) => {
+    if (a.status === 'pending' && b.status !== 'pending') return -1;
+    if (a.status !== 'pending' && b.status === 'pending') return 1;
+    return b.createdAt - a.createdAt; // Newest first
+  });
+  res.json(sorted);
+});
+
+app.post('/api/admin/manual-transactions/:transactionId/approve', verifyAdmin, async (req, res) => {
+    const { transactionId } = req.params;
+    const tx = store.pendingManualTransactions.find(t => t.id === transactionId);
+
+    if (!tx) {
+        return res.status(404).json({ error: 'Manual transaction request not found.' });
+    }
+    if (tx.status !== 'pending') {
+        return res.status(400).json({ error: `Transaction is already ${tx.status}.` });
+    }
+
+    const user = store.users[tx.userId];
+    if (!user) {
+        return res.status(404).json({ error: 'Associated user not found.' });
+    }
+
+    // Update user balance and log a formal transaction
+    if (tx.transactionType === 'deposit') {
+        user.balance += tx.amount;
+        addTransaction(tx.userId, 'deposit', tx.amount, undefined, `Manual deposit approved by admin from ${tx.provider}.`);
+    } else if (tx.transactionType === 'withdraw') {
+        if (user.balance < tx.amount) {
+            tx.status = 'rejected';
+            await saveStoreAndWait();
+            return res.status(400).json({ error: 'Insufficient user balance. Transaction rejected.'});
+        }
+        user.balance -= tx.amount;
+        addTransaction(tx.userId, 'withdrawal', tx.amount, undefined, `Manual withdrawal approved by admin to ${tx.phone} via ${tx.provider}.`);
+    }
+
+    tx.status = 'approved';
+    await saveStoreAndWait();
+
+    // Notify user of the update
+    broadcastUserUpdate(user.id);
+
+    res.json({ success: true, message: 'Transaction approved successfully.' });
+});
+
+app.post('/api/admin/manual-transactions/:transactionId/reject', verifyAdmin, async (req, res) => {
+    const { transactionId } = req.params;
+    const tx = store.pendingManualTransactions.find(t => t.id === transactionId);
+
+    if (!tx) {
+        return res.status(404).json({ error: 'Manual transaction request not found.' });
+    }
+    if (tx.status !== 'pending') {
+        return res.status(400).json({ error: `Transaction is already ${tx.status}.` });
+    }
+    
+    tx.status = 'rejected';
+    await saveStoreAndWait();
+    
+    // Optional: Notify user of rejection
+    // sendEventToUser(tx.userId, 'wallet_update', { message: 'Your transaction was rejected.' });
+
+    res.json({ success: true, message: 'Transaction rejected successfully.' });
 });
 
 
@@ -2751,6 +2877,66 @@ app.get('/api/admin/rooms', isAdmin, (req, res) => {
 // Get all transactions
 app.get('/api/admin/transactions', isAdmin, (req, res) => {
     res.json(store.transactions);
+});
+
+// Get all pending manual transactions
+app.get('/api/admin/manual-transactions', isAdmin, (req, res) => {
+    res.json(store.pendingManualTransactions || []);
+});
+
+// Approve a manual transaction
+app.post('/api/admin/manual-transactions/:transactionId/approve', isAdmin, async (req, res) => {
+    const { transactionId } = req.params;
+    const tx = store.pendingManualTransactions.find(t => t.id === transactionId);
+
+    if (!tx || tx.status !== 'pending') {
+        return res.status(404).json({ error: 'Pending transaction not found or already processed.' });
+    }
+
+    const user = store.users[tx.userId];
+    if (!user) {
+        return res.status(404).json({ error: 'User associated with transaction not found.' });
+    }
+
+    if (tx.transactionType === 'deposit') {
+        user.balance += tx.amount;
+        addTransaction(user.id, 'deposit', tx.amount, undefined, `Manual deposit approved by admin. Request ID: ${tx.id}`);
+    } else { // withdrawal
+        // This was already deducted, so we just confirm it
+    }
+
+    tx.status = 'approved';
+    await saveStoreAndWait();
+
+    broadcastUserUpdate(user.id);
+    res.json({ success: true, transaction: tx });
+});
+
+// Reject a manual transaction
+app.post('/api/admin/manual-transactions/:transactionId/reject', isAdmin, async (req, res) => {
+    const { transactionId } = req.params;
+    const tx = store.pendingManualTransactions.find(t => t.id === transactionId);
+
+    if (!tx || tx.status !== 'pending') {
+        return res.status(404).json({ error: 'Pending transaction not found or already processed.' });
+    }
+    
+    const user = store.users[tx.userId];
+    if (!user) {
+        return res.status(404).json({ error: 'User associated with transaction not found.' });
+    }
+
+    // If it was a withdrawal request, we need to refund the user's balance
+    if (tx.transactionType === 'withdraw') {
+        user.balance += tx.amount;
+        addTransaction(user.id, 'refund', tx.amount, undefined, `Withdrawal request ${tx.id} rejected, funds returned.`);
+    }
+
+    tx.status = 'rejected';
+    await saveStoreAndWait();
+    
+    broadcastUserUpdate(user.id);
+    res.json({ success: true, transaction: tx });
 });
 
 
