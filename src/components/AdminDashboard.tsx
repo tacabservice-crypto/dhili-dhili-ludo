@@ -3,11 +3,25 @@ import { UserProfile, GameRoom } from '../types/game';
 import UserEditModal from './UserEditModal';
 import { formatCurrency } from '../utils/number';
 
+interface PaymentProviderConfig {
+    enabled: boolean;
+    apiKey?: string;
+    apiUrl?: string;
+    accountNumber?: string;
+}
+
+const PAYMENT_PROVIDERS: Array<{ key: string; label: string; description: string }> = [
+    { key: 'evc', label: 'EVC Plus', description: 'EVC API configuration' },
+    { key: 'edahab', label: 'eDahab', description: 'E-Dahab API configuration' },
+    { key: 'sahal', label: 'Sahal', description: 'Sahal API configuration' },
+    { key: 'premier', label: 'Premier Bank', description: 'Premier Bank API configuration' },
+];
+
 const AdminDashboard: React.FC = () => {
     const [adminId, setAdminId] = useState<string | null>(localStorage.getItem('admin_id'));
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions'>('stats');
+    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings'>('stats');
     const [error, setError] = useState<string | null>(null);
 
     // Data states
@@ -16,6 +30,9 @@ const AdminDashboard: React.FC = () => {
     const [rooms, setRooms] = useState<GameRoom[]>([]);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [manualTransactions, setManualTransactions] = useState<any[]>([]);
+    const [paymentSettings, setPaymentSettings] = useState<Record<string, PaymentProviderConfig>>({});
+    const [settingsSaving, setSettingsSaving] = useState(false);
+    const [settingsMessage, setSettingsMessage] = useState<string | null>(null);
 
     // Modal state
     const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -60,11 +77,12 @@ const AdminDashboard: React.FC = () => {
         setAdminId(null);
     };
 
-    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions') => {
+    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings') => {
         if (!adminId) return;
         setError(null);
         try {
-            const response = await fetch(`/api/admin/${type}?userId=${adminId}`);
+            const path = type === 'payment-settings' ? '/api/admin/payment-settings' : `/api/admin/${type}`;
+            const response = await fetch(`${path}?userId=${adminId}`);
             if (!response.ok) {
                 let errMessage = `Failed to fetch ${type}`;
                 try {
@@ -93,6 +111,9 @@ const AdminDashboard: React.FC = () => {
                     break;
                 case 'manual-transactions':
                     setManualTransactions(data);
+                    break;
+                case 'payment-settings':
+                    setPaymentSettings(data);
                     break;
             }
         } catch (err: any) {
@@ -124,6 +145,31 @@ const AdminDashboard: React.FC = () => {
         } catch (err: any) {
             setError(err.message);
             throw err;
+        }
+    };
+
+    const handleSavePaymentSettings = async () => {
+        if (!adminId) return;
+        setError(null);
+        setSettingsSaving(true);
+        setSettingsMessage(null);
+        try {
+            const response = await fetch(`/api/admin/payment-settings?userId=${adminId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ paymentProviders: paymentSettings }),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to save payment settings');
+            }
+            const data = await response.json();
+            setPaymentSettings(data.paymentProviders || paymentSettings);
+            setSettingsMessage('Payment settings saved successfully.');
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setSettingsSaving(false);
         }
     };
     
@@ -471,9 +517,98 @@ const AdminDashboard: React.FC = () => {
                         </table>
                     </div>
                 );
-            default:
-                return null;
-        }
+                                case 'payment-settings':
+                                    return (
+                                        <div className="space-y-4">
+                                            <p className="text-sm text-gray-400 mb-4">Configure payment provider API keys to enable direct API-based deposits and withdrawals. When API settings exist for a provider, users will use the API instead of the legacy USSD flow.</p>
+                                            {PAYMENT_PROVIDERS.map((provider) => {
+                                                const config = paymentSettings[provider.key] || { enabled: false };
+                                                return (
+                                                    <div key={provider.key} className="bg-gray-900 border border-gray-700 rounded-xl p-5">
+                                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                                                            <div>
+                                                                <h3 className="text-lg font-bold">{provider.label}</h3>
+                                                                <p className="text-sm text-gray-500">{provider.description}</p>
+                                                            </div>
+                                                            <label className="inline-flex items-center gap-2 text-sm font-semibold">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={config.enabled}
+                                                                    onChange={(e) => setPaymentSettings(prev => ({
+                                                                        ...prev,
+                                                                        [provider.key]: {
+                                                                            ...config,
+                                                                            enabled: e.target.checked
+                                                                        }
+                                                                    }))}
+                                                                    className="accent-blue-500 h-4 w-4"
+                                                                />
+                                                                Enabled
+                                                            </label>
+                                                        </div>
+                                                        <div className="grid gap-4 sm:grid-cols-2">
+                                                            <label className="block text-xs uppercase tracking-wider text-gray-400">
+                                                                API URL
+                                                                <input
+                                                                    type="text"
+                                                                    value={config.apiUrl || ''}
+                                                                    onChange={(e) => setPaymentSettings(prev => ({
+                                                                        ...prev,
+                                                                        [provider.key]: {
+                                                                            ...config,
+                                                                            apiUrl: e.target.value
+                                                                        }
+                                                                    }))}
+                                                                    className="mt-2 w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                                />
+                                                            </label>
+                                                            <label className="block text-xs uppercase tracking-wider text-gray-400">
+                                                                API Key
+                                                                <input
+                                                                    type="text"
+                                                                    value={config.apiKey || ''}
+                                                                    onChange={(e) => setPaymentSettings(prev => ({
+                                                                        ...prev,
+                                                                        [provider.key]: {
+                                                                            ...config,
+                                                                            apiKey: e.target.value
+                                                                        }
+                                                                    }))}
+                                                                    className="mt-2 w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                                />
+                                                            </label>
+                                                            <label className="block text-xs uppercase tracking-wider text-gray-400 sm:col-span-2">
+                                                                Account Number / Merchant ID
+                                                                <input
+                                                                    type="text"
+                                                                    value={config.accountNumber || ''}
+                                                                    onChange={(e) => setPaymentSettings(prev => ({
+                                                                        ...prev,
+                                                                        [provider.key]: {
+                                                                            ...config,
+                                                                            accountNumber: e.target.value
+                                                                        }
+                                                                    }))}
+                                                                    className="mt-2 w-full rounded-xl border border-gray-700 bg-gray-950 px-4 py-2 text-sm text-white focus:border-blue-500 focus:outline-none"
+                                                                />
+                                                            </label>
+                                                        </div>
+                                                    </div>
+                                                );
+                                            })}
+                                            {settingsMessage && <div className="rounded-xl bg-green-500/10 border border-green-500/20 p-4 text-sm text-green-200">{settingsMessage}</div>}
+                                            <button
+                                                onClick={handleSavePaymentSettings}
+                                                disabled={settingsSaving}
+                                                className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60"
+                                            >
+                                                Save Payment Settings
+                                            </button>
+                                        </div>
+                                    );
+                                default:
+                                    return null;
+                            }
     };
 
     return (
@@ -496,6 +631,7 @@ const AdminDashboard: React.FC = () => {
                         <button onClick={() => setView('rooms')} className={`w-full py-2 rounded ${view === 'rooms' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Rooms</button>
                         <button onClick={() => setView('transactions')} className={`w-full py-2 rounded ${view === 'transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Transactions</button>
                         <button onClick={() => setView('manual-transactions')} className={`w-full py-2 rounded ${view === 'manual-transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Manual Transactions</button>
+                        <button onClick={() => setView('payment-settings')} className={`w-full py-2 rounded ${view === 'payment-settings' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Payment Settings</button>
                     </div>
 
                     <div className="bg-gray-800 p-6 rounded-lg">

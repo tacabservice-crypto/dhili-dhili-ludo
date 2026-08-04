@@ -27,7 +27,18 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
   
   const [phone, setPhone] = useState('');
   const [senderPhone, setSenderPhone] = useState('');
+  type PaymentProviderConfig = {
+    enabled: boolean;
+    apiKey?: string;
+    apiUrl?: string;
+    accountNumber?: string;
+  };
+
   const [provider, setProvider] = useState<'evc' | 'edahab' | 'sahal' | 'premier'>('evc');
+  const [paymentSettings, setPaymentSettings] = useState<Record<string, PaymentProviderConfig>>({});
+  const [apiProcessing, setApiProcessing] = useState(false);
+  const [apiMessage, setApiMessage] = useState<string>('');
+  const [apiError, setApiError] = useState<string>('');
 
   const [ussdString, setUssdString] = useState('');
   const [isCopied, setIsCopied] = useState(false);
@@ -52,6 +63,20 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     }
   }, [user.id, activeTab]);
 
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await fetch('/api/payment/settings');
+        if (!response.ok) return;
+        const data = await response.json();
+        setPaymentSettings(data);
+      } catch (err) {
+        console.error('Unable to fetch payment settings', err);
+      }
+    };
+    fetchSettings();
+  }, []);
+
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setIsCopied(true);
@@ -61,9 +86,14 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     });
   };
   
+  const selectedPaymentProvider = paymentSettings[provider];
+  const isProviderApiConfigured = !!selectedPaymentProvider?.enabled && !!selectedPaymentProvider?.apiKey;
+
   const handleRequestConfirmation = async () => {
     setConfirmationLoading(true);
     setError('');
+    setApiError('');
+    setApiMessage('');
     try {
         const response = await fetch('/api/wallet/request-manual-confirmation', {
             method: 'POST',
@@ -91,7 +121,72 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     }
 };
 
-  const handleGenerateUssd = (e: React.FormEvent) => {
+const handleProcessApiPayment = async () => {
+  setApiProcessing(true);
+  setError('');
+  setApiError('');
+  setApiMessage('');
+
+  const amtFloat = parseFloat(amount);
+  if (isNaN(amtFloat) || amtFloat <= 0) {
+    setApiError(language === 'so' ? 'Fadlan geli lacag sax ah oo togan.' : 'Please enter a valid positive amount.');
+    setApiProcessing(false);
+    return;
+  }
+
+  if (activeTab === 'withdraw') {
+    if (amtFloat > user.balance) {
+      setApiError(language === 'so' ? 'Haraagaaga kuma filna kala bixiddaan.' : 'Insufficient balance for this withdrawal.');
+      setApiProcessing(false);
+      return;
+    }
+    if (!phone.trim()) {
+      setApiError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta kula baxayso.' : 'Please enter the phone number for the withdrawal.');
+      setApiProcessing(false);
+      return;
+    }
+  }
+
+  if (activeTab === 'deposit' && !senderPhone.trim()) {
+    setApiError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta ka soo direyso.' : 'Please enter the phone number you are sending from.');
+    setApiProcessing(false);
+    return;
+  }
+
+  try {
+    const response = await fetch('/api/wallet/process-api-payment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: user.id,
+        amount: amtFloat,
+        phone: activeTab === 'withdraw' ? phone : undefined,
+        senderPhone: activeTab === 'deposit' ? senderPhone : undefined,
+        provider,
+        transactionType: activeTab,
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      setApiError(data.error || 'Failed to process payment via API.');
+    } else {
+      setApiMessage(data.message || (language === 'so' ? 'Lacagta si guul leh ayaa loo farsameeyay.' : 'Payment processed successfully via API.'));
+      setConfirmationRequested(true);
+      onBalanceUpdated();
+      setAmount('');
+      setPhone('');
+      setSenderPhone('');
+    }
+  } catch (err) {
+    console.error('API payment failed:', err);
+    setApiError(language === 'so' ? 'Waxaa dhacay cilad lama filaan ah. Fadlan isku day markale.' : 'An unexpected error occurred. Please try again.');
+  } finally {
+    setApiProcessing(false);
+  }
+};
+
+const handleGenerateUssd = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setUssdString('');
@@ -121,9 +216,9 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
         }
     }
     
-    // Disable USSD generation for Premier Bank for now
-    if (provider === 'premier') {
-        setError(language === 'so' ? 'Kani waa hab bangi oo u baahan is-dhexgalka API. Fadlan dooro bixiye kale oo USSD ah.' : 'This is a bank method that requires API integration. Please select another USSD provider.');
+    // Disable USSD generation for Premier Bank unless API is configured.
+    if (provider === 'premier' && !isProviderApiConfigured) {
+        setError(language === 'so' ? 'Kani waa hab bangi oo u baahan is-dhexgalka API. Fadlan dooro bixiye kale oo USSD ah ama ku xidh API Settings-ka.' : 'This is a bank method that requires API integration. Please select another USSD provider or configure API settings.' );
         return;
     }
 
@@ -152,6 +247,8 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     setUssdString('');
     setAmount('');
     setError('');
+    setApiError('');
+    setApiMessage('');
     setConfirmationRequested(false);
   }
 
@@ -280,7 +377,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                     </button>
                 </div>
              ) : (
-              <form onSubmit={handleGenerateUssd} className="space-y-4">
+              <form className="space-y-4">
                 <div className="space-y-1.5">
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                     {language === 'so' ? 'Shirkadda Lacagta' : 'Payment Provider'}
@@ -313,6 +410,20 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                   </div>
                 </div>
 
+                {isProviderApiConfigured ? (
+                  <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-100">
+                    {language === 'so'
+                      ? 'API-ga shirkaddan waa la habeysay. Haddii aad rabto, xaqiiji macluumaadka oo dhagsii badhanka hoose si aad lacagta u qabato adigoon isticmaalin USSD.'
+                      : 'This provider is configured for API payments. Process payment directly through the API instead of using USSD.'}
+                  </div>
+                ) : provider === 'premier' ? (
+                  <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-100">
+                    {language === 'so'
+                      ? 'Premier Bank wuxuu u baahan yahay API si toos ah. Fadlan u sheeg maamulka inuu ku daro Payment Settings ama dooro bixiye kale.'
+                      : 'Premier Bank requires API integration. Ask the admin to configure it in Payment Settings or choose another provider.'}
+                  </div>
+                ) : null}
+
                 {activeTab === 'withdraw' && (
                   <div className="space-y-1 animate-in fade-in duration-300">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
@@ -328,7 +439,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                     />
                   </div>
                 )}
-                
+                 
                 {activeTab === 'deposit' && (
                     <>
                         <div className="space-y-1 animate-in fade-in duration-300">
@@ -382,20 +493,57 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                   ))}
                 </div>
 
-                <button
-                  type="submit"
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-blue-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
-                >
-                  {activeTab === 'deposit' ? (
-                    <>
-                      <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Samee Koodhka Dhigaalka' : 'Generate Deposit Code'}
-                    </>
-                  ) : (
-                    <>
-                      <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Samee Koodhka Kala-bixidda' : 'Generate Withdraw Code'}
-                    </>
-                  )}
-                </button>
+                {apiError && (
+                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
+                    {apiError}
+                  </div>
+                )}
+
+                {apiMessage && (
+                  <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-3 text-sm text-green-100">
+                    {apiMessage}
+                  </div>
+                )}
+
+                {isProviderApiConfigured ? (
+                  <button
+                    type="button"
+                    onClick={handleProcessApiPayment}
+                    disabled={apiProcessing}
+                    className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-cyan-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {apiProcessing ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        {language === 'so' ? 'Waa la farsameynayaa...' : 'Processing...'}
+                      </>
+                    ) : activeTab === 'deposit' ? (
+                      <>
+                        <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Dhig Lacag API-ga' : 'Deposit via API'}
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Kala-bixi API-ga' : 'Withdraw via API'}
+                      </>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={handleGenerateUssd}
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-blue-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
+                  >
+                    {activeTab === 'deposit' ? (
+                      <>
+                        <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Samee Koodhka Dhigaalka' : 'Generate Deposit Code'}
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Samee Koodhka Kala-bixidda' : 'Generate Withdraw Code'}
+                      </>
+                    )}
+                  </button>
+                )}
               </form>
             )
           ) : (

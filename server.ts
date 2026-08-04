@@ -133,6 +133,22 @@ if (serviceAccount) {
 // ==========================================
 // 1. DATA STORE SETUP & PERSISTENCE
 // ==========================================
+interface PaymentProviderConfig {
+  enabled: boolean;
+  apiKey?: string;
+  apiUrl?: string;
+  accountNumber?: string;
+}
+
+type PaymentProviderKey = 'evc' | 'edahab' | 'sahal' | 'premier';
+
+const DEFAULT_PAYMENT_PROVIDERS: Record<PaymentProviderKey, PaymentProviderConfig> = {
+  evc: { enabled: false },
+  edahab: { enabled: false },
+  sahal: { enabled: false },
+  premier: { enabled: false },
+};
+
 interface DBStore {
   users: Record<string, UserProfile>;
   transactions: WalletTransaction[];
@@ -140,6 +156,7 @@ interface DBStore {
   matchmakingQueues: Record<string, string[]>; // betAmount -> array of userIds
   houseRevenue: number;
   pendingManualTransactions: ManualTransactionRequest[];
+  paymentProviders: Record<PaymentProviderKey, PaymentProviderConfig>;
 }
 
 let store: DBStore = {
@@ -155,7 +172,8 @@ let store: DBStore = {
     50: []
   },
   houseRevenue: 0,
-  pendingManualTransactions: []
+  pendingManualTransactions: [],
+  paymentProviders: { ...DEFAULT_PAYMENT_PROVIDERS }
 };
 
 // Load store from disk (local backup/fallback)
@@ -173,6 +191,10 @@ function loadStore() {
       };
       store.houseRevenue = parsed.houseRevenue || 0;
       store.pendingManualTransactions = parsed.pendingManualTransactions || [];
+      store.paymentProviders = {
+        ...DEFAULT_PAYMENT_PROVIDERS,
+        ...(parsed.paymentProviders || {})
+      };
       console.log('Database loaded successfully from disk.');
     } else {
       saveStoreAndWait();
@@ -204,6 +226,10 @@ async function loadStoreFromFirestore() {
         };
         store.houseRevenue = parsed.houseRevenue || 0;
         store.pendingManualTransactions = parsed.pendingManualTransactions || [];
+        store.paymentProviders = {
+          ...DEFAULT_PAYMENT_PROVIDERS,
+          ...(parsed.paymentProviders || {})
+        };
         console.log('Database loaded successfully from Firebase Firestore.');
         // Update local file backup
         fs.writeFileSync(DB_FILE, payload.data, 'utf8');
@@ -1293,6 +1319,60 @@ app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
 app.get('/api/wallet/transactions/:userId', (req, res) => {
   const txs = store.transactions.filter(t => t.userId === req.params.userId);
   res.json(txs);
+});
+
+app.get('/api/payment/settings', (req, res) => {
+  res.json(store.paymentProviders);
+});
+
+app.post('/api/wallet/process-api-payment', async (req, res) => {
+  const { userId, amount, phone, senderPhone, provider, transactionType } = req.body;
+  if (!userId || !amount || !provider || !transactionType) {
+    return res.status(400).json({ error: 'Missing required api payment fields.' });
+  }
+
+  const providerKey = provider as PaymentProviderKey;
+  const config = store.paymentProviders[providerKey];
+  if (!config || !config.enabled || !config.apiKey) {
+    return res.status(400).json({ error: 'API is not configured for this provider.' });
+  }
+
+  const user = store.users[userId];
+  if (!user) {
+    return res.status(404).json({ error: 'User not found.' });
+  }
+
+  const parsedAmount = parseFloat(amount);
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    return res.status(400).json({ error: 'Invalid amount.' });
+  }
+
+  if (transactionType === 'withdraw') {
+    if (!phone) {
+      return res.status(400).json({ error: 'Phone number is required for withdrawal requests.' });
+    }
+    if (user.balance < parsedAmount) {
+      return res.status(400).json({ error: 'Insufficient funds.' });
+    }
+    user.balance -= parsedAmount;
+    addTransaction(userId, 'withdrawal', parsedAmount, undefined, `API withdrawal via ${providerKey}.`);
+    broadcastUserUpdate(userId);
+    await saveStoreAndWait();
+    return res.json({ success: true, balance: user.balance, message: 'Withdrawal processed via API.' });
+  }
+
+  if (transactionType === 'deposit') {
+    if (!senderPhone) {
+      return res.status(400).json({ error: 'Sender phone number is required for deposit requests.' });
+    }
+    user.balance += parsedAmount;
+    addTransaction(userId, 'deposit', parsedAmount, undefined, `API deposit via ${providerKey}.`);
+    broadcastUserUpdate(userId);
+    await saveStoreAndWait();
+    return res.json({ success: true, balance: user.balance, message: 'Deposit processed via API.' });
+  }
+
+  return res.status(400).json({ error: 'Unsupported transaction type.' });
 });
 
 
@@ -2799,6 +2879,25 @@ app.get('/api/admin/transactions', isAdmin, (req, res) => {
 // Get all pending manual transactions
 app.get('/api/admin/manual-transactions', isAdmin, (req, res) => {
     res.json(store.pendingManualTransactions || []);
+});
+
+app.get('/api/admin/payment-settings', isAdmin, (req, res) => {
+    res.json(store.paymentProviders);
+});
+
+app.post('/api/admin/payment-settings', isAdmin, async (req, res) => {
+    const paymentProviders = req.body.paymentProviders;
+    if (!paymentProviders || typeof paymentProviders !== 'object') {
+        return res.status(400).json({ error: 'Invalid payment settings payload.' });
+    }
+
+    store.paymentProviders = {
+        ...DEFAULT_PAYMENT_PROVIDERS,
+        ...paymentProviders
+    };
+
+    await saveStoreAndWait();
+    res.json({ success: true, paymentProviders: store.paymentProviders });
 });
 
 // Approve a manual transaction
