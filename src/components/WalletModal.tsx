@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Copy, Check, Phone } from 'lucide-react';
+import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Check, Phone } from 'lucide-react';
 import { UserProfile, WalletTransaction } from '../types/game';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency } from '../utils/number';
@@ -78,15 +78,6 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     fetchSettings();
   }, []);
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text).then(() => {
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
-    }, (err) => {
-      console.error('Could not copy text: ', err);
-    });
-  };
-  
   const selectedPaymentProvider = paymentSettings[provider];
   const isProviderApiConfigured = !!selectedPaymentProvider?.enabled && !!selectedPaymentProvider?.apiKey;
 
@@ -405,17 +396,16 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                         <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
                             <p className="text-xs text-slate-300 font-semibold">
                                 {language === 'so'
-                                    ? 'Koodhka dhigaalka waa diyaar. Nuqul ka samee si aad u isticmaasho.'
-                                    : 'Your deposit code is ready. Copy it to use as needed.'}
+                                    ? 'Koodhka dhigaalka waa diyaar. Taabo Dir si aad USSD-ga u furto.'
+                                    : 'Your deposit code is ready. Tap Dir to open the USSD dialer.'}
                             </p>
-                            <button
-                                type="button"
-                                onClick={() => copyToClipboard(ussdString)}
-                                className="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2"
+                            <a
+                                href={`tel:${ussdString}`}
+                                className="w-full inline-flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow gap-2"
                             >
-                                <Copy className="w-4 h-4" />
-                                {language === 'so' ? 'Nuqul Ka Samee Koodhka' : 'Copy Deposit Code'}
-                            </button>
+                                <Phone className="w-4 h-4" />
+                                Dir
+                            </a>
                         </div>
                         <button
                             type="button"
