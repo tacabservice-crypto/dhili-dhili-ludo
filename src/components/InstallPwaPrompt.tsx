@@ -105,8 +105,8 @@ const InstallPwaPrompt = () => {
              </button>
            ) : (
              <button
-               disabled
-               className="mt-3 w-full bg-slate-700/70 text-slate-200 font-medium text-xs py-2 px-4 rounded-lg border border-slate-600 text-center opacity-80 cursor-not-allowed"
+               onClick={() => alert(getInstallGuide())}
+               className="mt-3 w-full bg-slate-700/70 text-slate-200 font-medium text-xs py-2 px-4 rounded-lg border border-slate-600 text-center"
              >
                Raac tilmaamaha
              </button>
