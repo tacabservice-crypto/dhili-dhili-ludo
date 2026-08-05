@@ -603,6 +603,12 @@ export default function GameRoomView({
             Ciyaar kale Bilow (Play Another Game) ⚔️
           </button>
         </div>
+
+        {/* Audio elements for sound effects */}
+        <audio ref={diceAudioRef} src={diceAudioSrc} preload="auto" />
+        <audio ref={winAudioRef} src={winAudioSrc} preload="auto" />
+        <audio ref={forfeitAudioRef} src={forfeitAudioSrc} preload="auto" />
+        <audio ref={captureAudioRef} src={captureAudioSrc} preload="auto" />
       </div>
     );
   }
