@@ -44,6 +44,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 // Import audio assets directly
 import diceAudioSrc from '../assets/dice.mp3';
 import winAudioSrc from '../assets/win.mp3';
+import forfeitAudioSrc from '../assets/forfeit.mp3';
+import captureAudioSrc from '../assets/capture.mp3';
 
 interface GameRoomProps {
   room: GameRoom;
@@ -116,6 +118,9 @@ export default function GameRoomView({
   const voiceControlsRef = useRef<HTMLDivElement>(null); // New ref for voice controls popover
   const diceAudioRef = useRef<HTMLAudioElement>(null);
   const winAudioRef = useRef<HTMLAudioElement>(null);
+  const forfeitAudioRef = useRef<HTMLAudioElement>(null);
+  const captureAudioRef = useRef<HTMLAudioElement>(null);
+  const prevTokensRef = useRef<LudoToken[]>(room.gameState.tokens);
   const { width, height } = useWindowSize();
   const { 
     initializeVoiceChat,
@@ -257,16 +262,47 @@ export default function GameRoomView({
     }
   }, [room.gameState.diceRoll, room.gameState.hasRolled, isSpeakerOn]);
 
-  // Win sound effect
+  // Win/Loss sound effect
   useEffect(() => {
-    if (room.status === 'completed') {
-      const isWinner = room.gameState.winnerId === userId;
-      if (isWinner && isSpeakerOn && winAudioRef.current) {
-        winAudioRef.current.volume = 0.7;
-        winAudioRef.current.play().catch(e => console.error("Error playing win sound:", e));
+    if (room.status === 'completed' && room.gameState.winnerId && isSpeakerOn) {
+      if (room.gameState.winnerId === userId) {
+        // I am the winner
+        if (winAudioRef.current) {
+          winAudioRef.current.volume = 0.7;
+          winAudioRef.current.play().catch(e => console.error("Error playing win sound:", e));
+        }
+      } else {
+        // I am not the winner, so I lost.
+        if (forfeitAudioRef.current) {
+          forfeitAudioRef.current.volume = 0.6;
+          forfeitAudioRef.current.play().catch(e => console.error("Error playing forfeit/loss sound:", e));
+        }
       }
     }
-  }, [room.status, userId, isSpeakerOn]);
+  }, [room.status, room.gameState.winnerId, userId, isSpeakerOn]);
+
+  // Capture sound effect
+  useEffect(() => {
+    const prevTokens = prevTokensRef.current;
+    const currentTokens = room.gameState.tokens;
+
+    // Check if any token moved to base
+    if (isSpeakerOn && captureAudioRef.current) {
+      for (const currentToken of currentTokens) {
+        const prevToken = prevTokens.find(t => t.id === currentToken.id);
+        // If a token was on the board and is now in the base, it was captured.
+        if (prevToken && prevToken.position > -1 && currentToken.position === -1) {
+          captureAudioRef.current.volume = 0.5;
+          captureAudioRef.current.play().catch(e => console.error("Error playing capture sound:", e));
+          // Play sound only once per state change, even if multiple tokens were captured (rare).
+          break;
+        }
+      }
+    }
+
+    // Update the ref for the next render.
+    prevTokensRef.current = currentTokens;
+  }, [room.gameState.tokens, isSpeakerOn]);
 
 
   // Automated Auto-Roll checker
@@ -1223,6 +1259,8 @@ export default function GameRoomView({
       {/* Audio elements for sound effects */}
       <audio ref={diceAudioRef} src={diceAudioSrc} preload="auto" />
       <audio ref={winAudioRef} src={winAudioSrc} preload="auto" />
+      <audio ref={forfeitAudioRef} src={forfeitAudioSrc} preload="auto" />
+      <audio ref={captureAudioRef} src={captureAudioSrc} preload="auto" />
     </div>
   );
 }
