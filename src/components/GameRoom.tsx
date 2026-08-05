@@ -46,6 +46,7 @@ import diceAudioSrc from '../assets/dice.mp3';
 import winAudioSrc from '../assets/win.mp3';
 import forfeitAudioSrc from '../assets/forfeit.mp3';
 import captureAudioSrc from '../assets/capture.mp3';
+import tokenOutAudioSrc from '../assets/token_out.mp3';
 
 interface GameRoomProps {
   room: GameRoom;
@@ -120,7 +121,9 @@ export default function GameRoomView({
   const winAudioRef = useRef<HTMLAudioElement>(null);
   const forfeitAudioRef = useRef<HTMLAudioElement>(null);
   const captureAudioRef = useRef<HTMLAudioElement>(null);
+  const tokenOutAudioRef = useRef<HTMLAudioElement>(null);
   const prevTokensRef = useRef<LudoToken[]>(room.gameState.tokens);
+  const hasPlayedFirstTokenOutSound = useRef<string[]>([]);
   const { width, height } = useWindowSize();
   const { 
     initializeVoiceChat,
@@ -281,28 +284,57 @@ export default function GameRoomView({
     }
   }, [room.status, room.gameState.winnerId, userId, isSpeakerOn]);
 
-  // Capture sound effect
+  // Sound effects based on token state changes (Capture, Token Out)
   useEffect(() => {
     const prevTokens = prevTokensRef.current;
     const currentTokens = room.gameState.tokens;
 
-    // Check if any token moved to base
-    if (isSpeakerOn && captureAudioRef.current) {
+    // Only proceed if tokens have actually changed
+    if (prevTokens === currentTokens) {
+      // Update the ref for the next render.
+      prevTokensRef.current = currentTokens;
+      return;
+    }
+
+    // Check for captures or tokens leaving base
+    if (isSpeakerOn) {
       for (const currentToken of currentTokens) {
         const prevToken = prevTokens.find(t => t.id === currentToken.id);
-        // If a token was on the board and is now in the base, it was captured.
-        if (prevToken && prevToken.position > -1 && currentToken.position === -1) {
-          captureAudioRef.current.volume = 0.5;
-          captureAudioRef.current.play().catch(e => console.error("Error playing capture sound:", e));
-          // Play sound only once per state change, even if multiple tokens were captured (rare).
-          break;
+        if (prevToken) {
+          // CAPTURE: Token moved from board to base
+          if (prevToken.position > -1 && currentToken.position === -1) {
+            if (captureAudioRef.current) {
+              captureAudioRef.current.volume = 0.5;
+              captureAudioRef.current.play().catch(e => console.error("Error playing capture sound:", e));
+              // Break early to play only one sound per token state update, if multiple events occurred simultaneously.
+              break; 
+            }
+          }
+          
+          // TOKEN OUT: Token moved from base to board
+          if (prevToken.position === -1 && currentToken.position > -1) {
+            // Check if the sound has already been played for this player
+            if (!hasPlayedFirstTokenOutSound.current.includes(currentToken.ownerId)) {
+              if (tokenOutAudioRef.current) {
+                tokenOutAudioRef.current.volume = 0.6;
+                tokenOutAudioRef.current.play().catch(e => console.error("Error playing token out sound:", e));
+                
+                // Add the player to the list of players for whom the sound has been played
+                hasPlayedFirstTokenOutSound.current.push(currentToken.ownerId);
+
+                // Break early to play only one sound per token state update.
+                break;
+              }
+            }
+          }
         }
       }
     }
 
-    // Update the ref for the next render.
+    // Update the ref for the next render. This must be outside the sound playing logic.
+    // It's crucial for the next comparison.
     prevTokensRef.current = currentTokens;
-  }, [room.gameState.tokens, isSpeakerOn]);
+  }, [room.gameState.tokens, isSpeakerOn, userId]);
 
 
   // Automated Auto-Roll checker
@@ -609,6 +641,7 @@ export default function GameRoomView({
         <audio ref={winAudioRef} src={winAudioSrc} preload="auto" />
         <audio ref={forfeitAudioRef} src={forfeitAudioSrc} preload="auto" />
         <audio ref={captureAudioRef} src={captureAudioSrc} preload="auto" />
+        <audio ref={tokenOutAudioRef} src={tokenOutAudioSrc} preload="auto" />
       </div>
     );
   }
@@ -1267,6 +1300,7 @@ export default function GameRoomView({
       <audio ref={winAudioRef} src={winAudioSrc} preload="auto" />
       <audio ref={forfeitAudioRef} src={forfeitAudioSrc} preload="auto" />
       <audio ref={captureAudioRef} src={captureAudioSrc} preload="auto" />
+      <audio ref={tokenOutAudioRef} src={tokenOutAudioSrc} preload="auto" />
     </div>
   );
 }
