@@ -41,6 +41,10 @@ import { useVoiceChat } from '../context/VoiceChatContext';
 import { formatCurrency } from '../utils/number';
 import { useLocation, useNavigate } from 'react-router-dom';
 
+// Import audio assets directly
+import diceAudioSrc from '../assets/dice.mp3';
+import winAudioSrc from '../assets/win.mp3';
+
 interface GameRoomProps {
   room: GameRoom;
   user: UserProfile;
@@ -1217,8 +1221,8 @@ export default function GameRoomView({
         />
       )}
       {/* Audio elements for sound effects */}
-      <audio ref={diceAudioRef} src="/dice.mp3" preload="auto" />
-      <audio ref={winAudioRef} src="/win.mp3" preload="auto" />
+      <audio ref={diceAudioRef} src={diceAudioSrc} preload="auto" />
+      <audio ref={winAudioRef} src={winAudioSrc} preload="auto" />
     </div>
   );
 }
