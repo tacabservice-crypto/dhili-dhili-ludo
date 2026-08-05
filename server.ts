@@ -538,20 +538,14 @@ function createInitialTokens(userId: string, color: PlayerColor): LudoToken[] {
 
 // Check if a move is possible for a token
 function isMoveValid(token: LudoToken, roll: number): boolean {
-  if (token.position === 56) return false; // Finished
+  if (token.position === 56) return false; // Already finished
   if (token.position === -1) {
-    return roll === 6; // Releases from home base on rolling 6
+    return roll === 6; // Can only leave base with a 6
   }
 
-  // Check for moves on the main track that cross into the home stretch
-  const homeEntry = HOME_ENTRY_POSITIONS[token.color];
-  if (token.position <= homeEntry && token.position + roll > homeEntry) {
-    const stepsIntoHomeStretch = (token.position + roll) - homeEntry;
-    const finalHomePosition = 50 + stepsIntoHomeStretch;
-    return finalHomePosition <= 56;
-  }
-
-  // Standard move on the main track or within the home stretch
+  // In the relative coordinate system (0-50 is main track, 51-56 is home stretch),
+  // any move is valid as long as it doesn't overshoot the final home square (56).
+  // The logic in `moveTokenLogic` will handle the transition correctly.
   return token.position + roll <= 56;
 }
 
@@ -700,25 +694,54 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
 
   const activePlayer = room.players[gs.turn];
   const oldPos = token.position;
+  let newPos = oldPos;
 
-  // Calculate new position
-  if (token.position === -1 && diceValue === 6) {
-    token.position = 0;
-    addLog(room, `${activePlayer.username} moved token out of base onto start!`);
-  } else {
-    const homeEntry = HOME_ENTRY_POSITIONS[token.color];
-    let newPos = token.position;
+  const RELATIVE_HOME_ENTRY_SQUARE = 51; // The first square of the home stretch in relative terms (e.g., green enters at relative 51)
+  const MAIN_TRACK_LENGTH = 52; // Main track has squares 0-51
 
-    // Check if move crosses into the home stretch
-    if (token.position <= homeEntry && token.position + diceValue > homeEntry) {
-      const stepsIntoHomeStretch = (token.position + diceValue) - homeEntry;
-      newPos = 50 + stepsIntoHomeStretch;
-    } else {
-      // Standard move
-      newPos += diceValue;
+  // Logic for leaving home base
+  if (oldPos === -1 && diceValue === 6) {
+    newPos = 0; // Relative start position is 0
+    addLog(room, `${activePlayer.username} moved token out of base!`);
+  }
+  // Logic for tokens already on the board (0 or more)
+  else if (oldPos >= 0) {
+    // Case 1: Token is currently on the main track (0-50)
+    if (oldPos < RELATIVE_HOME_ENTRY_SQUARE) {
+      const theoreticalNewPos = oldPos + diceValue;
+      // A token can only enter the home stretch if it is on the approach path.
+      // This prevents a token at the start from jumping to the end with a large roll.
+      // We check if the old position is within 6 squares of the home entry point.
+      if (oldPos >= (RELATIVE_HOME_ENTRY_SQUARE - 6) && oldPos < RELATIVE_HOME_ENTRY_SQUARE && theoreticalNewPos >= RELATIVE_HOME_ENTRY_SQUARE) {
+        // Move enters or passes into home stretch (51-56)
+        newPos = theoreticalNewPos;
+      } else {
+        // Standard move on the main circular track.
+        newPos = theoreticalNewPos;
+        if (newPos >= MAIN_TRACK_LENGTH) {
+            newPos = newPos % MAIN_TRACK_LENGTH;
+        }
+      }
     }
-    token.position = newPos;
-    addLog(room, `${activePlayer.username} moved token by ${diceValue} spaces (from ${oldPos} to ${token.position}).`);
+    // Case 2: Token is already in home stretch (51-55)
+    else { // oldPos >= RELATIVE_HOME_ENTRY_SQUARE
+      newPos = oldPos + diceValue;
+    }
+  }
+
+  // If a token overshoots 56, it stays at its old position.
+  // This prevents moving out of the home stretch once inside.
+  if (newPos > 56) {
+      newPos = oldPos; // Revert to old position
+      addLog(room, `${activePlayer.username}'s token overshot the final home square and could not move.`);
+  }
+  
+  // Update token position
+  token.position = newPos;
+
+  // Only log if the position actually changed
+  if (oldPos !== newPos) {
+      addLog(room, `${activePlayer.username} moved token by ${diceValue} spaces (from ${oldPos === -1 ? 'base' : oldPos} to ${newPos}).`);
   }
 
   // Check cutting mechanism
@@ -739,7 +762,7 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
         if (isAlly) return false;
       }
 
-      if (t.position < 0 || t.position > 50) return false; // base or stretch
+      if (t.position < 0 || t.position >= RELATIVE_HOME_ENTRY_SQUARE) return false; // base or stretch (only check main track 0-50)
       const otherGlobal = getGlobalPosition(t.color, t.position);
       return otherGlobal === finalGlobal;
     });
@@ -755,7 +778,7 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
   }
 
   // Check if player has finished this token
-  if (token.position === 56) {
+  if (token.position === 56) { // Assuming 56 is the final spot.
     addLog(room, `🎉 Token finished! ${activePlayer.username} has safely brought a token home!`);
     bonusTurn = true; // Completing token grants bonus turn
   }
@@ -3197,8 +3220,18 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
+    
+    // Serve static assets (JS, CSS, images) with default caching.
+    // These files have hashes in their names, so they can be cached aggressively.
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
+    
+    // For all other non-API routes, serve the index.html file.
+    // We explicitly set no-cache headers for index.html to ensure
+    // clients always get the latest version of the app shell.
+    app.get(/^(?!\/api).*/, (req, res) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }

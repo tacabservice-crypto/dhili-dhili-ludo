@@ -104,9 +104,12 @@ const InstallPwaPrompt = () => {
                Hadda Rakib
              </button>
            ) : (
-             <div className="mt-3 w-full bg-slate-700/70 text-slate-200 font-medium text-[11px] py-2 px-3 rounded-lg border border-slate-600 text-center">
-               {isIOS ? 'iPhone/iPad Safari' : isAndroid ? 'Android browser' : 'Browser install support'}
-             </div>
+             <button
+               disabled
+               className="mt-3 w-full bg-slate-700/70 text-slate-200 font-medium text-xs py-2 px-4 rounded-lg border border-slate-600 text-center opacity-80 cursor-not-allowed"
+             >
+               Raac tilmaamaha
+             </button>
            )}
          </div>
          <button onClick={handleDismissClick} className="p-1 hover:bg-white/10 rounded-full" aria-label="Dismiss install prompt">
