@@ -11,7 +11,7 @@ export default defineConfig(() => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'logo.svg'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'logo.svg', 'dice.mp3', 'win.mp3'],
         manifest: {
           name: 'Dhili Dhili Ludo',
           short_name: 'DDL',
