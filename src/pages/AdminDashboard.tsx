@@ -609,11 +609,11 @@ const AdminDashboard: React.FC = () => {
                                     </tr>
                                 </thead>
                                 <tbody className="bg-gray-900 divide-y divide-gray-700">
-                                    {adminSettings?.roles?.map((role: string) => (
-                                        <tr key={role}>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{role}</td>
+                                    {adminSettings?.roles?.map((role: { name: string }) => (
+                                        <tr key={role.name}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{role.name}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <button onClick={() => handleDeleteRole(role)} className="text-red-400 hover:text-red-600">Delete</button>
+                                                <button onClick={() => handleDeleteRole(role.name)} className="text-red-400 hover:text-red-600">Delete</button>
                                             </td>
                                         </tr>
                                     ))}
