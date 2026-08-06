@@ -8,7 +8,22 @@ import ChangePasswordForm from '../components/ChangePasswordForm'; // Import Cha
 import { formatCurrency } from '../utils/number';
 
 const AdminDashboard: React.FC = () => {
-    const [adminId, setAdminId] = useState<string | null>(localStorage.getItem('admin_id'));
+        // Define AdminUser interface to match backend
+    interface AdminUser {
+        id: string;
+        username: string;
+        permissions: string[];
+    }
+
+    const [adminUser, setAdminUser] = useState<AdminUser | null>(() => {
+        const storedUser = localStorage.getItem('admin_user');
+        try {
+            return storedUser ? JSON.parse(storedUser) : null;
+        } catch {
+            return null;
+        }
+    });
+    const adminId = adminUser?.id;
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'agents' | 'settings'>('stats');
@@ -58,21 +73,19 @@ const AdminDashboard: React.FC = () => {
                 body: JSON.stringify({ username, password }),
             });
             if (!response.ok) {
-                // Try to parse error message, but handle cases where it's not JSON
                 let errorMessage = 'Login failed. Please check credentials.';
                 try {
                     const data = await response.json();
                     errorMessage = data.error || errorMessage;
                 } catch (e) {
-                    // Response was not JSON, could be a server error page
                     console.error("Failed to parse error response as JSON", e);
                 }
                 throw new Error(errorMessage);
             }
             const data = await response.json();
-            if (data.success) {
-                localStorage.setItem('admin_id', data.userId);
-                setAdminId(data.userId);
+            if (data.success && data.user) {
+                localStorage.setItem('admin_user', JSON.stringify(data.user));
+                setAdminUser(data.user);
             } else {
                 throw new Error(data.error || 'Login failed');
             }
@@ -82,15 +95,15 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleLogout = () => {
-        localStorage.removeItem('admin_id');
-        setAdminId(null);
+        localStorage.removeItem('admin_user');
+        setAdminUser(null);
     };
 
     const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'agents' | 'settings') => {
-        if (!adminId) return;
+        if (!adminUser) return;
         setError(null);
         try {
-            const response = await fetch(`/api/admin/${type}?userId=${adminId}`);
+            const response = await fetch(`/api/admin/${type}?userId=${adminUser.id}`);
             if (!response.ok) {
                 let errMessage = `Failed to fetch ${type}`;
                 try {
@@ -142,20 +155,20 @@ const AdminDashboard: React.FC = () => {
     };
 
     useEffect(() => {
-        if (adminId) {
+        if (adminUser) {
             fetchData(view);
             if (view === 'settings') {
                 fetchData('payment-settings');
                 fetchData('settings');
             }
         }
-    }, [adminId, view]);
+    }, [adminUser, view]);
 
     const handleSaveUser = async (updatedData: Partial<UserProfile>) => {
-        if (!editingUser || !adminId) return;
+        if (!editingUser || !adminUser) return;
         
         try {
-            const response = await fetch(`/api/admin/users/${editingUser.id}/update?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/users/${editingUser.id}/update?userId=${adminUser.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(updatedData),
@@ -173,10 +186,10 @@ const AdminDashboard: React.FC = () => {
     };
     
     const handleDeleteUser = async (userToDelete: UserProfile) => {
-        if (!adminId || !window.confirm(`Are you sure you want to delete user ${userToDelete.username}? This action cannot be undone.`)) return;
+        if (!adminUser || !window.confirm(`Are you sure you want to delete user ${userToDelete.username}? This action cannot be undone.`)) return;
 
         try {
-            const response = await fetch(`/api/admin/users/${userToDelete.id}/delete?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/users/${userToDelete.id}/delete?userId=${adminUser.id}`, {
                 method: 'DELETE',
             });
             if (!response.ok) {
@@ -190,10 +203,10 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleImpersonate = async (userToImpersonate: UserProfile) => {
-        if (!adminId || !window.confirm(`Are you sure you want to log in as ${userToImpersonate.username}?`)) return;
+        if (!adminUser || !window.confirm(`Are you sure you want to log in as ${userToImpersonate.username}?`)) return;
 
         try {
-            const response = await fetch(`/api/admin/impersonate?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/impersonate?userId=${adminUser.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ userId: userToImpersonate.id }),
@@ -213,10 +226,10 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleCancelGame = async (roomId: string) => {
-        if (!adminId || !window.confirm(`Are you sure you want to cancel room ${roomId}?`)) return;
+        if (!adminUser || !window.confirm(`Are you sure you want to cancel room ${roomId}?`)) return;
 
         try {
-            const response = await fetch(`/api/admin/rooms/${roomId}/cancel?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/rooms/${roomId}/cancel?userId=${adminUser.id}`, {
                 method: 'POST',
             });
             if (!response.ok) {
@@ -230,10 +243,10 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleViewUserGames = async (user: UserProfile) => {
-        if (!adminId) return;
+        if (!adminUser) return;
         setError(null);
         try {
-            const response = await fetch(`/api/admin/users/${user.id}/games?userId=${adminId}`);
+            const response = await fetch(`/api/admin/users/${user.id}/games?userId=${adminUser.id}`);
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.error || `Failed to fetch game history`);
@@ -247,9 +260,9 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleApproveTransaction = async (transactionId: string) => {
-        if (!adminId || !window.confirm('Are you sure you want to approve this transaction?')) return;
+        if (!adminUser || !window.confirm('Are you sure you want to approve this transaction?')) return;
         try {
-            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/approve?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/approve?userId=${adminUser.id}`, {
                 method: 'POST',
             });
             if (!response.ok) {
@@ -263,9 +276,9 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleRejectTransaction = async (transactionId: string) => {
-        if (!adminId || !window.confirm('Are you sure you want to reject this transaction?')) return;
+        if (!adminUser || !window.confirm('Are you sure you want to reject this transaction?')) return;
         try {
-            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/reject?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/reject?userId=${adminUser.id}`, {
                 method: 'POST',
             });
             if (!response.ok) {
@@ -279,10 +292,10 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleCreateRole = async () => {
-        if (!adminId || !newRoleName) return;
+        if (!adminUser || !newRoleName) return;
         setError(null);
         try {
-            const response = await fetch(`/api/admin/roles/create?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/roles/create?userId=${adminUser.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: newRoleName }),
@@ -299,10 +312,10 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleDeleteRole = async (roleName: string) => {
-        if (!adminId || !window.confirm(`Are you sure you want to delete the role "${roleName}"?`)) return;
+        if (!adminUser || !window.confirm(`Are you sure you want to delete the role "${roleName}"?`)) return;
         setError(null);
         try {
-            const response = await fetch(`/api/admin/roles/delete?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/roles/delete?userId=${adminUser.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name: roleName }),
@@ -380,7 +393,7 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    if (!adminId) {
+    if (!adminUser) {
         return (
             <div className="bg-gray-900 text-white min-h-screen flex items-center justify-center">
                 <div className="bg-gray-800 p-8 rounded-lg shadow-lg text-center w-full max-w-sm">
@@ -424,7 +437,7 @@ const AdminDashboard: React.FC = () => {
                             <h2 className="text-2xl font-bold text-white mb-4">Admin Settings</h2>
                             <div className="bg-gray-800 p-6 rounded-lg">
                                 <ChangePasswordForm 
-                                    userId={adminId}
+                                    userId={adminUser.id}
                                     onSuccess={(message) => {
                                         setAdminSettingSuccessMessage(message);
                                         setAdminSettingErrorMessage(null);

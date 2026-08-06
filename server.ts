@@ -3232,48 +3232,135 @@ app.get('/api/rooms/check-status/:roomId', (req, res) => {
 // 6. ADMIN API ENDPOINTS
 // ==========================================
 
-// Login endpoint for admin
-app.post('/api/admin/login', (req, res) => {
+// Define the new AdminUser structure
+interface AdminUser {
+    id: string;
+    username: string;
+    password: string; // In a real app, this MUST be hashed.
+    permissions: string[]; // e.g., ['manage_users', 'view_stats', 'all']
+}
+
+// New Login endpoint for admin
+app.post('/api/admin/login', async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { username, password } = req.body;
 
-    // 1. Check for the master admin
-    const adminUsername = store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin';
-    const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password';
+    try {
+        const adminUsersRef = db.collection('adminUsers');
+        const snapshot = await adminUsersRef.where('username', '==', username).get();
 
-    if (username === adminUsername && password === adminPassword) {
-        const adminUserId = 'internal_admin_user_id';
-        return res.json({ success: true, userId: adminUserId });
+        if (snapshot.empty) {
+            return res.status(401).json({ success: false, error: 'Invalid admin credentials.' });
+        }
+
+        const adminUserDoc = snapshot.docs[0];
+        const adminUser = adminUserDoc.data() as AdminUser;
+
+        // IMPORTANT: Passwords should be hashed. This is a plain text comparison for now.
+        if (adminUser.password === password) {
+            // Return the user object without the password
+            const { password: _, ...userToReturn } = adminUser;
+            res.json({ success: true, user: userToReturn });
+        } else {
+            res.status(401).json({ success: false, error: 'Invalid admin credentials.' });
+        }
+    } catch (error) {
+        console.error('Admin login failed:', error);
+        res.status(500).json({ error: 'An error occurred during admin login.' });
     }
-
-    // 2. Check for a user with an assigned role and password
-    const userAsAdmin = Object.values(store.users).find(u => u.username === username && u.role && u.role !== 'player' && u.password);
-    
-    if (userAsAdmin && userAsAdmin.password === password) {
-        // Use the actual user's ID for the session
-        return res.json({ success: true, userId: userAsAdmin.id });
-    }
-
-    res.status(401).json({ success: false, error: 'Invalid admin credentials.' });
 });
 
-// Middleware to check for admin access
-function isAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
-    const userId = req.query.userId;
-    // Trim userId to safeguard against leading/trailing whitespace from query params
-    const trimmedUserId = typeof userId === 'string' ? userId.trim() : '';
+// New middleware factory to check for specific permissions
+const hasPermission = (requiredPermission: string) => {
+    return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+        if (!db) return res.status(500).json({ error: 'Database not initialized' });
 
-    if (trimmedUserId === 'internal_admin_user_id') {
-        return next();
+        const adminId = req.query.userId as string;
+        if (!adminId) {
+            return res.status(403).json({ error: 'Access denied. Admin user ID is required.' });
+        }
+
+        try {
+            const adminUserRef = db.collection('adminUsers').doc(adminId);
+            const adminUserDoc = await adminUserRef.get();
+
+            if (!adminUserDoc.exists) {
+                return res.status(403).json({ error: 'Access denied. Invalid admin user.' });
+            }
+
+            const adminUser = adminUserDoc.data() as AdminUser;
+            // The 'all' permission grants access to everything
+            if (adminUser.permissions.includes('all') || adminUser.permissions.includes(requiredPermission)) {
+                next(); // User has permission, proceed
+            } else {
+                res.status(403).json({ error: 'Access denied. You do not have permission for this action.' });
+            }
+        } catch (error) {
+            console.error('Permission check failed:', error);
+            res.status(500).json({ error: 'An error occurred during permission check.' });
+        }
+    };
+};
+
+// Endpoint to create a new admin user. Only accessible by a root admin with 'all' permission.
+app.post('/api/admin/admins/create', hasPermission('all'), async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+    const { username, password, permissions } = req.body;
+
+    if (!username || !password || !Array.isArray(permissions)) {
+        return res.status(400).json({ error: 'Username, password, and a list of permissions are required.' });
     }
-    
-    // Fallback for user-role based admin
-    const user = store.users[trimmedUserId];
-    if (user && user.role && user.role !== 'player') { // Check if user has any role other than player
-        return next();
+
+    try {
+        const adminUsersRef = db.collection('adminUsers');
+        const existingAdmin = await adminUsersRef.where('username', '==', username).get();
+        if (!existingAdmin.empty) {
+            return res.status(409).json({ error: 'An admin with this username already exists.' });
+        }
+        
+        const newAdminId = `admin_${Date.now()}`;
+        const newAdmin: AdminUser = {
+            id: newAdminId,
+            username,
+            password, // Again, should be hashed!
+            permissions,
+        };
+
+        await adminUsersRef.doc(newAdminId).set(newAdmin);
+        
+        const { password: _, ...userToReturn } = newAdmin;
+        res.status(201).json({ success: true, user: userToReturn });
+
+    } catch (error) {
+        console.error('Failed to create admin user:', error);
+        res.status(500).json({ error: 'Failed to create admin user.' });
     }
-    
-    res.status(403).json({ error: 'Access denied. You do not have admin privileges.' });
-}
+});
+
+
+// A temporary replacement for the old isAdmin to bridge the transition.
+// It verifies that the request comes from a valid admin user in the new system,
+// but doesn't check for specific granular permissions.
+// This will be replaced with hasPermission('permission_name') calls on each endpoint.
+const isAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+
+    const adminId = req.query.userId as string;
+    if (!adminId) {
+        return res.status(403).json({ error: 'Access denied. Admin user ID is required.' });
+    }
+
+    db.collection('adminUsers').doc(adminId).get().then(doc => {
+        if (doc.exists) {
+            next(); // It's a valid admin, let them pass for now.
+        } else {
+            res.status(403).json({ error: 'Access denied. Invalid admin user.' });
+        }
+    }).catch(error => {
+        console.error('Admin validation failed:', error);
+        res.status(500).json({ error: 'An error occurred during admin validation.' });
+    });
+};
 
 app.get('/api/admin/settings', isAdmin, (req, res) => {
     res.json({
@@ -3510,12 +3597,21 @@ app.post('/api/admin/users/:userId/update', isAdmin, async (req, res) => {
 // ==================================
 
 // Get all agents
-app.get('/api/admin/agents', isAdmin, (req, res) => {
-  res.json(Object.values(store.agents || {}));
+app.get('/api/admin/agents', isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: 'Database not initialized' });
+  try {
+    const agentsSnapshot = await db.collection('agents').get();
+    const agents = agentsSnapshot.docs.map(doc => doc.data());
+    res.json(agents);
+  } catch (error) {
+    console.error('Failed to get agents:', error);
+    res.status(500).json({ error: 'Failed to retrieve agents from database.' });
+  }
 });
 
 // Create a new agent
 app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: 'Database not initialized' });
   const { username, password, commissionRate } = req.body;
 
   if (!username || !password || !commissionRate) {
@@ -3534,73 +3630,102 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Commission rate must be a number between 0 and 1.' });
   }
 
-  // Check if username already exists
-  if (Object.values(store.agents).some(agent => agent.username === username)) {
-    return res.status(409).json({ error: 'Agent with this username already exists.' });
+  try {
+    // Check if username already exists in Firestore
+    const agentsRef = db.collection('agents');
+    const existingAgentSnapshot = await agentsRef.where('username', '==', username).get();
+    if (!existingAgentSnapshot.empty) {
+      return res.status(409).json({ error: 'Agent with this username already exists.' });
+    }
+
+    const agentId = `agent_${Date.now()}`;
+    const newAgent: Agent = {
+      id: agentId,
+      username,
+      password, // In a real app, this should be hashed and salted
+      commissionRate: rate,
+      balance: 0,
+      floatBalance: 0,
+      status: 'Active',
+      createdAt: Date.now(),
+    };
+
+    await agentsRef.doc(agentId).set(newAgent);
+
+    res.status(201).json(newAgent);
+  } catch (error) {
+    console.error('Failed to create agent:', error);
+    res.status(500).json({ error: 'Failed to create agent in database.' });
   }
-
-  const agentId = `agent_${Date.now()}`;
-  const newAgent: Agent = {
-    id: agentId,
-    username,
-    password, // In a real app, this should be hashed and salted
-    commissionRate: rate,
-    balance: 0,
-    floatBalance: 0,
-    status: 'Active',
-    createdAt: Date.now(),
-  };
-
-  store.agents[agentId] = newAgent;
-  await saveStoreAndWait();
-
-  res.status(201).json(newAgent);
 });
 
 // Update an agent's details
 app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { agentId } = req.params;
-    const agent = store.agents[agentId];
-
-    if (!agent) {
-        return res.status(404).json({ error: 'Agent not found.' });
-    }
-
     const { username, password, commissionRate, status } = req.body;
+    
+    try {
+        const agentRef = db.collection('agents').doc(agentId);
+        const agentDoc = await agentRef.get();
 
-    if (username && typeof username === 'string' && username.length >= 3) {
-        agent.username = username;
-    }
-    if (password && typeof password === 'string' && password.length >= 6) {
-        agent.password = password; // Should be hashed
-    }
-    if (commissionRate && typeof commissionRate === 'number' && commissionRate >= 0 && commissionRate <= 1) {
-        agent.commissionRate = commissionRate;
-    }
-    if (status && ['Active', 'Suspended'].includes(status)) {
-        agent.status = status;
-    }
+        if (!agentDoc.exists) {
+            return res.status(404).json({ error: 'Agent not found.' });
+        }
 
-    await saveStoreAndWait();
-    res.json({ success: true, agent });
+        const updateData: Partial<Agent> = {};
+
+        if (username && typeof username === 'string' && username.length >= 3) {
+            updateData.username = username;
+        }
+        if (password && typeof password === 'string' && password.length >= 6) {
+            updateData.password = password; // Should be hashed
+        }
+        if (commissionRate && typeof commissionRate === 'number' && commissionRate >= 0 && commissionRate <= 1) {
+            updateData.commissionRate = commissionRate;
+        }
+        if (status && ['Active', 'Suspended'].includes(status)) {
+            updateData.status = status;
+        }
+
+        if (Object.keys(updateData).length === 0) {
+            return res.status(400).json({ error: 'No valid fields to update.' });
+        }
+
+        await agentRef.update(updateData);
+        
+        const updatedAgentDoc = await agentRef.get();
+        res.json({ success: true, agent: updatedAgentDoc.data() });
+    } catch (error) {
+        console.error(`Failed to update agent ${agentId}:`, error);
+        res.status(500).json({ error: 'Failed to update agent in database.' });
+    }
 });
 
 // Delete an agent
 app.delete('/api/admin/agents/:agentId/delete', isAdmin, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { agentId } = req.params;
-    const agent = store.agents[agentId];
 
-    if (!agent) {
-        return res.status(404).json({ error: 'Agent not found.' });
+    try {
+        const agentRef = db.collection('agents').doc(agentId);
+        const agentDoc = await agentRef.get();
+
+        if (!agentDoc.exists) {
+            return res.status(404).json({ error: 'Agent not found.' });
+        }
+
+        await agentRef.delete();
+        res.json({ success: true, message: 'Agent deleted successfully.' });
+    } catch (error) {
+        console.error(`Failed to delete agent ${agentId}:`, error);
+        res.status(500).json({ error: 'Failed to delete agent from database.' });
     }
-
-    delete store.agents[agentId];
-    await saveStoreAndWait();
-    res.json({ success: true, message: 'Agent deleted successfully.' });
 });
 
 // Credit an agent's float balance
 app.post('/api/admin/agents/credit-float', isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: 'Database not initialized' });
   const { agentId, amount, discount } = req.body;
   const creditAmount = parseFloat(amount);
   const discountAmount = parseFloat(discount) || 0;
@@ -3609,30 +3734,43 @@ app.post('/api/admin/agents/credit-float', isAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Valid agentId and a positive amount are required.' });
   }
 
-  const agent = store.agents[agentId];
-  if (!agent) {
-    return res.status(404).json({ error: 'Agent not found.' });
+  try {
+    const agentRef = db.collection('agents').doc(agentId);
+    const transactionRef = db.collection('agentTransactions').doc(); // Auto-generate ID
+
+    const transactionData: AgentTransaction = {
+      id: transactionRef.id,
+      agentId: agentId,
+      type: 'FloatPurchase',
+      amount: creditAmount,
+      discountAmount: discountAmount,
+      timestamp: Date.now(),
+      description: `Admin credited ${creditAmount} to float with a ${discountAmount} discount.`
+    };
+
+    await db.runTransaction(async (t) => {
+      const agentDoc = await t.get(agentRef);
+      if (!agentDoc.exists) {
+        throw new Error('Agent not found.'); // This will be caught and sent as 500, can be refined
+      }
+      const currentFloat = agentDoc.data()?.floatBalance || 0;
+      const newFloatBalance = currentFloat + creditAmount;
+
+      t.update(agentRef, { floatBalance: newFloatBalance });
+      t.set(transactionRef, transactionData);
+    });
+    
+    const updatedAgent = await agentRef.get();
+
+    res.json({ success: true, agent: updatedAgent.data(), transaction: transactionData });
+  } catch (error) {
+    console.error(`Failed to credit agent ${agentId}:`, error);
+    // Basic error handling, could check for specific error types
+    if ((error as Error).message === 'Agent not found.') {
+        return res.status(404).json({ error: 'Agent not found.' });
+    }
+    res.status(500).json({ error: 'Failed to credit agent float in database.' });
   }
-
-  agent.floatBalance = (agent.floatBalance || 0) + creditAmount;
-
-  const transaction: AgentTransaction = {
-    id: `atx_${Date.now()}`,
-    agentId: agentId,
-    type: 'FloatPurchase',
-    amount: creditAmount,
-    discountAmount: discountAmount,
-    timestamp: Date.now(),
-    description: `Admin credited ${creditAmount} to float with a ${discountAmount} discount.`
-  };
-  if (!store.agentTransactions) {
-    store.agentTransactions = [];
-  }
-  store.agentTransactions.unshift(transaction);
-
-  await saveStoreAndWait();
-
-  res.json({ success: true, agent, transaction });
 });
 
 
@@ -3725,21 +3863,38 @@ app.post('/api/admin/broadcast', isAdmin, (req, res) => {
 // ==========================================
 
 // Middleware to check for agent access
-function isAgent(req: any, res: express.Response, next: express.NextFunction) {
+async function isAgent(req: any, res: express.Response, next: express.NextFunction) {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const agentId = req.query.agentId as string;
     if (!agentId) {
         return res.status(401).json({ error: 'Agent ID is required for this operation.' });
     }
-    const agent = store.agents[agentId];
-    if (!agent || agent.status !== 'Active') {
-        return res.status(403).json({ error: 'Access denied. Invalid or inactive agent ID.' });
+    
+    try {
+        const agentRef = db.collection('agents').doc(agentId);
+        const agentDoc = await agentRef.get();
+
+        if (!agentDoc.exists) {
+            return res.status(403).json({ error: 'Access denied. Invalid agent ID.' });
+        }
+        
+        const agent = agentDoc.data() as Agent;
+
+        if (agent.status !== 'Active') {
+            return res.status(403).json({ error: 'Access denied. Inactive agent ID.' });
+        }
+
+        req.agent = agent; // Attach agent object to the request
+        next();
+    } catch (error) {
+        console.error('Agent verification failed:', error);
+        res.status(500).json({ error: 'Failed to verify agent status.' });
     }
-    req.agent = agent; // Attach agent object to the request
-    next();
 }
 
 // Get agent's own profile data
 app.get('/api/agent/profile', isAgent, (req, res) => {
+    // The isAgent middleware now attaches the full agent object from Firestore.
     const agent = (req as any).agent;
     res.json(agent);
 });
@@ -3761,14 +3916,25 @@ app.get('/api/agent/player-lookup', isAgent, (req, res) => {
 });
 
 // Get agent's own transaction history
-app.get('/api/agent/transactions', isAgent, (req, res) => {
+app.get('/api/agent/transactions', isAgent, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const agent = (req as any).agent;
-    const transactions = store.agentTransactions.filter(t => t.agentId === agent.id);
-    res.json(transactions);
+    try {
+        const snapshot = await db.collection('agentTransactions')
+            .where('agentId', '==', agent.id)
+            .orderBy('timestamp', 'desc')
+            .get();
+        const transactions = snapshot.docs.map(doc => doc.data());
+        res.json(transactions);
+    } catch (error) {
+        console.error(`Failed to get transactions for agent ${agent.id}:`, error);
+        res.status(500).json({ error: 'Failed to retrieve agent transactions.' });
+    }
 });
 
 // Deposit funds from an agent's float to a player's wallet
 app.post('/api/agent/deposit', isAgent, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const agent: Agent = (req as any).agent;
     const { playerId, amount } = req.body;
     const depositAmount = parseFloat(amount);
@@ -3776,47 +3942,70 @@ app.post('/api/agent/deposit', isAgent, async (req, res) => {
     if (!playerId || !depositAmount || depositAmount <= 0) {
         return res.status(400).json({ error: 'Valid playerId and a positive amount are required.' });
     }
-
+    
+    // NOTE: The 'users' collection is still managed by the in-memory 'store'.
+    // This is a temporary state during refactoring. A proper solution
+    // would fetch the player from a 'users' collection in Firestore.
     const player = store.users[playerId];
     if (!player) {
         return res.status(404).json({ error: 'Player not found.' });
     }
+    
+    try {
+        const agentRef = db.collection('agents').doc(agent.id);
+        const agentTxRef = db.collection('agentTransactions').doc();
 
-    if (agent.floatBalance < depositAmount) {
-        return res.status(400).json({ error: 'Insufficient float balance.' });
+        await db.runTransaction(async (t) => {
+            const agentDoc = await t.get(agentRef);
+            if (!agentDoc.exists) throw new Error('Agent not found.');
+
+            const agentData = agentDoc.data() as Agent;
+            if (agentData.floatBalance < depositAmount) {
+                throw new Error('Insufficient float balance.');
+            }
+
+            const newFloatBalance = agentData.floatBalance - depositAmount;
+            t.update(agentRef, { floatBalance: newFloatBalance });
+
+            const agentTx: AgentTransaction = {
+                id: agentTxRef.id,
+                agentId: agent.id,
+                type: 'PlayerDeposit',
+                amount: depositAmount,
+                playerId: playerId,
+                timestamp: Date.now(),
+                description: `Deposited ${depositAmount} into ${player.username}'s account.`
+            };
+            t.set(agentTxRef, agentTx);
+        });
+
+        // This part remains, but is also part of the old system.
+        // It should be refactored to be part of the transaction.
+        player.balance += depositAmount;
+        addTransaction(
+            playerId,
+            'deposit',
+            depositAmount,
+            undefined,
+            `Deposit received from agent ${agent.id}.`
+        );
+        await saveStoreAndWait(); // This saves the player's new balance.
+
+        broadcastUserUpdate(player.id);
+        
+        const updatedAgentDoc = await agentRef.get();
+        const updatedAgent = updatedAgentDoc.data();
+
+        res.json({ success: true, newAgentBalance: updatedAgent?.floatBalance, newPlayerBalance: player.balance });
+
+    } catch (error) {
+        console.error(`Agent ${agent.id} failed to deposit to player ${playerId}:`, error);
+        const errorMessage = (error instanceof Error) ? error.message : 'An unknown error occurred.';
+        if (errorMessage.includes('Insufficient')) {
+            return res.status(400).json({ error: errorMessage });
+        }
+        res.status(500).json({ error: `Failed to process deposit: ${errorMessage}` });
     }
-
-    // Perform the transaction
-    agent.floatBalance -= depositAmount;
-    player.balance += depositAmount;
-
-    // Log agent transaction
-    const agentTx: AgentTransaction = {
-        id: `atx_${Date.now()}`,
-        agentId: agent.id,
-        type: 'PlayerDeposit',
-        amount: depositAmount,
-        playerId: playerId,
-        timestamp: Date.now(),
-        description: `Deposited ${depositAmount} into ${player.username}'s account.`
-    };
-    store.agentTransactions.unshift(agentTx);
-
-    // Log player wallet transaction
-    addTransaction(
-        playerId,
-        'deposit',
-        depositAmount,
-        undefined,
-        `Deposit received from agent ${agent.id}.`
-    );
-
-    await saveStoreAndWait();
-
-    // Notify player of their new balance
-    broadcastUserUpdate(player.id);
-
-    res.json({ success: true, newAgentBalance: agent.floatBalance, newPlayerBalance: player.balance });
 });
 
 
