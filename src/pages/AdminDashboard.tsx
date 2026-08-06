@@ -15,6 +15,14 @@ const AdminDashboard: React.FC = () => {
         permissions: string[];
     }
 
+    type AdminRole = {
+        id: string;
+        name: string;
+        username: string;
+        permissions: string[];
+        status: 'active' | 'suspended';
+    }
+
     const [adminUser, setAdminUser] = useState<AdminUser | null>(() => {
         const storedUser = localStorage.getItem('admin_user');
         try {
@@ -58,6 +66,8 @@ const AdminDashboard: React.FC = () => {
     const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
     const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
     const [creditingAgent, setCreditingAgent] = useState<Agent | null>(null);
+    const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
+    const [isEditRoleModalOpen, setIsEditRoleModalOpen] = useState(false);
     const [viewingUserGames, setViewingUserGames] = useState<GameRoom[] | null>(null);
     const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
     const [broadcastMessage, setBroadcastMessage] = useState('');
