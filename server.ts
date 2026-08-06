@@ -3235,31 +3235,43 @@ app.get('/api/rooms/check-status/:roomId', (req, res) => {
 // Login endpoint for admin
 app.post('/api/admin/login', (req, res) => {
     const { username, password } = req.body;
+
+    // 1. Check for the master admin
     const adminUsername = store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin';
     const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password';
 
     if (username === adminUsername && password === adminPassword) {
-        // In a real app, you'd create a secure session.
-        // For this app, we'll just use a static ID that the frontend can store.
         const adminUserId = 'internal_admin_user_id';
-        res.json({ success: true, userId: adminUserId });
-    } else {
-        res.status(401).json({ success: false, error: 'Invalid username or password' });
+        return res.json({ success: true, userId: adminUserId });
     }
+
+    // 2. Check for a user with an assigned role and password
+    const userAsAdmin = Object.values(store.users).find(u => u.username === username && u.role && u.role !== 'player' && u.password);
+    
+    if (userAsAdmin && userAsAdmin.password === password) {
+        // Use the actual user's ID for the session
+        return res.json({ success: true, userId: userAsAdmin.id });
+    }
+
+    res.status(401).json({ success: false, error: 'Invalid admin credentials.' });
 });
 
 // Middleware to check for admin access
 function isAdmin(req: express.Request, res: express.Response, next: express.NextFunction) {
-    const { userId } = req.query;
-    if (userId === 'internal_admin_user_id') {
+    const userId = req.query.userId;
+    // Trim userId to safeguard against leading/trailing whitespace from query params
+    const trimmedUserId = typeof userId === 'string' ? userId.trim() : '';
+
+    if (trimmedUserId === 'internal_admin_user_id') {
         return next();
     }
-    // In a real app, you would have a more robust check here
-    // based on session or a permissions system.
-    const user = store.users[userId as string];
-    if (user && user.role === 'admin') {
+    
+    // Fallback for user-role based admin
+    const user = store.users[trimmedUserId];
+    if (user && user.role && user.role !== 'player') { // Check if user has any role other than player
         return next();
     }
+    
     res.status(403).json({ error: 'Access denied. You do not have admin privileges.' });
 }
 
@@ -3389,9 +3401,13 @@ app.post('/api/admin/manual-transactions/:transactionId/approve', isAdmin, async
     if (tx.transactionType === 'deposit') {
         user.balance += tx.amount;
         addTransaction(user.id, 'deposit', tx.amount, undefined, `Manual deposit approved by admin. Request ID: ${tx.id}`);
-    } else {
+    } else { // withdrawal
         if (user.balance < tx.amount) {
-            return res.status(400).json({ error: 'Insufficient balance to approve this withdrawal request.' });
+            // Not enough balance, reject it instead
+            tx.status = 'rejected';
+            await saveStoreAndWait();
+            // No balance change needed since funds were never held
+            return res.status(400).json({ error: 'Insufficient balance to approve this withdrawal request. Transaction has been rejected.' });
         }
         user.balance -= tx.amount;
         addTransaction(user.id, 'withdrawal', tx.amount, undefined, `Manual withdrawal approved by admin. Request ID: ${tx.id}`);
@@ -3412,22 +3428,26 @@ app.post('/api/admin/manual-transactions/:transactionId/reject', isAdmin, async 
     if (!tx || tx.status !== 'pending') {
         return res.status(404).json({ error: 'Pending transaction not found or already processed.' });
     }
-    
+
     const user = store.users[tx.userId];
     if (!user) {
-        return res.status(404).json({ error: 'User associated with transaction not found.' });
+        // Even if user not found, we can still mark transaction as rejected
+        tx.status = 'rejected';
+        await saveStoreAndWait();
+        return res.status(404).json({ error: 'User associated with transaction not found. Transaction rejected.' });
     }
-
-    // If it was a withdrawal request, we need to refund the user's balance
-    if (tx.transactionType === 'withdraw') {
-        user.balance += tx.amount;
-        addTransaction(user.id, 'refund', tx.amount, undefined, `Withdrawal request ${tx.id} rejected, funds returned.`);
-    }
-
+    
+    // On rejection, no balance change should occur. Funds are only moved on approval.
+    // The previous logic incorrectly "refunded" money that was never taken.
     tx.status = 'rejected';
     await saveStoreAndWait();
     
-    broadcastUserUpdate(user.id);
+    // Notify the user their request was rejected, but their balance is unchanged.
+    sendEventToUser(user.id, 'user_notification', {
+        type: 'info',
+        message: `Your ${tx.transactionType} request for $${tx.amount} was rejected.`
+    });
+    
     res.json({ success: true, transaction: tx });
 });
 
@@ -3445,31 +3465,44 @@ app.post('/api/admin/impersonate', isAdmin, (req, res) => {
 });
 
 // Update a user's details (e.g., balance, role)
-app.post('/api/admin/users/:userId/update', isAdmin, (req, res) => {
+app.post('/api/admin/users/:userId/update', isAdmin, async (req, res) => {
     const { userId } = req.params;
-    const user = store.users[userId];
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
+    const userToUpdate = store.users[userId];
+
+    if (!userToUpdate) {
+        return res.status(404).json({ error: 'User not found.' });
     }
+    
+    const { username, avatar, balance, winCount, lossCount, role, password } = req.body;
 
-    const { balance, role, winCount, lossCount } = req.body;
-
+    if (typeof username === 'string' && username.trim()) {
+        userToUpdate.username = username.trim();
+    }
+    if (typeof avatar === 'string' && avatar.trim()) {
+        userToUpdate.avatar = avatar.trim();
+    }
     if (typeof balance === 'number') {
-        user.balance = balance;
-    }
-    if (role && ['admin', 'player'].includes(role)) {
-        user.role = role;
+        userToUpdate.balance = balance;
     }
     if (typeof winCount === 'number') {
-        user.winCount = winCount;
+        userToUpdate.winCount = winCount;
     }
     if (typeof lossCount === 'number') {
-        user.lossCount = lossCount;
+        userToUpdate.lossCount = lossCount;
+    }
+    if (typeof role === 'string' && role.trim()) {
+        userToUpdate.role = role.trim();
+    }
+    // Only update password if a non-empty string is provided
+    if (typeof password === 'string' && password.trim()) {
+        // In a real app, hash this password before saving!
+        userToUpdate.password = password;
     }
 
-    saveStore();
-    broadcastUserUpdate(user.id); // Notify user of the change
-    res.json(user);
+    await saveStoreAndWait();
+    
+    broadcastUserUpdate(userId);
+    res.json(userToUpdate);
 });
 
 // ==================================
@@ -3513,6 +3546,8 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
     password, // In a real app, this should be hashed and salted
     commissionRate: rate,
     balance: 0,
+    floatBalance: 0,
+    status: 'Active',
     createdAt: Date.now(),
   };
 
@@ -3520,6 +3555,48 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
   await saveStoreAndWait();
 
   res.status(201).json(newAgent);
+});
+
+// Update an agent's details
+app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
+    const { agentId } = req.params;
+    const agent = store.agents[agentId];
+
+    if (!agent) {
+        return res.status(404).json({ error: 'Agent not found.' });
+    }
+
+    const { username, password, commissionRate, status } = req.body;
+
+    if (username && typeof username === 'string' && username.length >= 3) {
+        agent.username = username;
+    }
+    if (password && typeof password === 'string' && password.length >= 6) {
+        agent.password = password; // Should be hashed
+    }
+    if (commissionRate && typeof commissionRate === 'number' && commissionRate >= 0 && commissionRate <= 1) {
+        agent.commissionRate = commissionRate;
+    }
+    if (status && ['Active', 'Suspended'].includes(status)) {
+        agent.status = status;
+    }
+
+    await saveStoreAndWait();
+    res.json({ success: true, agent });
+});
+
+// Delete an agent
+app.delete('/api/admin/agents/:agentId/delete', isAdmin, async (req, res) => {
+    const { agentId } = req.params;
+    const agent = store.agents[agentId];
+
+    if (!agent) {
+        return res.status(404).json({ error: 'Agent not found.' });
+    }
+
+    delete store.agents[agentId];
+    await saveStoreAndWait();
+    res.json({ success: true, message: 'Agent deleted successfully.' });
 });
 
 // Credit an agent's float balance
@@ -3537,7 +3614,7 @@ app.post('/api/admin/agents/credit-float', isAdmin, async (req, res) => {
     return res.status(404).json({ error: 'Agent not found.' });
   }
 
-  agent.floatBalance += creditAmount;
+  agent.floatBalance = (agent.floatBalance || 0) + creditAmount;
 
   const transaction: AgentTransaction = {
     id: `atx_${Date.now()}`,
@@ -3548,6 +3625,9 @@ app.post('/api/admin/agents/credit-float', isAdmin, async (req, res) => {
     timestamp: Date.now(),
     description: `Admin credited ${creditAmount} to float with a ${discountAmount} discount.`
   };
+  if (!store.agentTransactions) {
+    store.agentTransactions = [];
+  }
   store.agentTransactions.unshift(transaction);
 
   await saveStoreAndWait();

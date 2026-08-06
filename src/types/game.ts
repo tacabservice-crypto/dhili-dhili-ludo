@@ -14,6 +14,8 @@ export interface UserProfile {
   lossCount: number;
   isOfflinePreference?: boolean;
   vip?: { tier: string; expires: number; };
+  role?: string;
+  password?: string; // In a real app, this should be securely hashed.
 }
 
 export interface WalletTransaction {
@@ -120,6 +122,8 @@ export interface Agent {
   password?: string; // Should be hashed
   commissionRate: number;
   balance: number;
+  floatBalance?: number;
+  status?: 'Active' | 'Suspended';
   createdAt: number;
 }
 

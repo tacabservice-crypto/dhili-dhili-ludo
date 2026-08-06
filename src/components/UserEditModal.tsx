@@ -2,21 +2,28 @@ import React, { useState } from 'react';
 import { UserProfile } from '../types/game';
 import ChangePasswordModal from './ChangePasswordModal';
 
+interface Role {
+    id: string;
+    name: string;
+}
+
 interface UserEditModalProps {
     user: UserProfile;
     onClose: () => void;
     onSave: (updatedUser: Partial<UserProfile>) => Promise<void>;
     isAdmin?: boolean;
+    roles: Role[];
 }
 
 const AVATARS = ['😀', '😎', '🚀', '🧠', '👑', '💪', '🎉', '🔥', '💯', '🎲', '🤔','😂','😃','😄','😅','😆','😉','😊','😋','😌','😍','😏','😐','😑','😒','😓','pensive','😕','😖','😗','😘','😙','😚','😛','😜','😝','😞','😟','😠','😡','😢','😣','😤','😥','😦','😧','😨','😩','😪','😫','😬','😭','😮','😯','😰','😱','😲','😳','😴','😵','😶','😷'];
 
-const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, isAdmin = false }) => {
+const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, isAdmin = false, roles = [] }) => {
     const [formData, setFormData] = useState({
         username: user.username,
         avatar: user.avatar,
+        role: user.role || 'player',
     });
-    const [password, setPassword] = useState<string | null>(null);
+    const [newPassword, setNewPassword] = useState('');
     const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false);
     const [customAvatar, setCustomAvatar] = useState('');
     const [avatarType, setAvatarType] = useState<'emoji' | 'url'>('emoji');
@@ -32,9 +39,11 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, is
         setError(null);
         setIsSaving(true);
         const dataToSave: Partial<UserProfile> = { ...formData };
-        // if (password) {
-        //     dataToSave.password = password;
-        // }
+        
+        if (newPassword) {
+            dataToSave.password = newPassword;
+        }
+
         if (avatarType === 'url' && customAvatar) {
             dataToSave.avatar = customAvatar;
         }
@@ -48,8 +57,10 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, is
         }
     };
 
-    const handlePasswordSave = (newPassword: string) => {
-        setPassword(newPassword);
+    const handlePasswordSave = (password: string) => {
+        // This is for the user changing their own password, not the admin reset
+        // We'll use the new simple text input for admin resets.
+        setNewPassword(password);
         setIsPasswordModalOpen(false);
     };
 
@@ -100,7 +111,31 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, is
                         )}
                         {isAdmin && (
                             <>
-                                {/* Admin fields here */}
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400">Role</label>
+                                    <select 
+                                        name="role" 
+                                        value={formData.role} 
+                                        onChange={(e) => setFormData(prev => ({ ...prev, role: e.target.value }))} 
+                                        className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1"
+                                    >
+                                        <option value="player">Player</option>
+                                        {roles.map(role => (
+                                            <option key={role.id} value={role.id}>{role.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-400">Set/Reset Password</label>
+                                    <input 
+                                        type="text" 
+                                        name="password" 
+                                        value={newPassword}
+                                        onChange={(e) => setNewPassword(e.target.value)} 
+                                        placeholder="Enter new password (optional)"
+                                        className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" 
+                                    />
+                                </div>
                             </>
                         )}
                     </div>
@@ -118,11 +153,6 @@ const UserEditModal: React.FC<UserEditModalProps> = ({ user, onClose, onSave, is
                                 {isSaving ? 'Kaydinaya...' : 'Save Changes'}
                             </button>
                         </div>
-                        {isAdmin && (
-                            <button onClick={() => onSave({ role: user.role === 'admin' ? 'player' : 'admin' })} className={`font-bold py-2 px-4 rounded ${user.role === 'admin' ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white`}>
-                                {user.role === 'admin' ? 'Revoke Admin' : 'Make Admin'}
-                            </button>
-                        )}
                     </div>
                     {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
                 </div>
