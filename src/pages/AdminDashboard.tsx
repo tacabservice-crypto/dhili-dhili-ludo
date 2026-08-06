@@ -11,7 +11,7 @@ const AdminDashboard: React.FC = () => {
     const [adminId, setAdminId] = useState<string | null>(localStorage.getItem('admin_id'));
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'agents'>('stats');
+    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'agents' | 'settings'>('stats');
     const [error, setError] = useState<string | null>(null);
     const [adminSettingSuccessMessage, setAdminSettingSuccessMessage] = useState<string | null>(null);
     const [adminSettingErrorMessage, setAdminSettingErrorMessage] = useState<string | null>(null);
@@ -142,7 +142,8 @@ const AdminDashboard: React.FC = () => {
     useEffect(() => {
         if (adminId) {
             fetchData(view);
-            if (view === 'users' && !adminSettings) {
+            if (view === 'settings') {
+                fetchData('payment-settings');
                 fetchData('settings');
             }
         }
@@ -367,6 +368,170 @@ const AdminDashboard: React.FC = () => {
         );
     }
 
+    const renderSettingsView = () => {
+        return (
+            <div className="space-y-8">
+                <div>
+                    <h2 className="text-2xl font-bold text-white mb-4">Admin Settings</h2>
+                    <div className="bg-gray-800 p-6 rounded-lg">
+                        <ChangePasswordForm 
+                            userId={adminId}
+                            onSuccess={(message) => {
+                                setAdminSettingSuccessMessage(message);
+                                setAdminSettingErrorMessage(null);
+                            }}
+                            onError={(message) => {
+                                setAdminSettingErrorMessage(message);
+                                setAdminSettingSuccessMessage(null);
+                            }}
+                        />
+                        {adminSettingSuccessMessage && <p className="text-green-500 mt-4">{adminSettingSuccessMessage}</p>}
+                        {adminSettingErrorMessage && <p className="text-red-500 mt-4">{adminSettingErrorMessage}</p>}
+                    </div>
+                </div>
+    
+                <div className="space-y-6">
+                    <div className="flex items-center justify-between mb-4">
+                        <h2 className="text-xl font-bold text-white">Payment Settings</h2>
+                        <button
+                            onClick={async () => {
+                                try {
+                                    const response = await fetch(`/api/admin/payment-settings?userId=${adminId}`, {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({ paymentSettings }),
+                                    });
+                                    const data = await response.json();
+                                    if (!response.ok) throw new Error(data.error || 'Failed to save payment settings');
+                                    setPaymentSettings({
+                                        defaultProvider: data.paymentSettings.defaultProvider,
+                                        providers: { ...defaultPaymentSettings.providers, ...(data.paymentSettings.providers || {}) },
+                                    });
+                                    alert('Payment settings saved.');
+                                } catch (err: any) {
+                                    setError(err.message);
+                                }
+                            }}
+                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                        >
+                            Save Settings
+                        </button>
+                    </div>
+
+                    <div className="space-y-4">
+                        {Object.entries(paymentSettings.providers).map(([provider, config]: [string, any]) => (
+                            <div key={provider} className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div>
+                                        <p className="text-lg font-bold uppercase text-white">{provider}</p>
+                                        <p className="text-xs text-gray-400">Provider configuration</p>
+                                    </div>
+                                    <label className="inline-flex items-center gap-2 text-sm text-gray-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={!!config.enabled}
+                                            onChange={(e) => {
+                                                setPaymentSettings((prev: any) => ({
+                                                    ...prev,
+                                                    defaultProvider: prev.defaultProvider || provider,
+                                                    providers: {
+                                                        ...prev.providers,
+                                                        [provider]: {
+                                                            ...prev.providers[provider],
+                                                            enabled: e.target.checked,
+                                                        },
+                                                    },
+                                                }));
+                                            }}
+                                        />
+                                        Enabled
+                                    </label>
+                                </div>
+
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <input
+                                        value={config.apiKey || ''}
+                                        onChange={(e) => setPaymentSettings((prev: any) => ({
+                                            ...prev,
+                                            providers: {
+                                                ...prev.providers,
+                                                [provider]: { ...prev.providers[provider], apiKey: e.target.value }
+                                            }
+                                        }))}
+                                        placeholder="API Key"
+                                        className="bg-gray-800 text-white px-3 py-2 rounded"
+                                    />
+                                    <input
+                                        value={config.merchantId || ''}
+                                        onChange={(e) => setPaymentSettings((prev: any) => ({
+                                            ...prev,
+                                            providers: {
+                                                ...prev.providers,
+                                                [provider]: { ...prev.providers[provider], merchantId: e.target.value }
+                                            }
+                                        }))}
+                                        placeholder="Merchant ID"
+                                        className="bg-gray-800 text-white px-3 py-2 rounded"
+                                    />
+                                    <input
+                                        value={config.username || ''}
+                                        onChange={(e) => setPaymentSettings((prev: any) => ({
+                                            ...prev,
+                                            providers: {
+                                                ...prev.providers,
+                                                [provider]: { ...prev.providers[provider], username: e.target.value }
+                                            }
+                                        }))}
+                                        placeholder="Username"
+                                        className="bg-gray-800 text-white px-3 py-2 rounded"
+                                    />
+                                    <input
+                                        value={config.password || ''}
+                                        onChange={(e) => setPaymentSettings((prev: any) => ({
+                                            ...prev,
+                                            providers: {
+                                                ...prev.providers,
+                                                [provider]: { ...prev.providers[provider], password: e.target.value }
+                                            }
+                                        }))}
+                                        placeholder="Password"
+                                        type="password"
+                                        className="bg-gray-800 text-white px-3 py-2 rounded"
+                                    />
+                                    <input
+                                        value={config.accountNumber || ''}
+                                        onChange={(e) => setPaymentSettings((prev: any) => ({
+                                            ...prev,
+                                            providers: {
+                                                ...prev.providers,
+                                                [provider]: { ...prev.providers[provider], accountNumber: e.target.value }
+                                            }
+                                        }))}
+                                        placeholder="Account Number"
+                                        className="bg-gray-800 text-white px-3 py-2 rounded md:col-span-2"
+                                    />
+                                    <textarea
+                                        value={config.description || ''}
+                                        onChange={(e) => setPaymentSettings((prev: any) => ({
+                                            ...prev,
+                                            providers: {
+                                                ...prev.providers,
+                                                [provider]: { ...prev.providers[provider], description: e.target.value }
+                                            }
+                                        }))}
+                                        placeholder="Provider notes / API instructions"
+                                        rows={3}
+                                        className="bg-gray-800 text-white px-3 py-2 rounded md:col-span-2"
+                                    />
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            </div>
+        );
+    };
+
     const renderView = () => {
         switch (view) {
             case 'stats':
@@ -513,147 +678,8 @@ const AdminDashboard: React.FC = () => {
                         </table>
                     </div>
                 );
-            case 'payment-settings':
-                return (
-                    <div className="space-y-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-bold text-white">Payment Settings</h2>
-                            <button
-                                onClick={async () => {
-                                    try {
-                                        const response = await fetch(`/api/admin/payment-settings?userId=${adminId}`, {
-                                            method: 'POST',
-                                            headers: { 'Content-Type': 'application/json' },
-                                            body: JSON.stringify({ paymentSettings }),
-                                        });
-                                        const data = await response.json();
-                                        if (!response.ok) throw new Error(data.error || 'Failed to save payment settings');
-                                        setPaymentSettings({
-                                            defaultProvider: data.paymentSettings.defaultProvider,
-                                            providers: { ...defaultPaymentSettings.providers, ...(data.paymentSettings.providers || {}) },
-                                        });
-                                        alert('Payment settings saved.');
-                                    } catch (err: any) {
-                                        setError(err.message);
-                                    }
-                                }}
-                                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                            >
-                                Save Settings
-                            </button>
-                        </div>
-
-                        <div className="space-y-4">
-                            {Object.entries(paymentSettings.providers).map(([provider, config]: [string, any]) => (
-                                <div key={provider} className="bg-gray-900 rounded-xl p-4 border border-gray-700">
-                                    <div className="flex items-center justify-between mb-4">
-                                        <div>
-                                            <p className="text-lg font-bold uppercase text-white">{provider}</p>
-                                            <p className="text-xs text-gray-400">Provider configuration</p>
-                                        </div>
-                                        <label className="inline-flex items-center gap-2 text-sm text-gray-300">
-                                            <input
-                                                type="checkbox"
-                                                checked={!!config.enabled}
-                                                onChange={(e) => {
-                                                    setPaymentSettings((prev: any) => ({
-                                                        ...prev,
-                                                        defaultProvider: prev.defaultProvider || provider,
-                                                        providers: {
-                                                            ...prev.providers,
-                                                            [provider]: {
-                                                                ...prev.providers[provider],
-                                                                enabled: e.target.checked,
-                                                            },
-                                                        },
-                                                    }));
-                                                }}
-                                            />
-                                            Enabled
-                                        </label>
-                                    </div>
-
-                                    <div className="grid md:grid-cols-2 gap-4">
-                                        <input
-                                            value={config.apiKey || ''}
-                                            onChange={(e) => setPaymentSettings((prev: any) => ({
-                                                ...prev,
-                                                providers: {
-                                                    ...prev.providers,
-                                                    [provider]: { ...prev.providers[provider], apiKey: e.target.value }
-                                                }
-                                            }))}
-                                            placeholder="API Key"
-                                            className="bg-gray-800 text-white px-3 py-2 rounded"
-                                        />
-                                        <input
-                                            value={config.merchantId || ''}
-                                            onChange={(e) => setPaymentSettings((prev: any) => ({
-                                                ...prev,
-                                                providers: {
-                                                    ...prev.providers,
-                                                    [provider]: { ...prev.providers[provider], merchantId: e.target.value }
-                                                }
-                                            }))}
-                                            placeholder="Merchant ID"
-                                            className="bg-gray-800 text-white px-3 py-2 rounded"
-                                        />
-                                        <input
-                                            value={config.username || ''}
-                                            onChange={(e) => setPaymentSettings((prev: any) => ({
-                                                ...prev,
-                                                providers: {
-                                                    ...prev.providers,
-                                                    [provider]: { ...prev.providers[provider], username: e.target.value }
-                                                }
-                                            }))}
-                                            placeholder="Username"
-                                            className="bg-gray-800 text-white px-3 py-2 rounded"
-                                        />
-                                        <input
-                                            value={config.password || ''}
-                                            onChange={(e) => setPaymentSettings((prev: any) => ({
-                                                ...prev,
-                                                providers: {
-                                                    ...prev.providers,
-                                                    [provider]: { ...prev.providers[provider], password: e.target.value }
-                                                }
-                                            }))}
-                                            placeholder="Password"
-                                            type="password"
-                                            className="bg-gray-800 text-white px-3 py-2 rounded"
-                                        />
-                                        <input
-                                            value={config.accountNumber || ''}
-                                            onChange={(e) => setPaymentSettings((prev: any) => ({
-                                                ...prev,
-                                                providers: {
-                                                    ...prev.providers,
-                                                    [provider]: { ...prev.providers[provider], accountNumber: e.target.value }
-                                                }
-                                            }))}
-                                            placeholder="Account Number"
-                                            className="bg-gray-800 text-white px-3 py-2 rounded md:col-span-2"
-                                        />
-                                        <textarea
-                                            value={config.description || ''}
-                                            onChange={(e) => setPaymentSettings((prev: any) => ({
-                                                ...prev,
-                                                providers: {
-                                                    ...prev.providers,
-                                                    [provider]: { ...prev.providers[provider], description: e.target.value }
-                                                }
-                                            }))}
-                                            placeholder="Provider notes / API instructions"
-                                            rows={3}
-                                            className="bg-gray-800 text-white px-3 py-2 rounded md:col-span-2"
-                                        />
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                );
+            case 'settings':
+                return renderSettingsView();
             case 'agents':
                 return (
                     <div>
@@ -806,6 +832,7 @@ const AdminDashboard: React.FC = () => {
                         <button onClick={() => setView('transactions')} className={`w-full py-2 rounded ${view === 'transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Transactions</button>
                         <button onClick={() => setView('manual-transactions')} className={`w-full py-2 rounded ${view === 'manual-transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Manual Transactions</button>
                         <button onClick={() => setView('agents')} className={`w-full py-2 rounded ${view === 'agents' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Agents</button>
+                        <button onClick={() => setView('settings')} className={`w-full py-2 rounded ${view === 'settings' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Settings</button>
                     </div>
 
                     <div className="bg-gray-800 p-6 rounded-lg">
