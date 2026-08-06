@@ -3469,27 +3469,69 @@ app.post('/api/admin/roles/create', hasPermission('all'), async (req, res) => {
     }
 });
 
-// Delete an admin user/role
-app.post('/api/admin/roles/delete', hasPermission('all'), async (req, res) => {
+// Update an admin user/role
+app.post('/api/admin/roles/:roleId/update', hasPermission('all'), async (req, res) => {
     if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { id } = req.body; // Deleting by ID is safer
-    if (!id) {
+    const { roleId } = req.params;
+    const updatedData = req.body;
+
+    if (!roleId) {
+        return res.status(400).json({ error: 'Role ID is required.' });
+    }
+
+    try {
+        const adminRef = db.collection('adminUsers').doc(roleId);
+        const doc = await adminRef.get();
+
+        if (!doc.exists) {
+            return res.status(404).json({ error: 'Admin role not found.' });
+        }
+
+        // Do not allow updating the password to an empty string.
+        if (updatedData.password === '') {
+            delete updatedData.password;
+        }
+
+        await adminRef.update(updatedData);
+
+        const updatedDoc = await adminRef.get();
+        const { password, ...returnData } = updatedDoc.data() as AdminUser;
+
+        res.json({ success: true, role: returnData });
+
+    } catch (error) {
+        console.error('Failed to update admin role:', error);
+        res.status(500).json({ error: 'Failed to update admin role.' });
+    }
+});
+
+interface AdminRole extends AdminUser {
+    name: string;
+    status: 'active' | 'suspended';
+}
+
+// Delete an admin user/role
+app.delete('/api/admin/roles/:roleId/delete', hasPermission('all'), async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+    const { roleId } = req.params;
+    if (!roleId) {
         return res.status(400).json({ error: 'Admin user ID is required.' });
     }
 
     try {
-        const adminRef = db.collection('adminUsers').doc(id);
+        const adminRef = db.collection('adminUsers').doc(roleId);
         const doc = await adminRef.get();
         
         if (!doc.exists) {
             return res.status(404).json({ error: 'Admin user not found.' });
         }
         
-        // Optional: Prevent deleting the super admin
         const adminData = doc.data() as AdminUser;
         if (adminData.permissions.includes('all')) {
-            // Or check by a specific username/ID if there's a known root admin
-            // return res.status(400).json({ error: 'Cannot delete a super administrator.' });
+            const allAdminsSnapshot = await db.collection('adminUsers').where('permissions', 'array-contains', 'all').get();
+            if (allAdminsSnapshot.size <= 1) {
+                return res.status(400).json({ error: 'Cannot delete the last super administrator.' });
+            }
         }
         
         await adminRef.delete();

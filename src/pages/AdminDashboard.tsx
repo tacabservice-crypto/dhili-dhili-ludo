@@ -909,9 +909,10 @@ const AdminDashboard: React.FC = () => {
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Agent ID</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Username</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Commission Rate</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Balance</th>
-                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Created At</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Commission</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Float Balance</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-gray-900 divide-y divide-gray-700">
@@ -920,8 +921,20 @@ const AdminDashboard: React.FC = () => {
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-white font-mono">{agent.id}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{agent.username}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-400">{(agent.commissionRate * 100).toFixed(2)}%</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400">{formatCurrency(agent.balance)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(agent.createdAt).toLocaleString()}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400">{formatCurrency(agent.floatBalance)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${agent.status === 'Active' ? 'bg-green-800 text-green-100' : 'bg-red-800 text-red-100'}`}>
+                                                    {agent.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                                <button onClick={() => setCreditingAgent(agent)} className="text-green-400 hover:text-green-600">Credit</button>
+                                                <button onClick={() => setEditingAgent(agent)} className="text-indigo-400 hover:text-indigo-600">Edit</button>
+                                                <button onClick={() => handleToggleAgentStatus(agent)} className={agent.status === 'Active' ? 'text-yellow-400 hover:text-yellow-600' : 'text-green-400 hover:text-green-600'}>
+                                                    {agent.status === 'Active' ? 'Suspend' : 'Activate'}
+                                                </button>
+                                                <button onClick={() => handleDeleteAgent(agent.id)} className="text-red-400 hover:text-red-600">Delete</button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -1097,6 +1110,23 @@ const AdminDashboard: React.FC = () => {
                     permissionsList={permissionsList}
                     onClose={() => setEditingRole(null)}
                     onSave={(updatedData) => handleUpdateRole(editingRole.id, updatedData)}
+                />
+            )}
+            {editingAgent && (
+                <EditAgentModal
+                    agent={editingAgent}
+                    onClose={() => setEditingAgent(null)}
+                    onSave={(data) => handleUpdateAgent(editingAgent.id, data)}
+                />
+            )}
+            {creditingAgent && (
+                <CreditAgentModal
+                    agent={creditingAgent}
+                    onClose={() => setCreditingAgent(null)}
+                    onCredit={(amount, discount) => {
+                        handleCreditAgentFloat(creditingAgent.id, amount, discount);
+                        setCreditingAgent(null);
+                    }}
                 />
             )}
         </>
