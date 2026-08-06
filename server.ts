@@ -235,7 +235,8 @@ let store: DBStore = {
   paymentProviders: { ...DEFAULT_PAYMENT_PROVIDERS },
   adminSettings: { ...DEFAULT_ADMIN_SETTINGS },
   agents: {},
-  agentTransactions: []
+  agentTransactions: [],
+  tournaments: {}
 };
 
 // Load store from disk (local backup/fallback)
@@ -319,7 +320,7 @@ async function loadStoreFromFirestore() {
     console.log('No existing state in Firestore. Loading from local store fallback...');
     loadStore();
     // Immediately seed the empty Firestore with the loaded local data
-    syncToFirestore();
+    // syncToFirestore();
   } catch (err) {
     console.error('Failed to load store from Firestore:', err);
     loadStore();
@@ -343,7 +344,7 @@ async function syncToFirestore() {
 function saveStore() {
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-    syncToFirestore(); // Fire-and-forget for non-critical updates
+    // syncToFirestore(); // Fire-and-forget for non-critical updates
   } catch (error) {
     console.error('Failed to write database to disk.', error);
   }
@@ -353,7 +354,7 @@ function saveStore() {
 async function saveStoreAndWait() {
     try {
       fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-      await syncToFirestore();
+      await // syncToFirestore();
     } catch (error) {
       console.error('Failed to write database to disk.', error);
     }
@@ -3480,32 +3481,42 @@ app.get('/api/admin/agents', isAdmin, (req, res) => {
   res.json(Object.values(store.agents || {}));
 });
 
-// Create a new agent from an existing user
+// Create a new agent
 app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
-  const { userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: 'User ID is required to create an agent.' });
+  const { username, password, commissionRate } = req.body;
+
+  if (!username || !password || !commissionRate) {
+    return res.status(400).json({ error: 'Username, password, and commission rate are required.' });
   }
 
-  const user = store.users[userId];
-  if (!user) {
-    return res.status(404).json({ error: 'User not found.' });
+  // More validation
+  if (typeof username !== 'string' || username.length < 3) {
+    return res.status(400).json({ error: 'Username must be a string of at least 3 characters.' });
+  }
+  if (typeof password !== 'string' || password.length < 6) {
+    return res.status(400).json({ error: 'Password must be a string of at least 6 characters.' });
+  }
+  const rate = parseFloat(commissionRate);
+  if (isNaN(rate) || rate < 0 || rate > 1) {
+    return res.status(400).json({ error: 'Commission rate must be a number between 0 and 1.' });
   }
 
-  const existingAgent = Object.values(store.agents).find(a => a.userId === userId);
-  if (existingAgent) {
-    return res.status(409).json({ error: 'This user is already an agent.' });
+  // Check if username already exists
+  if (Object.values(store.agents).some(agent => agent.username === username)) {
+    return res.status(409).json({ error: 'Agent with this username already exists.' });
   }
 
+  const agentId = `agent_${Date.now()}`;
   const newAgent: Agent = {
-    id: `agent_${Date.now()}`,
-    userId: userId,
-    floatBalance: 0,
-    status: 'Active',
+    id: agentId,
+    username,
+    password, // In a real app, this should be hashed and salted
+    commissionRate: rate,
+    balance: 0,
     createdAt: Date.now(),
   };
 
-  store.agents[newAgent.id] = newAgent;
+  store.agents[agentId] = newAgent;
   await saveStoreAndWait();
 
   res.status(201).json(newAgent);
@@ -3543,7 +3554,6 @@ app.post('/api/admin/agents/credit-float', isAdmin, async (req, res) => {
 
   res.json({ success: true, agent, transaction });
 });
-
 
 
 

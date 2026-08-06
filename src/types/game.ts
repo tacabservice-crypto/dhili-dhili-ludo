@@ -115,10 +115,11 @@ export interface GameRoom {
 // ==========================================
 
 export interface Agent {
-  id: string; // Unique ID for the agent record
-  userId: string; // Links to a UserProfile ID
-  floatBalance: number; // The amount of digital currency the agent has available to sell
-  status: 'Active' | 'Suspended' | 'Pending';
+  id: string;
+  username: string;
+  password?: string; // Should be hashed
+  commissionRate: number;
+  balance: number;
   createdAt: number;
 }
 

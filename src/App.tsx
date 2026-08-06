@@ -7,6 +7,7 @@ import Dashboard from './components/Dashboard';
 import GameRoomView from './components/GameRoom';
 import WalletModal from './components/WalletModal';
 import RejoinPrompt from './components/RejoinPrompt';
+import AdminDashboard from './pages/AdminDashboard';
 import BecomeVip from './pages/BecomeVip';
 import Tournaments from './pages/Tournaments';
 import InstallPwaPrompt from './components/InstallPwaPrompt';
@@ -831,10 +832,14 @@ export default function App() {
     );
   }
 
+  if (window.location.pathname === '/admin') {
+    return <AdminDashboard />;
+  }
+
   if (window.location.pathname === '/vip') {
     return <BecomeVip />;
   }
-
+  
   if (window.location.pathname === '/tournaments') {
     return <Tournaments />;
   }
