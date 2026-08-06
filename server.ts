@@ -354,7 +354,7 @@ function saveStore() {
 async function saveStoreAndWait() {
     try {
       fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-      await // syncToFirestore();
+      await syncToFirestore();
     } catch (error) {
       console.error('Failed to write database to disk.', error);
     }

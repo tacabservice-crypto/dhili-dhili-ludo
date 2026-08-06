@@ -757,41 +757,7 @@ const AdminDashboard: React.FC = () => {
             </div>
         );
     };
-		case 'agents':
-        return (
-            <div>
-                <div className="flex justify-between items-center mb-4">
-                    <h2 className="text-xl font-bold text-white">Agents</h2>
-                    <button onClick={() => setCreateAgentModalOpen(true)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                        Create Agent
-                    </button>
-                </div>
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-700">
-                        <thead className="bg-gray-800">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Agent ID</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Username</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Commission Rate</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Balance</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Created At</th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-gray-900 divide-y divide-gray-700">
-                            {agents.map(agent => (
-                                <tr key={agent.id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white font-mono">{agent.id}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{agent.username}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-400">{(agent.commissionRate * 100).toFixed(2)}%</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-green-400">{formatCurrency(agent.balance)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(agent.createdAt).toLocaleString()}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        );
+
 
     return (
         <>
