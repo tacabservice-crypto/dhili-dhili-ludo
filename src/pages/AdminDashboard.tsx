@@ -12,6 +12,7 @@ const AdminDashboard: React.FC = () => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'agents' | 'settings'>('stats');
+    const [settingsView, setSettingsView] = useState<'admin' | 'payment' | 'roles'>('admin');
     const [error, setError] = useState<string | null>(null);
     const [adminSettingSuccessMessage, setAdminSettingSuccessMessage] = useState<string | null>(null);
     const [adminSettingErrorMessage, setAdminSettingErrorMessage] = useState<string | null>(null);
@@ -46,6 +47,7 @@ const AdminDashboard: React.FC = () => {
     const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [isCreateAgentModalOpen, setCreateAgentModalOpen] = useState(false);
+    const [newRoleName, setNewRoleName] = useState('');
 
     const handleAuth = async () => {
         setError(null);
@@ -276,6 +278,45 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
+    const handleCreateRole = async () => {
+        if (!adminId || !newRoleName) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/roles/create?userId=${adminId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: newRoleName }),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to create role');
+            }
+            setNewRoleName('');
+            fetchData('settings');
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
+    const handleDeleteRole = async (roleName: string) => {
+        if (!adminId || !window.confirm(`Are you sure you want to delete the role "${roleName}"?`)) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/roles/delete?userId=${adminId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: roleName }),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to delete role');
+            }
+            fetchData('settings');
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
     const renderGameHistoryModal = () => {
         if (!viewingUserGames || !viewingUser) return null;
 
@@ -370,164 +411,218 @@ const AdminDashboard: React.FC = () => {
 
     const renderSettingsView = () => {
         return (
-            <div className="space-y-8">
-                <div>
-                    <h2 className="text-2xl font-bold text-white mb-4">Admin Settings</h2>
-                    <div className="bg-gray-800 p-6 rounded-lg">
-                        <ChangePasswordForm 
-                            userId={adminId}
-                            onSuccess={(message) => {
-                                setAdminSettingSuccessMessage(message);
-                                setAdminSettingErrorMessage(null);
-                            }}
-                            onError={(message) => {
-                                setAdminSettingErrorMessage(message);
-                                setAdminSettingSuccessMessage(null);
-                            }}
-                        />
-                        {adminSettingSuccessMessage && <p className="text-green-500 mt-4">{adminSettingSuccessMessage}</p>}
-                        {adminSettingErrorMessage && <p className="text-red-500 mt-4">{adminSettingErrorMessage}</p>}
-                    </div>
+            <div>
+                <div className="bg-gray-800 rounded-lg p-1 flex space-x-1 mb-6">
+                    <button onClick={() => setSettingsView('admin')} className={`w-full py-2 rounded ${settingsView === 'admin' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Admin</button>
+                    <button onClick={() => setSettingsView('payment')} className={`w-full py-2 rounded ${settingsView === 'payment' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Payment</button>
+                    <button onClick={() => setSettingsView('roles')} className={`w-full py-2 rounded ${settingsView === 'roles' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Roles</button>
                 </div>
-    
-                <div className="space-y-6">
-                    <div className="flex items-center justify-between mb-4">
-                        <h2 className="text-xl font-bold text-white">Payment Settings</h2>
-                        <button
-                            onClick={async () => {
-                                try {
-                                    const response = await fetch(`/api/admin/payment-settings?userId=${adminId}`, {
-                                        method: 'POST',
-                                        headers: { 'Content-Type': 'application/json' },
-                                        body: JSON.stringify({ paymentSettings }),
-                                    });
-                                    const data = await response.json();
-                                    if (!response.ok) throw new Error(data.error || 'Failed to save payment settings');
-                                    setPaymentSettings({
-                                        defaultProvider: data.paymentSettings.defaultProvider,
-                                        providers: { ...defaultPaymentSettings.providers, ...(data.paymentSettings.providers || {}) },
-                                    });
-                                    alert('Payment settings saved.');
-                                } catch (err: any) {
-                                    setError(err.message);
-                                }
-                            }}
-                            className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                        >
-                            Save Settings
-                        </button>
-                    </div>
 
-                    <div className="space-y-4">
-                        {Object.entries(paymentSettings.providers).map(([provider, config]: [string, any]) => (
-                            <div key={provider} className="bg-gray-900 rounded-xl p-4 border border-gray-700">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div>
-                                        <p className="text-lg font-bold uppercase text-white">{provider}</p>
-                                        <p className="text-xs text-gray-400">Provider configuration</p>
-                                    </div>
-                                    <label className="inline-flex items-center gap-2 text-sm text-gray-300">
-                                        <input
-                                            type="checkbox"
-                                            checked={!!config.enabled}
-                                            onChange={(e) => {
-                                                setPaymentSettings((prev: any) => ({
-                                                    ...prev,
-                                                    defaultProvider: prev.defaultProvider || provider,
-                                                    providers: {
-                                                        ...prev.providers,
-                                                        [provider]: {
-                                                            ...prev.providers[provider],
-                                                            enabled: e.target.checked,
-                                                        },
-                                                    },
-                                                }));
-                                            }}
-                                        />
-                                        Enabled
-                                    </label>
-                                </div>
-
-                                <div className="grid md:grid-cols-2 gap-4">
-                                    <input
-                                        value={config.apiKey || ''}
-                                        onChange={(e) => setPaymentSettings((prev: any) => ({
-                                            ...prev,
-                                            providers: {
-                                                ...prev.providers,
-                                                [provider]: { ...prev.providers[provider], apiKey: e.target.value }
-                                            }
-                                        }))}
-                                        placeholder="API Key"
-                                        className="bg-gray-800 text-white px-3 py-2 rounded"
-                                    />
-                                    <input
-                                        value={config.merchantId || ''}
-                                        onChange={(e) => setPaymentSettings((prev: any) => ({
-                                            ...prev,
-                                            providers: {
-                                                ...prev.providers,
-                                                [provider]: { ...prev.providers[provider], merchantId: e.target.value }
-                                            }
-                                        }))}
-                                        placeholder="Merchant ID"
-                                        className="bg-gray-800 text-white px-3 py-2 rounded"
-                                    />
-                                    <input
-                                        value={config.username || ''}
-                                        onChange={(e) => setPaymentSettings((prev: any) => ({
-                                            ...prev,
-                                            providers: {
-                                                ...prev.providers,
-                                                [provider]: { ...prev.providers[provider], username: e.target.value }
-                                            }
-                                        }))}
-                                        placeholder="Username"
-                                        className="bg-gray-800 text-white px-3 py-2 rounded"
-                                    />
-                                    <input
-                                        value={config.password || ''}
-                                        onChange={(e) => setPaymentSettings((prev: any) => ({
-                                            ...prev,
-                                            providers: {
-                                                ...prev.providers,
-                                                [provider]: { ...prev.providers[provider], password: e.target.value }
-                                            }
-                                        }))}
-                                        placeholder="Password"
-                                        type="password"
-                                        className="bg-gray-800 text-white px-3 py-2 rounded"
-                                    />
-                                    <input
-                                        value={config.accountNumber || ''}
-                                        onChange={(e) => setPaymentSettings((prev: any) => ({
-                                            ...prev,
-                                            providers: {
-                                                ...prev.providers,
-                                                [provider]: { ...prev.providers[provider], accountNumber: e.target.value }
-                                            }
-                                        }))}
-                                        placeholder="Account Number"
-                                        className="bg-gray-800 text-white px-3 py-2 rounded md:col-span-2"
-                                    />
-                                    <textarea
-                                        value={config.description || ''}
-                                        onChange={(e) => setPaymentSettings((prev: any) => ({
-                                            ...prev,
-                                            providers: {
-                                                ...prev.providers,
-                                                [provider]: { ...prev.providers[provider], description: e.target.value }
-                                            }
-                                        }))}
-                                        placeholder="Provider notes / API instructions"
-                                        rows={3}
-                                        className="bg-gray-800 text-white px-3 py-2 rounded md:col-span-2"
-                                    />
-                                </div>
+                {settingsView === 'admin' && (
+                    <div className="space-y-8">
+                        <div>
+                            <h2 className="text-2xl font-bold text-white mb-4">Admin Settings</h2>
+                            <div className="bg-gray-800 p-6 rounded-lg">
+                                <ChangePasswordForm 
+                                    userId={adminId}
+                                    onSuccess={(message) => {
+                                        setAdminSettingSuccessMessage(message);
+                                        setAdminSettingErrorMessage(null);
+                                    }}
+                                    onError={(message) => {
+                                        setAdminSettingErrorMessage(message);
+                                        setAdminSettingSuccessMessage(null);
+                                    }}
+                                />
+                                {adminSettingSuccessMessage && <p className="text-green-500 mt-4">{adminSettingSuccessMessage}</p>}
+                                {adminSettingErrorMessage && <p className="text-red-500 mt-4">{adminSettingErrorMessage}</p>}
                             </div>
-                        ))}
+                        </div>
                     </div>
-                </div>
+                )}
+
+                {settingsView === 'payment' && (
+                    <div className="space-y-6">
+                        <div className="flex items-center justify-between mb-4">
+                            <h2 className="text-xl font-bold text-white">Payment Settings</h2>
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const response = await fetch(`/api/admin/payment-settings?userId=${adminId}`, {
+                                            method: 'POST',
+                                            headers: { 'Content-Type': 'application/json' },
+                                            body: JSON.stringify({ paymentSettings }),
+                                        });
+                                        const data = await response.json();
+                                        if (!response.ok) throw new Error(data.error || 'Failed to save payment settings');
+                                        setPaymentSettings({
+                                            defaultProvider: data.paymentSettings.defaultProvider,
+                                            providers: { ...defaultPaymentSettings.providers, ...(data.paymentSettings.providers || {}) },
+                                        });
+                                        alert('Payment settings saved.');
+                                    } catch (err: any) {
+                                        setError(err.message);
+                                    }
+                                }}
+                                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                            >
+                                Save Settings
+                            </button>
+                        </div>
+
+                        <div className="space-y-4">
+                            {Object.entries(paymentSettings.providers).map(([provider, config]: [string, any]) => (
+                                <div key={provider} className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+                                    <div className="flex items-center justify-between mb-4">
+                                        <div>
+                                            <p className="text-lg font-bold uppercase text-white">{provider}</p>
+                                            <p className="text-xs text-gray-400">Provider configuration</p>
+                                        </div>
+                                        <label className="inline-flex items-center gap-2 text-sm text-gray-300">
+                                            <input
+                                                type="checkbox"
+                                                checked={!!config.enabled}
+                                                onChange={(e) => {
+                                                    setPaymentSettings((prev: any) => ({
+                                                        ...prev,
+                                                        defaultProvider: prev.defaultProvider || provider,
+                                                        providers: {
+                                                            ...prev.providers,
+                                                            [provider]: {
+                                                                ...prev.providers[provider],
+                                                                enabled: e.target.checked,
+                                                            },
+                                                        },
+                                                    }));
+                                                }}
+                                            />
+                                            Enabled
+                                        </label>
+                                    </div>
+
+                                    <div className="grid md:grid-cols-2 gap-4">
+                                        <input
+                                            value={config.apiKey || ''}
+                                            onChange={(e) => setPaymentSettings((prev: any) => ({
+                                                ...prev,
+                                                providers: {
+                                                    ...prev.providers,
+                                                    [provider]: { ...prev.providers[provider], apiKey: e.target.value }
+                                                }
+                                            }))}
+                                            placeholder="API Key"
+                                            className="bg-gray-800 text-white px-3 py-2 rounded"
+                                        />
+                                        <input
+                                            value={config.merchantId || ''}
+                                            onChange={(e) => setPaymentSettings((prev: any) => ({
+                                                ...prev,
+                                                providers: {
+                                                    ...prev.providers,
+                                                    [provider]: { ...prev.providers[provider], merchantId: e.target.value }
+                                                }
+                                            }))}
+                                            placeholder="Merchant ID"
+                                            className="bg-gray-800 text-white px-3 py-2 rounded"
+                                        />
+                                        <input
+                                            value={config.username || ''}
+                                            onChange={(e) => setPaymentSettings((prev: any) => ({
+                                                ...prev,
+                                                providers: {
+                                                    ...prev.providers,
+                                                    [provider]: { ...prev.providers[provider], username: e.target.value }
+                                                }
+                                            }))}
+                                            placeholder="Username"
+                                            className="bg-gray-800 text-white px-3 py-2 rounded"
+                                        />
+                                        <input
+                                            value={config.password || ''}
+                                            onChange={(e) => setPaymentSettings((prev: any) => ({
+                                                ...prev,
+                                                providers: {
+                                                    ...prev.providers,
+                                                    [provider]: { ...prev.providers[provider], password: e.target.value }
+                                                }
+                                            }))}
+                                            placeholder="Password"
+                                            type="password"
+                                            className="bg-gray-800 text-white px-3 py-2 rounded"
+                                        />
+                                        <input
+                                            value={config.accountNumber || ''}
+                                            onChange={(e) => setPaymentSettings((prev: any) => ({
+                                                ...prev,
+                                                providers: {
+                                                    ...prev.providers,
+                                                    [provider]: { ...prev.providers[provider], accountNumber: e.target.value }
+                                                }
+                                            }))}
+                                            placeholder="Account Number"
+                                            className="bg-gray-800 text-white px-3 py-2 rounded md:col-span-2"
+                                        />
+                                        <textarea
+                                            value={config.description || ''}
+                                            onChange={(e) => setPaymentSettings((prev: any) => ({
+                                                ...prev,
+                                                providers: {
+                                                    ...prev.providers,
+                                                    [provider]: { ...prev.providers[provider], description: e.target.value }
+                                                }
+                                            }))}
+                                            placeholder="Provider notes / API instructions"
+                                            rows={3}
+                                            className="bg-gray-800 text-white px-3 py-2 rounded md:col-span-2"
+                                        />
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                {settingsView === 'roles' && (
+                    <div>
+                        <h2 className="text-2xl font-bold text-white mb-4">Role Management</h2>
+                        <div className="bg-gray-800 p-6 rounded-lg">
+                            <div className="flex gap-2 mb-4">
+                                <input
+                                    type="text"
+                                    value={newRoleName}
+                                    onChange={(e) => setNewRoleName(e.target.value)}
+                                    placeholder="New role name"
+                                    className="bg-gray-700 text-white px-3 py-2 rounded w-full"
+                                />
+                                <button
+                                    onClick={handleCreateRole}
+                                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                                >
+                                    Create Role
+                                </button>
+                            </div>
+                            <table className="min-w-full divide-y divide-gray-700">
+                                <thead className="bg-gray-800">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role Name</th>
+                                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-gray-900 divide-y divide-gray-700">
+                                    {adminSettings?.roles?.map((role: string) => (
+                                        <tr key={role}>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{role}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                                <button onClick={() => handleDeleteRole(role)} className="text-red-400 hover:text-red-600">Delete</button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                )}
+
             </div>
         );
     };
