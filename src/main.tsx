@@ -5,6 +5,9 @@ import App from './App.tsx';
 import './index.css';
 import { LanguageProvider } from './context/LanguageContext.tsx';
 import ErrorPage from "./pages/ErrorPage";
+import AdminDashboard from './pages/AdminDashboard';
+import BecomeVip from './pages/BecomeVip';
+import Tournaments from './pages/Tournaments';
 
 const router = createBrowserRouter([
   {
@@ -15,6 +18,18 @@ const router = createBrowserRouter([
   {
     path: "/room/:roomId",
     element: <App />,
+  },
+  {
+    path: "/admin",
+    element: <AdminDashboard />,
+  },
+  {
+    path: "/vip",
+    element: <BecomeVip />,
+  },
+  {
+    path: "/tournaments",
+    element: <Tournaments />,
   },
   {
     path: "/*",
