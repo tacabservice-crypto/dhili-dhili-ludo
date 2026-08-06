@@ -342,7 +342,7 @@ const AdminDashboard: React.FC = () => {
                 throw new Error(err.error || 'Failed to delete role');
             }
             fetchData('settings');
-        } catch (err: any) => {
+        } catch (err: any) {
             setError(err.message);
         }
     };
