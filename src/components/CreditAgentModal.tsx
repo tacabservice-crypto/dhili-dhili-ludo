@@ -2,19 +2,16 @@ import React, { useState } from 'react';
 import { Agent } from '../types/game';
 
 interface CreditAgentModalProps {
-    isOpen: boolean;
-    agent: Agent | null;
+    agent: Agent;
     onClose: () => void;
     onSave: (agentId: string, amount: number, discount: number) => Promise<void>;
 }
 
-const CreditAgentModal: React.FC<CreditAgentModalProps> = ({ isOpen, agent, onClose, onSave }) => {
+const CreditAgentModal: React.FC<CreditAgentModalProps> = ({ agent, onClose, onSave }) => {
     const [amount, setAmount] = useState('');
     const [discount, setDiscount] = useState('0');
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
-
-    if (!isOpen || !agent) return null;
 
     const handleSave = async () => {
         setError(null);

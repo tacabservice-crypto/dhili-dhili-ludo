@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Agent } from '../types/game';
 
 interface EditAgentModalProps {
-    isOpen: boolean;
-    agent: Agent | null;
+    agent: Agent;
     onClose: () => void;
     onSave: (agentId: string, data: Partial<Agent>) => Promise<void>;
 }
 
-const EditAgentModal: React.FC<EditAgentModalProps> = ({ isOpen, agent, onClose, onSave }) => {
+const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [commissionRate, setCommissionRate] = useState('');
@@ -22,8 +21,6 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ isOpen, agent, onClose,
             setPassword(''); // Don't pre-fill password
         }
     }, [agent]);
-
-    if (!isOpen || !agent) return null;
 
     const handleSave = async () => {
         setError(null);
