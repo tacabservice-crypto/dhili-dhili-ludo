@@ -3440,6 +3440,62 @@ app.post('/api/admin/settings', isAdmin, async (req, res) => {
     });
 });
 
+// Create a new role
+app.post('/api/admin/roles/create', isAdmin, async (req, res) => {
+    const { name } = req.body;
+    if (!name || typeof name !== 'string' || !name.trim()) {
+        return res.status(400).json({ error: 'Role name is required.' });
+    }
+
+    const trimmedName = name.trim();
+    if (!store.adminSettings.roles) {
+        store.adminSettings.roles = [];
+    }
+
+    const existingRole = store.adminSettings.roles.find(r => r.name.toLowerCase() === trimmedName.toLowerCase());
+    if (existingRole) {
+        return res.status(409).json({ error: 'A role with this name already exists.' });
+    }
+
+    const newRole: AdminRoleTemplate = {
+        id: `${trimmedName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
+        name: trimmedName,
+        permissions: [], // Start with no permissions
+    };
+
+    store.adminSettings.roles.push(newRole);
+    await saveStoreAndWait();
+
+    res.status(201).json({ success: true, role: newRole });
+});
+
+// Delete a role
+app.post('/api/admin/roles/delete', isAdmin, async (req, res) => {
+    const { name } = req.body;
+    if (!name) {
+        return res.status(400).json({ error: 'Role name is required.' });
+    }
+
+    if (!store.adminSettings.roles) {
+        return res.status(404).json({ error: 'No roles found to delete.' });
+    }
+
+    const roleIndex = store.adminSettings.roles.findIndex(r => r.name === name);
+    if (roleIndex === -1) {
+        return res.status(404).json({ error: 'Role not found.' });
+    }
+
+    // Prevent deletion of the 'Administrator' role
+    if (store.adminSettings.roles[roleIndex].id === 'admin' || store.adminSettings.roles[roleIndex].name.toLowerCase() === 'administrator') {
+        return res.status(400).json({ error: 'The default Administrator role cannot be deleted.' });
+    }
+
+    store.adminSettings.roles.splice(roleIndex, 1);
+    await saveStoreAndWait();
+
+    res.json({ success: true, message: 'Role deleted successfully.' });
+});
+
 // Get all runtime stats
 app.get('/api/admin/stats', isAdmin, (req, res) => {
     res.json({
