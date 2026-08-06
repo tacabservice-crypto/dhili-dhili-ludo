@@ -1,7 +1,4 @@
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
+
 import { useLocation, useParams } from 'react-router-dom';
 import React, { useState, useEffect, useRef } from 'react';
 import { UserProfile, GameRoom } from './types/game';
@@ -10,7 +7,6 @@ import Dashboard from './components/Dashboard';
 import GameRoomView from './components/GameRoom';
 import WalletModal from './components/WalletModal';
 import RejoinPrompt from './components/RejoinPrompt';
-import AdminDashboard from './components/AdminDashboard';
 import BecomeVip from './pages/BecomeVip';
 import Tournaments from './pages/Tournaments';
 import InstallPwaPrompt from './components/InstallPwaPrompt';
@@ -833,10 +829,6 @@ export default function App() {
         <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin" />
       </div>
     );
-  }
-
-  if (window.location.pathname === '/admin') {
-    return <AdminDashboard />;
   }
 
   if (window.location.pathname === '/vip') {
