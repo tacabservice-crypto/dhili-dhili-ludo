@@ -3247,6 +3247,26 @@ app.post('/api/admin/login', async (req, res) => {
 
     try {
         const adminUsersRef = db.collection('adminUsers');
+        
+        // Check if the admin collection is empty to bootstrap the first admin
+        const allAdminsSnapshot = await adminUsersRef.limit(1).get();
+        if (allAdminsSnapshot.empty) {
+            console.log('No admin users found. Creating first admin user from login credentials.');
+            const newAdminId = `admin_${Date.now()}`;
+            const newAdmin: AdminUser = {
+                id: newAdminId,
+                username,
+                password, // Password should be hashed in a real application
+                permissions: ['all'],
+            };
+            await adminUsersRef.doc(newAdminId).set(newAdmin);
+            console.log(`Created new admin: ${username}`);
+            
+            // Log the user in immediately after creation
+            const { password: _, ...userToReturn } = newAdmin;
+            return res.json({ success: true, user: userToReturn });
+        }
+
         const snapshot = await adminUsersRef.where('username', '==', username).get();
 
         if (snapshot.empty) {
