@@ -4,6 +4,7 @@ import UserEditModal from '../components/UserEditModal';
 import CreateAgentModal from '../components/CreateAgentModal';
 import EditAgentModal from '../components/EditAgentModal';
 import CreditAgentModal from '../components/CreditAgentModal';
+import EditRoleModal from '../components/EditRoleModal';
 import ChangePasswordForm from '../components/ChangePasswordForm'; // Import ChangePasswordForm
 import { formatCurrency } from '../utils/number';
 
@@ -338,14 +339,12 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const handleDeleteRole = async (roleName: string) => {
-        if (!adminUser || !window.confirm(`Are you sure you want to delete the role "${roleName}"?`)) return;
+    const handleDeleteRole = async (role: AdminRole) => {
+        if (!adminUser || !window.confirm(`Are you sure you want to delete the role "${role.name}"?`)) return;
         setError(null);
         try {
-            const response = await fetch(`/api/admin/roles/delete?userId=${adminUser.id}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: roleName }),
+            const response = await fetch(`/api/admin/roles/${role.id}/delete?userId=${adminUser.id}`, {
+                method: 'DELETE',
             });
             if (!response.ok) {
                 const err = await response.json();
@@ -355,6 +354,33 @@ const AdminDashboard: React.FC = () => {
         } catch (err: any) {
             setError(err.message);
         }
+    };
+
+    const handleUpdateRole = async (roleId: string, updatedData: Partial<AdminRole>) => {
+        if (!adminUser) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/roles/${roleId}/update?userId=${adminUser.id}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedData),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to update role');
+            }
+            fetchData('settings');
+            setEditingRole(null);
+        } catch (err: any) {
+            setError(err.message);
+            throw err;
+        }
+    };
+
+    const handleToggleRoleStatus = async (role: AdminRole) => {
+        const newStatus = role.status === 'active' ? 'suspended' : 'active';
+        if (!window.confirm(`Are you sure you want to ${newStatus === 'active' ? 'activate' : 'suspend'} the role "${role.name}"?`)) return;
+        await handleUpdateRole(role.id, { status: newStatus });
     };
 
     const handlePermissionChange = (permission: string) => {
@@ -686,15 +712,27 @@ const AdminDashboard: React.FC = () => {
                                 <thead className="bg-gray-800">
                                     <tr>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Role Name</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Username</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-300 uppercase tracking-wider">Status</th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-300 uppercase tracking-wider">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody className="bg-gray-900 divide-y divide-gray-700">
-                                    {adminSettings?.roles?.map((role: { name: string }) => (
-                                        <tr key={role.name}>
+                                    {(adminSettings?.roles as AdminRole[])?.map((role) => (
+                                        <tr key={role.id}>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-white">{role.name}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                                <button onClick={() => handleDeleteRole(role.name)} className="text-red-400 hover:text-red-600">Delete</button>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-300">{role.username}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${role.status === 'active' ? 'bg-green-800 text-green-100' : 'bg-red-800 text-red-100'}`}>
+                                                    {role.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
+                                                <button onClick={() => setEditingRole(role)} className="text-indigo-400 hover:text-indigo-600">Edit</button>
+                                                <button onClick={() => handleToggleRoleStatus(role)} className={role.status === 'active' ? 'text-yellow-400 hover:text-yellow-600' : 'text-green-400 hover:text-green-600'}>
+                                                    {role.status === 'active' ? 'Suspend' : 'Activate'}
+                                                </button>
+                                                <button onClick={() => handleDeleteRole(role)} className="text-red-400 hover:text-red-600">Delete</button>
                                             </td>
                                         </tr>
                                     ))}
@@ -1053,6 +1091,14 @@ const AdminDashboard: React.FC = () => {
                 onClose={() => setCreateAgentModalOpen(false)}
                 onCreateAgent={handleCreateAgent}
             />
+            {editingRole && (
+                <EditRoleModal
+                    role={editingRole}
+                    permissionsList={permissionsList}
+                    onClose={() => setEditingRole(null)}
+                    onSave={(updatedData) => handleUpdateRole(editingRole.id, updatedData)}
+                />
+            )}
         </>
     );
 };
