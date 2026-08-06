@@ -25,10 +25,10 @@ const ChangePasswordForm: React.FC<ChangePasswordFormProps> = ({ adminId, onErro
 
         setIsSubmitting(true);
         try {
-            const response = await fetch(`/api/admin/change-password?userId=${adminId}`, {
+            const response = await fetch(`/api/admin/settings?userId=${adminId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ currentPassword, newPassword }),
+                body: JSON.stringify({ currentPassword, newPassword, confirmPassword: confirmNewPassword }),
             });
 
             if (!response.ok) {

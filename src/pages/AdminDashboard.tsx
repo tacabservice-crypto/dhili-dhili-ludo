@@ -63,6 +63,12 @@ const AdminDashboard: React.FC = () => {
     const [broadcastMessage, setBroadcastMessage] = useState('');
     const [isCreateAgentModalOpen, setCreateAgentModalOpen] = useState(false);
     const [newRoleName, setNewRoleName] = useState('');
+    const [newRoleUsername, setNewRoleUsername] = useState('');
+    const [newRolePassword, setNewRolePassword] = useState('');
+    const [newRolePermissions, setNewRolePermissions] = useState<string[]>([]);
+
+    const permissionsList = ['stats', 'users', 'rooms', 'transactions', 'manual-transactions', 'agents', 'settings'];
+
 
     const handleAuth = async () => {
         setError(null);
@@ -292,19 +298,30 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleCreateRole = async () => {
-        if (!adminUser || !newRoleName) return;
+        if (!adminUser || !newRoleName || !newRoleUsername || !newRolePassword) {
+            setError('Please fill in all fields for the new role.');
+            return;
+        }
         setError(null);
         try {
             const response = await fetch(`/api/admin/roles/create?userId=${adminUser.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name: newRoleName }),
+                body: JSON.stringify({ 
+                    name: newRoleName,
+                    username: newRoleUsername,
+                    password: newRolePassword,
+                    permissions: newRolePermissions,
+                }),
             });
             if (!response.ok) {
                 const err = await response.json();
                 throw new Error(err.error || 'Failed to create role');
             }
             setNewRoleName('');
+            setNewRoleUsername('');
+            setNewRolePassword('');
+            setNewRolePermissions([]);
             fetchData('settings');
         } catch (err: any) {
             setError(err.message);
@@ -325,9 +342,17 @@ const AdminDashboard: React.FC = () => {
                 throw new Error(err.error || 'Failed to delete role');
             }
             fetchData('settings');
-        } catch (err: any) {
+        } catch (err: any) => {
             setError(err.message);
         }
+    };
+
+    const handlePermissionChange = (permission: string) => {
+        setNewRolePermissions(prev =>
+            prev.includes(permission)
+                ? prev.filter(p => p !== permission)
+                : [...prev, permission]
+        );
     };
 
     const renderGameHistoryModal = () => {
@@ -599,7 +624,7 @@ const AdminDashboard: React.FC = () => {
                     <div>
                         <h2 className="text-2xl font-bold text-white mb-4">Role Management</h2>
                         <div className="bg-gray-800 p-6 rounded-lg">
-                            <div className="flex gap-2 mb-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                                 <input
                                     type="text"
                                     value={newRoleName}
@@ -607,13 +632,46 @@ const AdminDashboard: React.FC = () => {
                                     placeholder="New role name"
                                     className="bg-gray-700 text-white px-3 py-2 rounded w-full"
                                 />
-                                <button
-                                    onClick={handleCreateRole}
-                                    className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
-                                >
-                                    Create Role
-                                </button>
+                                <input
+                                    type="text"
+                                    value={newRoleUsername}
+                                    onChange={(e) => setNewRoleUsername(e.target.value)}
+                                    placeholder="Username"
+                                    className="bg-gray-700 text-white px-3 py-2 rounded w-full"
+                                />
+                                <input
+                                    type="password"
+                                    value={newRolePassword}
+                                    onChange={(e) => setNewRolePassword(e.target.value)}
+                                    placeholder="Password"
+                                    className="bg-gray-700 text-white px-3 py-2 rounded w-full"
+                                />
                             </div>
+                            <div className="mb-4">
+                                <h3 className="text-lg font-bold text-white mb-2">Permissions</h3>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                                    {permissionsList.map(permission => (
+                                        <label key={permission} className="flex items-center space-x-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={newRolePermissions.includes(permission)}
+                                                onChange={() => handlePermissionChange(permission)}
+                                                className="form-checkbox h-5 w-5 text-purple-600 bg-gray-700 border-gray-600 rounded"
+                                            />
+                                            <span className="text-white capitalize">{permission.replace('-', ' ')}</span>
+                                        </label>
+                                    ))}
+                                </div>
+                            </div>
+                            <button
+                                onClick={handleCreateRole}
+                                className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+                            >
+                                Create Role
+                            </button>
+                        </div>
+                        <div className="bg-gray-800 p-6 rounded-lg mt-6">
+                             <h3 className="text-xl font-bold text-white mb-4">Existing Roles</h3>
                             <table className="min-w-full divide-y divide-gray-700">
                                 <thead className="bg-gray-800">
                                     <tr>
@@ -916,6 +974,13 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
+    const hasPermission = (permission: string) => {
+        if (!adminUser) return false;
+        // Super admin has all permissions
+        if (adminUser.username === 'admin') return true;
+        return adminUser.permissions?.includes(permission);
+    };
+
 
 
 
@@ -934,13 +999,13 @@ const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div className="bg-gray-800 rounded-lg p-1 flex space-x-1 mb-6">
-                        <button onClick={() => setView('stats')} className={`w-full py-2 rounded ${view === 'stats' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Stats</button>
-                        <button onClick={() => setView('users')} className={`w-full py-2 rounded ${view === 'users' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Users</button>
-                        <button onClick={() => setView('rooms')} className={`w-full py-2 rounded ${view === 'rooms' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Rooms</button>
-                        <button onClick={() => setView('transactions')} className={`w-full py-2 rounded ${view === 'transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Transactions</button>
-                        <button onClick={() => setView('manual-transactions')} className={`w-full py-2 rounded ${view === 'manual-transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Manual Transactions</button>
-                        <button onClick={() => setView('agents')} className={`w-full py-2 rounded ${view === 'agents' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Agents</button>
-                        <button onClick={() => setView('settings')} className={`w-full py-2 rounded ${view === 'settings' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Settings</button>
+                        {hasPermission('stats') && <button onClick={() => setView('stats')} className={`w-full py-2 rounded ${view === 'stats' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Stats</button>}
+                        {hasPermission('users') && <button onClick={() => setView('users')} className={`w-full py-2 rounded ${view === 'users' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Users</button>}
+                        {hasPermission('rooms') && <button onClick={() => setView('rooms')} className={`w-full py-2 rounded ${view === 'rooms' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Rooms</button>}
+                        {hasPermission('transactions') && <button onClick={() => setView('transactions')} className={`w-full py-2 rounded ${view === 'transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Transactions</button>}
+                        {hasPermission('manual-transactions') && <button onClick={() => setView('manual-transactions')} className={`w-full py-2 rounded ${view === 'manual-transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Manual Transactions</button>}
+                        {hasPermission('agents') && <button onClick={() => setView('agents')} className={`w-full py-2 rounded ${view === 'agents' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Agents</button>}
+                        {hasPermission('settings') && <button onClick={() => setView('settings')} className={`w-full py-2 rounded ${view === 'settings' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Settings</button>}
                     </div>
 
                     <div className="bg-gray-800 p-6 rounded-lg">

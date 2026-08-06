@@ -3382,16 +3382,29 @@ const isAdmin = (req: express.Request, res: express.Response, next: express.Next
     });
 };
 
-app.get('/api/admin/settings', isAdmin, (req, res) => {
-    res.json({
-        username: store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
-        passwordConfigured: Boolean(store.adminSettings?.password),
-        roles: store.adminSettings?.roles || DEFAULT_ADMIN_ROLES,
-    });
+app.get('/api/admin/settings', isAdmin, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+    
+    try {
+        const adminUsersSnapshot = await db.collection('adminUsers').get();
+        const roles = adminUsersSnapshot.docs.map(doc => {
+            const { password, ...roleData } = doc.data();
+            return roleData;
+        });
+
+        res.json({
+            username: store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
+            passwordConfigured: Boolean(store.adminSettings?.password),
+            roles: roles,
+        });
+    } catch (error) {
+        console.error('Failed to retrieve admin roles:', error);
+        res.status(500).json({ error: 'Failed to retrieve admin roles.' });
+    }
 });
 
 app.post('/api/admin/settings', isAdmin, async (req, res) => {
-    const { currentPassword, newPassword, confirmPassword, roles } = req.body;
+    const { currentPassword, newPassword, confirmPassword } = req.body;
     const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password';
 
     if (typeof newPassword === 'string' && newPassword.trim()) {
@@ -3407,24 +3420,6 @@ app.post('/api/admin/settings', isAdmin, async (req, res) => {
         store.adminSettings.password = newPassword;
     }
 
-    if (Array.isArray(roles)) {
-        const normalizedRoles = roles
-            .filter((role: any) => role && typeof role.name === 'string' && role.name.trim())
-            .map((role: any) => ({
-                id: role.id || `${role.name.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
-                name: role.name.trim(),
-                permissions: Array.isArray(role.permissions) ? role.permissions.filter((permission: any) => typeof permission === 'string') : [],
-            }));
-
-        if (normalizedRoles.length > 0) {
-            const hasAdminRole = normalizedRoles.some((role) => role.id === 'admin' || role.name.toLowerCase() === 'administrator');
-            if (!hasAdminRole) {
-                normalizedRoles.unshift({ id: 'admin', name: 'Administrator', permissions: ['all'] });
-            }
-            store.adminSettings.roles = normalizedRoles;
-        }
-    }
-
     if (typeof req.body.username === 'string' && req.body.username.trim()) {
         store.adminSettings.username = req.body.username.trim();
     }
@@ -3435,65 +3430,75 @@ app.post('/api/admin/settings', isAdmin, async (req, res) => {
         settings: {
             username: store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
             passwordConfigured: Boolean(store.adminSettings?.password),
-            roles: store.adminSettings?.roles || DEFAULT_ADMIN_ROLES,
         },
     });
 });
 
-// Create a new role
-app.post('/api/admin/roles/create', isAdmin, async (req, res) => {
-    const { name } = req.body;
-    if (!name || typeof name !== 'string' || !name.trim()) {
-        return res.status(400).json({ error: 'Role name is required.' });
+app.post('/api/admin/roles/create', hasPermission('all'), async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+    const { username, password, permissions, name } = req.body;
+
+    if (!username || !password || !Array.isArray(permissions) || !name) {
+        return res.status(400).json({ error: 'Role Name, username, password, and a list of permissions are required.' });
     }
 
-    const trimmedName = name.trim();
-    if (!store.adminSettings.roles) {
-        store.adminSettings.roles = [];
+    try {
+        const adminUsersRef = db.collection('adminUsers');
+        const existingAdmin = await adminUsersRef.where('username', '==', username).get();
+        if (!existingAdmin.empty) {
+            return res.status(409).json({ error: 'An admin with this username already exists.' });
+        }
+        
+        const newAdminId = `admin_${Date.now()}`;
+        const newAdmin: AdminUser = {
+            id: newAdminId,
+            username,
+            password, // In a real app, this MUST be hashed.
+            permissions,
+            name, // Adding the role name field
+        };
+
+        await adminUsersRef.doc(newAdminId).set(newAdmin);
+        
+        const { password: _, ...userToReturn } = newAdmin;
+        res.status(201).json({ success: true, user: userToReturn });
+
+    } catch (error) {
+        console.error('Failed to create admin user:', error);
+        res.status(500).json({ error: 'Failed to create admin user.' });
     }
-
-    const existingRole = store.adminSettings.roles.find(r => r.name.toLowerCase() === trimmedName.toLowerCase());
-    if (existingRole) {
-        return res.status(409).json({ error: 'A role with this name already exists.' });
-    }
-
-    const newRole: AdminRoleTemplate = {
-        id: `${trimmedName.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}`,
-        name: trimmedName,
-        permissions: [], // Start with no permissions
-    };
-
-    store.adminSettings.roles.push(newRole);
-    await saveStoreAndWait();
-
-    res.status(201).json({ success: true, role: newRole });
 });
 
-// Delete a role
-app.post('/api/admin/roles/delete', isAdmin, async (req, res) => {
-    const { name } = req.body;
-    if (!name) {
-        return res.status(400).json({ error: 'Role name is required.' });
+// Delete an admin user/role
+app.post('/api/admin/roles/delete', hasPermission('all'), async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+    const { id } = req.body; // Deleting by ID is safer
+    if (!id) {
+        return res.status(400).json({ error: 'Admin user ID is required.' });
     }
 
-    if (!store.adminSettings.roles) {
-        return res.status(404).json({ error: 'No roles found to delete.' });
+    try {
+        const adminRef = db.collection('adminUsers').doc(id);
+        const doc = await adminRef.get();
+        
+        if (!doc.exists) {
+            return res.status(404).json({ error: 'Admin user not found.' });
+        }
+        
+        // Optional: Prevent deleting the super admin
+        const adminData = doc.data() as AdminUser;
+        if (adminData.permissions.includes('all')) {
+            // Or check by a specific username/ID if there's a known root admin
+            // return res.status(400).json({ error: 'Cannot delete a super administrator.' });
+        }
+        
+        await adminRef.delete();
+        res.json({ success: true, message: 'Admin user deleted successfully.' });
+
+    } catch (error) {
+        console.error('Failed to delete admin user:', error);
+        res.status(500).json({ error: 'Failed to delete admin user.' });
     }
-
-    const roleIndex = store.adminSettings.roles.findIndex(r => r.name === name);
-    if (roleIndex === -1) {
-        return res.status(404).json({ error: 'Role not found.' });
-    }
-
-    // Prevent deletion of the 'Administrator' role
-    if (store.adminSettings.roles[roleIndex].id === 'admin' || store.adminSettings.roles[roleIndex].name.toLowerCase() === 'administrator') {
-        return res.status(400).json({ error: 'The default Administrator role cannot be deleted.' });
-    }
-
-    store.adminSettings.roles.splice(roleIndex, 1);
-    await saveStoreAndWait();
-
-    res.json({ success: true, message: 'Role deleted successfully.' });
 });
 
 // Get all runtime stats
