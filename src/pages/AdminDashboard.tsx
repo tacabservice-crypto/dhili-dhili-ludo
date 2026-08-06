@@ -1,14 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { UserProfile, GameRoom } from '../types/game';
 import UserEditModal from '../components/UserEditModal';
+import CreateAgentModal from '../components/CreateAgentModal';
+import ChangePasswordForm from '../components/ChangePasswordForm'; // Import ChangePasswordForm
+import ManageRoles from '../components/ManageRoles'; // Import ManageRoles
 import { formatCurrency } from '../utils/number';
 
 const AdminDashboard: React.FC = () => {
     const [adminId, setAdminId] = useState<string | null>(localStorage.getItem('admin_id'));
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'agents'>('stats');
+    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'agents' | 'admin-settings'>('stats');
     const [error, setError] = useState<string | null>(null);
+    const [adminSettingSuccessMessage, setAdminSettingSuccessMessage] = useState<string | null>(null);
+    const [adminSettingErrorMessage, setAdminSettingErrorMessage] = useState<string | null>(null);
 
     const defaultPaymentSettings = {
         defaultProvider: 'evc',
@@ -27,6 +32,8 @@ const AdminDashboard: React.FC = () => {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [manualTransactions, setManualTransactions] = useState<any[]>([]);
     const [paymentSettings, setPaymentSettings] = useState<any>(defaultPaymentSettings);
+    const [adminSettings, setAdminSettings] = useState<any>(null);
+
 
     const [agents, setAgents] = useState<any[]>([]);
 
@@ -74,7 +81,7 @@ const AdminDashboard: React.FC = () => {
         setAdminId(null);
     };
 
-    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings') => {
+    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'admin-settings') => {
         if (!adminId) return;
         setError(null);
         try {
@@ -119,6 +126,9 @@ const AdminDashboard: React.FC = () => {
                     break;
                 case 'agents':
                     setAgents(data);
+                    break;
+                case 'admin-settings':
+                    setAdminSettings(data);
                     break;
             }
         } catch (err: any) {
@@ -673,6 +683,39 @@ const AdminDashboard: React.FC = () => {
                         </div>
                     </div>
                 );
+            case 'admin-settings':
+                if (!adminId) return <p>Admin ID not found. Please log in again.</p>;
+                return (
+                    <div className="space-y-6">
+                        <h2 className="text-xl font-bold text-white mb-4">Admin Settings</h2>
+
+                        {adminSettingSuccessMessage && (
+                            <div className="bg-green-500 text-white p-3 rounded mb-4">{adminSettingSuccessMessage}</div>
+                        )}
+                        {adminSettingErrorMessage && (
+                            <div className="bg-red-500 text-white p-3 rounded mb-4">{adminSettingErrorMessage}</div>
+                        )}
+
+                        {/* Change Password Form */}
+                        <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+                            <h3 className="text-lg font-bold text-white mb-4">Change Admin Password</h3>
+                            <ChangePasswordForm 
+                                adminId={adminId} 
+                                onSuccess={(msg) => { setAdminSettingSuccessMessage(msg); setAdminSettingErrorMessage(null); }}
+                                onError={(msg) => { setAdminSettingErrorMessage(msg); setAdminSettingSuccessMessage(null); }}
+                            />
+                        </div>
+                        {/* Manage Roles */}
+                        <div className="bg-gray-900 rounded-xl p-4 border border-gray-700">
+                            <h3 className="text-lg font-bold text-white mb-4">Manage Roles</h3>
+                            <ManageRoles 
+                                adminId={adminId} 
+                                onSuccess={(msg) => { setAdminSettingSuccessMessage(msg); setAdminSettingErrorMessage(null); }}
+                                onError={(msg) => { setAdminSettingErrorMessage(msg); setAdminSettingSuccessMessage(null); }}
+                            />
+                        </div>
+                    </div>
+                );
             default:
                 return null;
         }
@@ -699,64 +742,7 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const renderCreateAgentModal = () => {
-        if (!isCreateAgentModalOpen) return null;
 
-        const [newAgentUsername, setNewAgentUsername] = useState('');
-        const [newAgentPassword, setNewAgentPassword] = useState('');
-        const [newAgentCommission, setNewAgentCommission] = useState('0.1');
-
-
-        const handleSubmit = () => {
-            handleCreateAgent({
-                username: newAgentUsername,
-                password: newAgentPassword,
-                commissionRate: newAgentCommission
-            });
-        };
-
-        return (
-            <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-                <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
-                    <h2 className="text-xl font-bold mb-4 text-white">Create New Agent</h2>
-                    <div className="space-y-4">
-                        <input
-                            type="text"
-                            value={newAgentUsername}
-                            onChange={(e) => setNewAgentUsername(e.target.value)}
-                            placeholder="Username"
-                            className="bg-gray-700 text-white w-full px-4 py-2 rounded"
-                        />
-                        <input
-                            type="password"
-                            value={newAgentPassword}
-                            onChange={(e) => setNewAgentPassword(e.target.value)}
-                            placeholder="Password"
-                            className="bg-gray-700 text-white w-full px-4 py-2 rounded"
-                        />
-                        <input
-                            type="number"
-                            value={newAgentCommission}
-                            onChange={(e) => setNewAgentCommission(e.target.value)}
-                            placeholder="Commission Rate (e.g., 0.1 for 10%)"
-                            step="0.01"
-                            min="0"
-                            max="1"
-                            className="bg-gray-700 text-white w-full px-4 py-2 rounded"
-                        />
-                    </div>
-                    <div className="mt-6 flex justify-end space-x-4">
-                        <button onClick={() => setCreateAgentModalOpen(false)} className="bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
-                            Close
-                        </button>
-                        <button onClick={handleSubmit} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
-                            Create Agent
-                        </button>
-                    </div>
-                </div>
-            </div>
-        );
-    };
 
 
     return (
@@ -780,6 +766,7 @@ const AdminDashboard: React.FC = () => {
                         <button onClick={() => setView('transactions')} className={`w-full py-2 rounded ${view === 'transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Transactions</button>
                         <button onClick={() => setView('manual-transactions')} className={`w-full py-2 rounded ${view === 'manual-transactions' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Manual Transactions</button>
                         <button onClick={() => setView('agents')} className={`w-full py-2 rounded ${view === 'agents' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Agents</button>
+                        <button onClick={() => setView('admin-settings')} className={`w-full py-2 rounded ${view === 'admin-settings' ? 'bg-purple-600' : 'hover:bg-gray-700'}`}>Admin Settings</button>
                     </div>
 
                     <div className="bg-gray-800 p-6 rounded-lg">
@@ -811,6 +798,11 @@ const AdminDashboard: React.FC = () => {
                 />
             )}
             {renderGameHistoryModal()}
+            <CreateAgentModal
+                isOpen={isCreateAgentModalOpen}
+                onClose={() => setCreateAgentModalOpen(false)}
+                onCreateAgent={handleCreateAgent}
+            />
         </>
     );
 };
