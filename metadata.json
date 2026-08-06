@@ -1,6 +1,6 @@
 {
-  "name": "Dhili Dhili Ludo",
-  "description": "Dhili Dhili is a premium, high-stakes multiplayer Ludo game featuring a luxurious Somali-themed UI, real-time matchmaking, private lounges, and immersive 3D gameplay.",
+  "name": "Ludo$om",
+  "description": "Ludo$om is a premium, high-stakes multiplayer Ludo game featuring a luxurious Somali-themed UI, real-time matchmaking, private lounges, and immersive 3D gameplay.",
   "requestFramePermissions": ["microphone"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

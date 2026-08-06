@@ -478,7 +478,7 @@ export default function Dashboard({
         {/* Top Header */}
         <div className="text-center z-10 space-y-1 mb-4">
           <h1 className="text-3xl font-black tracking-widest bg-gradient-to-r from-yellow-400 via-white to-purple-400 bg-clip-text text-transparent">
-            DHILI DHILI
+            Ludo$om
           </h1>
           <p className="text-[10px] font-black text-purple-400 tracking-wider uppercase">{t('searchingPlayers')}</p>
           <div className="inline-block bg-purple-500/20 border border-purple-500/30 text-purple-300 text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-widest mt-1">
@@ -672,7 +672,7 @@ export default function Dashboard({
             <Trophy className="w-5 h-5 text-white animate-pulse" />
           </div>
           <div>
-            <span className="font-black text-sm tracking-widest block text-yellow-400">DHILI <span className="text-white">DHILI</span></span>
+            <span className="font-black text-sm tracking-widest block text-yellow-400">Ludo<span className="text-white">$om</span></span>
             <span className="text-[8px] font-black text-purple-400 uppercase tracking-widest block">Ludo Arena Soomaaliyeed</span>
           </div>
         </div>
@@ -690,47 +690,70 @@ export default function Dashboard({
 
           {/* Settings Dropdown */}
           <div className="relative" ref={settingsDropdownRef}>
-            <button
-              onClick={() => setIsSettingsDropdownOpen(!isSettingsDropdownOpen)}
-              className="p-2 hover:bg-white/10 text-slate-400 hover:text-white rounded-xl transition-all cursor-pointer"
+            <div
+              className="flex items-center gap-2 cursor-pointer"
+              onClick={() => setIsSettingsDropdownOpen(prev => !prev)}
             >
-              <MoreVertical className="w-4 h-4" />
-            </button>
+              <span className="text-2xl bg-black/20 p-1 rounded-full">{user.avatar}</span>
+              <MoreVertical className="w-4 h-4 text-slate-400" />
+            </div>
 
             {isSettingsDropdownOpen && (
-              <div className="absolute top-full right-0 mt-2 w-48 bg-slate-800/90 backdrop-blur-xl border border-white/10 rounded-xl shadow-2xl z-40 overflow-hidden animate-in fade-in duration-150">
-                <div className="p-2 space-y-1">
+              <div className="absolute top-full right-0 mt-2 w-56 bg-[#1A0C40] border border-purple-500/40 rounded-xl shadow-2xl z-40 text-sm">
+                <div className="p-2 border-b border-purple-500/20">
+                  <p className="font-bold text-white">{user.username}</p>
+                  {user.email && <p className="text-xs text-slate-400">{user.email}</p>}
+                </div>
+                <div className="p-1">
                   <button
                     onClick={() => {
                       setIsEditingProfile(true);
                       setIsSettingsDropdownOpen(false);
                     }}
-                    className="w-full text-left flex items-center gap-2 p-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:bg-purple-500/20 hover:text-white rounded-md"
                   >
-                    <User className="w-3.5 h-3.5" />
+                    <User className="w-4 h-4" />
                     <span>{t('profileSettings')}</span>
                   </button>
-                  <div className="px-2">
-                    <LanguageToggle />
-                  </div>
+                  <LanguageToggle />
                   <button
                     onClick={() => {
                       setShowAboutUs(true);
                       setIsSettingsDropdownOpen(false);
                     }}
-                    className="w-full text-left flex items-center gap-2 p-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:bg-purple-500/20 hover:text-white rounded-md"
                   >
-                    <Info className="w-3.5 h-3.5" />
+                    <Info className="w-4 h-4" />
                     <span>{t('aboutUs')}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      window.location.assign('/vip'); // Navigate to the BecomeVip page
+                      setIsSettingsDropdownOpen(false);
+                    }}
+                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-yellow-400 hover:bg-yellow-500/20 hover:text-yellow-300 rounded-md"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>{t('becomeVip')}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      window.location.assign('/tournaments'); // Navigate to the Tournaments page
+                      setIsSettingsDropdownOpen(false);
+                    }}
+                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-green-400 hover:bg-green-500/20 hover:text-green-300 rounded-md"
+                  >
+                    <Trophy className="w-4 h-4" />
+                    <span>{t('tournaments')}</span>
                   </button>
                   <button
                     onClick={() => {
                       setShowHelp(true);
                       setIsSettingsDropdownOpen(false);
                     }}
-                    className="w-full text-left flex items-center gap-2 p-2 rounded-lg text-xs font-semibold text-slate-300 hover:bg-white/5 hover:text-white transition-all"
+                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-slate-300 hover:bg-purple-500/20 hover:text-white rounded-md"
                   >
-                    <HelpCircle className="w-3.5 h-3.5" />
+                    <HelpCircle className="w-4 h-4" />
                     <span>{t('help')}</span>
                   </button>
                   <button
@@ -738,9 +761,9 @@ export default function Dashboard({
                       onLogout();
                       setIsSettingsDropdownOpen(false);
                     }}
-                    className="w-full text-left flex items-center gap-2 p-2 rounded-lg text-xs font-semibold text-red-400 hover:bg-red-500/10 hover:text-red-300 transition-all"
+                    className="w-full text-left flex items-center gap-2 px-3 py-1.5 text-red-400 hover:bg-red-500/20 hover:text-red-300 rounded-md"
                   >
-                    <LogOut className="w-3.5 h-3.5" />
+                    <LogOut className="w-4 h-4" />
                     <span>{t('logout')}</span>
                   </button>
                 </div>
@@ -769,7 +792,9 @@ export default function Dashboard({
 
             <div className="space-y-0.5 sm:space-y-1 min-w-0 flex-1">
               <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-                <h2 className="text-xs sm:text-base font-bold text-white tracking-wide truncate max-w-[100px] xs:max-w-[140px] sm:max-w-none" title={user.username}>{user.username}</h2>
+                <h2 className="text-xs sm:text-base font-bold text-white tracking-wide truncate max-w-[100px] xs:max-w-[140px] sm:max-w-none" title={user.username}>
+                  {user.username} {user.vip && user.vip.expires > Date.now() && <span className="ml-1 text-yellow-400 text-lg">👑</span>}
+                </h2>
                 <button 
                   onClick={() => setIsEditingProfile(!isEditingProfile)}
                   className="shrink-0 rounded-md border border-white/10 bg-white/5 px-1.5 sm:px-2 py-0.5 text-[9px] sm:text-[10px] font-semibold text-blue-400 hover:bg-white/10 transition-all cursor-pointer active:scale-95"

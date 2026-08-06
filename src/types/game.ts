@@ -13,11 +13,7 @@ export interface UserProfile {
   winCount: number;
   lossCount: number;
   isOfflinePreference?: boolean;
-  role?: 'admin' | 'player'; // Added for admin roles
-  gamesPlayed?: number;
-  winRate?: number;
-  currentStreak?: number;
-  bestStreak?: number;
+  vip?: { tier: string; expires: number; };
 }
 
 export interface WalletTransaction {
@@ -111,4 +107,65 @@ export interface GameRoom {
   gameMode?: 'solo' | 'team'; // 'solo' or 'team'
   pendingPlayers?: LudoPlayer[]; // Players waiting for host approval
   rejectionReason?: string; // Reason for join rejection, for client-side feedback
+  tournamentDetails?: { tournamentId: string; matchId: string; };
 }
+
+// ==========================================
+// AGENT SYSTEM TYPES
+// ==========================================
+
+export interface Agent {
+  id: string; // Unique ID for the agent record
+  userId: string; // Links to a UserProfile ID
+  floatBalance: number; // The amount of digital currency the agent has available to sell
+  status: 'Active' | 'Suspended' | 'Pending';
+  createdAt: number;
+}
+
+export interface AgentTransaction {
+  id: string;
+  agentId: string;
+  type: 'FloatPurchase' | 'PlayerDeposit';
+  amount: number;
+  discountAmount?: number; // For FloatPurchase, records the profit made by the platform owner
+  playerId?: string; // For PlayerDeposit, the user who received the funds
+  timestamp: number;
+  description: string;
+}
+
+export interface VipSubscription {
+  id: string;
+  userId: string;
+  tier: string; // e.g., 'gold'
+  status: 'Active' | 'Expired' | 'Cancelled';
+  startDate: number;
+  endDate: number;
+}
+
+export interface Tournament {
+  id: string;
+  name: string;
+  entryFee: number;
+  prizePool: number;
+  status: 'registration_open' | 'in_progress' | 'completed' | 'cancelled';
+  players: { userId: string; username: string; avatar: string; }[];
+  maxPlayers: number;
+  startDate: number;
+  endDate: number;
+  winnerId: string | null;
+  currentRound: number;
+  matches: TournamentMatch[]; // References to TournamentMatch IDs or embedded matches
+  createdAt: number;
+}
+
+export interface TournamentMatch {
+  id: string;
+  tournamentId: string;
+  round: number;
+  player1: { userId: string; username: string; avatar: string; } | null;
+  player2: { userId: string; username: string; avatar: string; } | null;
+  winnerId: string | null;
+  roomId: string | null; // Reference to a GameRoom ID if played in a Ludo room
+  status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
+}
+

@@ -11,6 +11,8 @@ import GameRoomView from './components/GameRoom';
 import WalletModal from './components/WalletModal';
 import RejoinPrompt from './components/RejoinPrompt';
 import AdminDashboard from './components/AdminDashboard';
+import BecomeVip from './pages/BecomeVip';
+import Tournaments from './pages/Tournaments';
 import InstallPwaPrompt from './components/InstallPwaPrompt';
 import { Toaster } from 'react-hot-toast';
 import { VoiceChatProvider } from './context/VoiceChatContext';
@@ -118,13 +120,12 @@ export default function App() {
 
           const profileData: UserProfile = await response.json();
           setUser(profileData);
-          checkAndPromptRejoin(profileData.id);
+          // Initiate rejoin check without awaiting to not block authLoading
+          void checkAndPromptRejoin(profileData.id);
         } catch (err) {
           console.error("Auth session restore error:", err);
           setUser(null); // Ensure user is logged out on error
         }
-      } else {
-        setUser(null);
       }
       setAuthLoading(false);
     });
@@ -836,6 +837,14 @@ export default function App() {
 
   if (window.location.pathname === '/admin') {
     return <AdminDashboard />;
+  }
+
+  if (window.location.pathname === '/vip') {
+    return <BecomeVip />;
+  }
+
+  if (window.location.pathname === '/tournaments') {
+    return <Tournaments />;
   }
   
   if (rejoinableRoom) {

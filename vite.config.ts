@@ -13,8 +13,8 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'logo.svg', 'dice.mp3', 'win.mp3'],
         manifest: {
-          name: 'Dhili Dhili Ludo',
-          short_name: 'DDL',
+          name: 'Ludo$om',
+          short_name: 'Ludo$om',
           description:
             'A modern online Ludo game with real-time multiplayer and betting features.',
           theme_color: '#ffffff',
@@ -36,6 +36,14 @@ export default defineConfig(() => {
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
+      },
+    },
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          agent: path.resolve(__dirname, 'agent.html'),
+        },
       },
     },
     server: {

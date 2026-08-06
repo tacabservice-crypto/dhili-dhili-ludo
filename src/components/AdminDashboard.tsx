@@ -1106,7 +1106,7 @@ const AdminDashboard: React.FC = () => {
                         </button>
                         <div>
                             <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Dashboard</p>
-                            <h1 className="text-xl font-semibold">Dhili Dhili Ludo</h1>
+                            <h1 className="text-xl font-semibold">Ludo$om</h1>
                         </div>
                         <button
                             onClick={handleLogout}
@@ -1122,7 +1122,7 @@ const AdminDashboard: React.FC = () => {
                             <div className="rounded-none border border-slate-800/80 bg-slate-900/90 p-6 shadow-lg shadow-slate-950/20">
                                 <div className="flex items-start justify-between gap-4">
                                     <div>
-                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Dhili Dhili Ludo</p>
+                                        <p className="text-sm uppercase tracking-[0.3em] text-slate-500">Ludo$om</p>
                                         <h2 className="mt-2 text-3xl font-semibold">Admin Console</h2>
                                     </div>
                                     <div className="rounded-2xl bg-slate-800 p-3 text-slate-300">

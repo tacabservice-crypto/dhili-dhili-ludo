@@ -407,12 +407,6 @@ var START_OFFSETS = {
   red: 39
 };
 var SAFE_GLOBAL_SQUARES = [0, 8, 13, 21, 26, 34, 39, 47];
-var HOME_ENTRY_POSITIONS = {
-  green: 50,
-  yellow: 11,
-  blue: 24,
-  red: 37
-};
 function getGlobalPosition(color, relativePos) {
   if (relativePos < 0 || relativePos > 50) return null;
   const offset = START_OFFSETS[color];
@@ -431,12 +425,6 @@ function isMoveValid(token, roll) {
   if (token.position === 56) return false;
   if (token.position === -1) {
     return roll === 6;
-  }
-  const homeEntry = HOME_ENTRY_POSITIONS[token.color];
-  if (token.position <= homeEntry && token.position + roll > homeEntry) {
-    const stepsIntoHomeStretch = token.position + roll - homeEntry;
-    const finalHomePosition = 50 + stepsIntoHomeStretch;
-    return finalHomePosition <= 56;
   }
   return token.position + roll <= 56;
 }
@@ -548,20 +536,34 @@ function moveTokenLogic(room, tokenId, diceValue) {
   if (!token) return;
   const activePlayer = room.players[gs.turn];
   const oldPos = token.position;
-  if (token.position === -1 && diceValue === 6) {
-    token.position = 0;
-    addLog(room, `${activePlayer.username} moved token out of base onto start!`);
-  } else {
-    const homeEntry = HOME_ENTRY_POSITIONS[token.color];
-    let newPos = token.position;
-    if (token.position <= homeEntry && token.position + diceValue > homeEntry) {
-      const stepsIntoHomeStretch = token.position + diceValue - homeEntry;
-      newPos = 50 + stepsIntoHomeStretch;
+  let newPos = oldPos;
+  const RELATIVE_HOME_ENTRY_SQUARE = 51;
+  const MAIN_TRACK_LENGTH = 52;
+  if (oldPos === -1 && diceValue === 6) {
+    newPos = 0;
+    addLog(room, `${activePlayer.username} moved token out of base!`);
+  } else if (oldPos >= 0) {
+    if (oldPos < RELATIVE_HOME_ENTRY_SQUARE) {
+      const theoreticalNewPos = oldPos + diceValue;
+      if (oldPos >= RELATIVE_HOME_ENTRY_SQUARE - 6 && oldPos < RELATIVE_HOME_ENTRY_SQUARE && theoreticalNewPos >= RELATIVE_HOME_ENTRY_SQUARE) {
+        newPos = theoreticalNewPos;
+      } else {
+        newPos = theoreticalNewPos;
+        if (newPos >= MAIN_TRACK_LENGTH) {
+          newPos = newPos % MAIN_TRACK_LENGTH;
+        }
+      }
     } else {
-      newPos += diceValue;
+      newPos = oldPos + diceValue;
     }
-    token.position = newPos;
-    addLog(room, `${activePlayer.username} moved token by ${diceValue} spaces (from ${oldPos} to ${token.position}).`);
+  }
+  if (newPos > 56) {
+    newPos = oldPos;
+    addLog(room, `${activePlayer.username}'s token overshot the final home square and could not move.`);
+  }
+  token.position = newPos;
+  if (oldPos !== newPos) {
+    addLog(room, `${activePlayer.username} moved token by ${diceValue} spaces (from ${oldPos === -1 ? "base" : oldPos} to ${newPos}).`);
   }
   let bonusTurn = diceValue === 6;
   const finalGlobal = getGlobalPosition(token.color, token.position);
@@ -572,7 +574,7 @@ function moveTokenLogic(room, tokenId, diceValue) {
         const isAlly = token.color === "red" && t.color === "yellow" || token.color === "yellow" && t.color === "red" || token.color === "green" && t.color === "blue" || token.color === "blue" && t.color === "green";
         if (isAlly) return false;
       }
-      if (t.position < 0 || t.position > 50) return false;
+      if (t.position < 0 || t.position >= RELATIVE_HOME_ENTRY_SQUARE) return false;
       const otherGlobal = getGlobalPosition(t.color, t.position);
       return otherGlobal === finalGlobal;
     });
@@ -2423,7 +2425,10 @@ async function startServer() {
   } else {
     const distPath = import_path.default.join(process.cwd(), "dist");
     app.use(import_express.default.static(distPath));
-    app.get("*", (req, res) => {
+    app.get(/^(?!\/api).*/, (req, res) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
       res.sendFile(import_path.default.join(distPath, "index.html"));
     });
   }
