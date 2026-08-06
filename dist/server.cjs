@@ -30,6 +30,25 @@ var import_vite = require("vite");
 var import_app = require("firebase-admin/app");
 var import_firestore = require("firebase-admin/firestore");
 var import_auth = require("firebase-admin/auth");
+var VIP_TIERS = {
+  gold: {
+    name: "Gold VIP",
+    price: 10,
+    durationMonths: 1,
+    rakeDiscount: 0.02,
+    // 2% discount on rake
+    features: ["Ad-free experience", "Exclusive avatar borders", "2% Rake Discount", "Priority Customer Support"]
+  },
+  platinum: {
+    name: "Platinum VIP",
+    price: 25,
+    durationMonths: 3,
+    rakeDiscount: 0.05,
+    // 5% discount on rake
+    features: ["All Gold features", "Unique animated avatars", "5% Rake Discount", "Early access to new game modes"]
+  }
+};
+var RAKE_PERCENTAGE = 0.1;
 var app = (0, import_express.default)();
 var configuredAllowedOrigins = [
   process.env.VITE_APP_URL,
@@ -145,7 +164,9 @@ var store = {
   houseRevenue: 0,
   pendingManualTransactions: [],
   paymentProviders: { ...DEFAULT_PAYMENT_PROVIDERS },
-  adminSettings: { ...DEFAULT_ADMIN_SETTINGS }
+  adminSettings: { ...DEFAULT_ADMIN_SETTINGS },
+  agents: {},
+  agentTransactions: []
 };
 function loadStore() {
   try {
@@ -169,12 +190,15 @@ function loadStore() {
         ...DEFAULT_PAYMENT_PROVIDERS,
         ...parsed.paymentProviders || {}
       };
+      store.tournaments = parsed.tournaments || {};
       const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
       store.adminSettings = {
         username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
         password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || "password",
         roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES
       };
+      store.agents = parsed.agents || {};
+      store.agentTransactions = parsed.agentTransactions || [];
       console.log("Database loaded successfully from disk.");
     } else {
       saveStoreAndWait();
@@ -219,6 +243,9 @@ async function loadStoreFromFirestore() {
           password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || "password",
           roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES
         };
+        store.agents = parsed.agents || {};
+        store.agentTransactions = parsed.agentTransactions || [];
+        store.tournaments = parsed.tournaments || {};
         console.log("Database loaded successfully from Firebase Firestore.");
         import_fs.default.writeFileSync(DB_FILE, payload.data, "utf8");
         return;
@@ -596,6 +623,12 @@ function moveTokenLogic(room, tokenId, diceValue) {
   if (allFinished) {
     room.status = "completed";
     gs.winnerId = activePlayer.userId;
+    if (room.tournamentDetails) {
+      addLog(room, `\u{1F3C6} ${activePlayer.username} has won the tournament match!`);
+      handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, activePlayer.userId);
+      gs.escrowBalance = 0;
+      return;
+    }
     if (room.gameMode === "team") {
       const isRedYellow = token.color === "red" || token.color === "yellow";
       const winningColors = isRedYellow ? ["red", "yellow"] : ["green", "blue"];
@@ -628,18 +661,36 @@ function moveTokenLogic(room, tokenId, diceValue) {
     } else {
       addLog(room, `\u{1F3C6} CHAMPION! ${activePlayer.username} has finished all 4 tokens and WON the game!`);
       if (room.betAmount > 0) {
-        const winner = store.users[activePlayer.userId];
-        if (winner) {
-          winner.balance += gs.escrowBalance;
-          winner.winCount += 1;
+        const winnerProfile = store.users[activePlayer.userId];
+        if (winnerProfile) {
+          let effectiveRakePercentage = RAKE_PERCENTAGE;
+          if (winnerProfile.vip && winnerProfile.vip.expires > Date.now()) {
+            const vipTier = VIP_TIERS[winnerProfile.vip.tier];
+            if (vipTier) {
+              effectiveRakePercentage = Math.max(0, RAKE_PERCENTAGE - vipTier.rakeDiscount);
+            }
+          }
+          const rakeAmount = gs.escrowBalance * effectiveRakePercentage;
+          const payoutAmount = gs.escrowBalance - rakeAmount;
+          winnerProfile.balance += payoutAmount;
+          winnerProfile.winCount += 1;
           addTransaction(
             activePlayer.userId,
             "win_payout",
-            gs.escrowBalance,
+            payoutAmount,
             room.id,
-            `Payout for winning match ${room.id} with $${room.betAmount} bet.`
+            `Payout for winning match ${room.id} with $${room.betAmount} bet (Rake: $${rakeAmount.toFixed(2)}).`
           );
           broadcastUserUpdate(activePlayer.userId);
+          store.houseRevenue += rakeAmount;
+          addTransaction(
+            "house",
+            // A special ID for house transactions
+            "app_commission",
+            rakeAmount,
+            room.id,
+            `Rake from match ${room.id} (${(effectiveRakePercentage * 100).toFixed(0)}%).`
+          );
         }
         room.players.forEach((p) => {
           if (p.userId !== activePlayer.userId && !isBotPlayer(p.userId)) {
@@ -674,18 +725,42 @@ function handleInactivityForfeit(room, inactivePlayer) {
     const winner = activePlayers[0];
     room.status = "completed";
     room.gameState.winnerId = winner.userId;
-    const totalPayout = room.gameState.escrowBalance;
-    addLog(room, `\u{1F3C6} Game Over! ${winner.username} wins by forfeit and takes the pot of $${totalPayout.toFixed(2)}!`);
-    if (room.betAmount > 0 && totalPayout > 0) {
-      const winnerProfile = store.users[winner.userId];
-      if (winnerProfile && !isBotPlayer(winnerProfile.id)) {
-        winnerProfile.balance += totalPayout;
-        winnerProfile.winCount += 1;
-        addTransaction(winner.userId, "win_payout", totalPayout, room.id, `Win by opponent inactivity forfeit.`);
-        broadcastUserUpdate(winner.userId);
+    if (room.tournamentDetails) {
+      addLog(room, `\u{1F3C6} ${winner.username} has won the tournament match by forfeit!`);
+      handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, winner.userId);
+      room.gameState.escrowBalance = 0;
+    } else {
+      const totalPayout = room.gameState.escrowBalance;
+      addLog(room, `\u{1F3C6} Game Over! ${winner.username} wins by forfeit and takes the pot of $${totalPayout.toFixed(2)}!`);
+      if (room.betAmount > 0 && totalPayout > 0) {
+        const winnerProfile = store.users[winner.userId];
+        if (winnerProfile && !isBotPlayer(winnerProfile.id)) {
+          let effectiveRakePercentage = RAKE_PERCENTAGE;
+          if (winnerProfile.vip && winnerProfile.vip.expires > Date.now()) {
+            const vipTier = VIP_TIERS[winnerProfile.vip.tier];
+            if (vipTier) {
+              effectiveRakePercentage = Math.max(0, RAKE_PERCENTAGE - vipTier.rakeDiscount);
+            }
+          }
+          const rakeAmount = totalPayout * effectiveRakePercentage;
+          const payoutAmount = totalPayout - rakeAmount;
+          winnerProfile.balance += payoutAmount;
+          winnerProfile.winCount += 1;
+          addTransaction(winner.userId, "win_payout", payoutAmount, room.id, `Win by opponent inactivity forfeit (Rake: $${rakeAmount.toFixed(2)}).`);
+          broadcastUserUpdate(winner.userId);
+          store.houseRevenue += rakeAmount;
+          addTransaction(
+            "house",
+            // A special ID for house transactions
+            "app_commission",
+            rakeAmount,
+            room.id,
+            `Rake from forfeit match ${room.id} (${(effectiveRakePercentage * 100).toFixed(0)}%).`
+          );
+        }
       }
+      room.gameState.escrowBalance = 0;
     }
-    room.gameState.escrowBalance = 0;
   }
   saveStore();
   broadcastToRoom(room.id, "game_update", room);
@@ -816,6 +891,21 @@ var verifyFirebaseToken = async (req, res, next) => {
     res.status(403).json({ error: "Unauthorized: Invalid token." });
   }
 };
+var checkVipStatus = (req, res, next) => {
+  req.isVip = false;
+  req.vipRakeDiscount = 0;
+  if (req.user && req.user.uid) {
+    const user = Object.values(store.users).find((u) => u.firebaseUid === req.user.uid);
+    if (user && user.vip && user.vip.expires > Date.now()) {
+      req.isVip = true;
+      const vipTier = VIP_TIERS[user.vip.tier];
+      if (vipTier) {
+        req.vipRakeDiscount = vipTier.rakeDiscount;
+      }
+    }
+  }
+  next();
+};
 app.get("/api/debug/firebase", async (req, res) => {
   if (!db) {
     return res.json({
@@ -914,7 +1004,7 @@ data: ${JSON.stringify(seekingData)}
     removeSSEClient(res);
   });
 });
-app.post("/api/auth/login", verifyFirebaseToken, async (req, res) => {
+app.post("/api/auth/login", verifyFirebaseToken, checkVipStatus, async (req, res) => {
   const { username, email, avatar } = req.body;
   const firebaseUid = req.user.uid;
   let foundUser = Object.values(store.users).find((u) => u.firebaseUid === firebaseUid);
@@ -1098,6 +1188,186 @@ app.post("/api/wallet/process-api-payment", async (req, res) => {
   }
   return res.status(400).json({ error: "Unsupported transaction type." });
 });
+app.post("/api/vip/subscribe", verifyFirebaseToken, async (req, res) => {
+  const { tier } = req.body;
+  const firebaseUid = req.user.uid;
+  const user = Object.values(store.users).find((u) => u.firebaseUid === firebaseUid);
+  if (!user) {
+    return res.status(404).json({ error: "User not found." });
+  }
+  const vipTier = VIP_TIERS[tier];
+  if (!vipTier) {
+    return res.status(400).json({ error: "Invalid VIP tier specified." });
+  }
+  if (user.balance < vipTier.price) {
+    return res.status(400).json({ error: "Insufficient funds to purchase this VIP subscription." });
+  }
+  user.balance -= vipTier.price;
+  const startDate = Date.now();
+  const endDate = startDate + vipTier.durationMonths * 30 * 24 * 60 * 60 * 1e3;
+  user.vip = {
+    tier,
+    expires: endDate
+  };
+  addTransaction(user.id, "app_commission", vipTier.price, void 0, `VIP Subscription (${vipTier.name}) purchase.`);
+  await saveStoreAndWait();
+  broadcastUserUpdate(user.id);
+  res.json({ success: true, user, message: `Successfully subscribed to ${vipTier.name} VIP!` });
+});
+app.get("/api/tournaments", (req, res) => {
+  const availableTournaments = Object.values(store.tournaments).filter((t) => t.status === "registration_open");
+  res.json(availableTournaments);
+});
+app.get("/api/tournaments/:id", (req, res) => {
+  const { id } = req.params;
+  const tournament = store.tournaments[id];
+  if (!tournament) {
+    return res.status(404).json({ error: "Tournament not found." });
+  }
+  res.json(tournament);
+});
+app.post("/api/tournaments/:id/register", verifyFirebaseToken, async (req, res) => {
+  const { id } = req.params;
+  const firebaseUid = req.user.uid;
+  const user = Object.values(store.users).find((u) => u.firebaseUid === firebaseUid);
+  if (!user) {
+    return res.status(404).json({ error: "User not found." });
+  }
+  const tournament = store.tournaments[id];
+  if (!tournament) {
+    return res.status(404).json({ error: "Tournament not found." });
+  }
+  if (tournament.status !== "registration_open") {
+    return res.status(400).json({ error: "Tournament is not open for registration." });
+  }
+  if (user.balance < tournament.entryFee) {
+    return res.status(400).json({ error: "Insufficient funds to register for this tournament." });
+  }
+  if (tournament.players.length >= tournament.maxPlayers) {
+    return res.status(400).json({ error: "Tournament is already full." });
+  }
+  if (tournament.players.some((p) => p.userId === user.id)) {
+    return res.status(400).json({ error: "You are already registered for this tournament." });
+  }
+  user.balance -= tournament.entryFee;
+  addTransaction(user.id, "bet_escrow_locked", tournament.entryFee, id, `Tournament entry fee for "${tournament.name}".`);
+  tournament.players.push({
+    userId: user.id,
+    username: user.username,
+    avatar: user.avatar
+  });
+  await saveStoreAndWait();
+  broadcastUserUpdate(user.id);
+  broadcastToAll("tournament_update", tournament);
+  res.json({ success: true, tournament, message: `Successfully registered for ${tournament.name}!` });
+});
+async function handleTournamentMatchWin(tournamentId, matchId, winnerId) {
+  const tournament = store.tournaments[tournamentId];
+  if (!tournament) return;
+  const match = tournament.matches.find((m) => m.id === matchId);
+  if (!match) return;
+  match.winnerId = winnerId;
+  match.status = "completed";
+  const allMatchesInRoundComplete = tournament.matches.filter((m) => m.round === tournament.currentRound).every((m) => m.status === "completed");
+  if (allMatchesInRoundComplete) {
+    const winners = tournament.matches.filter((m) => m.round === tournament.currentRound).map((m) => m.winnerId).filter((id) => id !== null).map((id) => tournament.players.find((p) => p.userId === id)).filter((p) => p !== void 0);
+    if (winners.length === 1) {
+      tournament.winnerId = winners[0].userId;
+      tournament.status = "completed";
+      tournament.endDate = Date.now();
+      const winnerUser = store.users[winners[0].userId];
+      if (winnerUser) {
+        winnerUser.balance += tournament.prizePool;
+        addTransaction(winnerUser.id, "win_payout", tournament.prizePool, tournament.id, `Tournament "${tournament.name}" prize.`);
+        broadcastUserUpdate(winnerUser.id);
+      }
+      broadcastToAll("tournament_ended", tournament);
+    } else {
+      tournament.currentRound++;
+      const nextRoundMatches = [];
+      for (let i = 0; i < winners.length; i += 2) {
+        const nextMatch = {
+          id: `tm_${tournament.id}_r${tournament.currentRound}_${i / 2}`,
+          tournamentId: tournament.id,
+          round: tournament.currentRound,
+          player1: winners[i],
+          player2: winners[i + 1] || null,
+          winnerId: winners[i + 1] ? null : winners[i].userId,
+          roomId: null,
+          status: winners[i + 1] ? "pending" : "completed"
+        };
+        nextRoundMatches.push(nextMatch);
+      }
+      tournament.matches.push(...nextRoundMatches);
+      for (const nextMatch of nextRoundMatches) {
+        if (nextMatch.status === "pending" && nextMatch.player1 && nextMatch.player2) {
+          const room = startMatchedRoom(
+            [nextMatch.player1, nextMatch.player2],
+            0,
+            2,
+            "solo"
+          );
+          nextMatch.roomId = room.id;
+          nextMatch.status = "in_progress";
+          room.tournamentDetails = { tournamentId: tournament.id, matchId: nextMatch.id };
+        }
+      }
+      broadcastToAll("tournament_update", tournament);
+    }
+  }
+  await saveStoreAndWait();
+}
+function createTournamentBracket(tournament) {
+  const players = [...tournament.players];
+  for (let i = players.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [players[i], players[j]] = [players[j], players[i]];
+  }
+  const matches = [];
+  for (let i = 0; i < players.length; i += 2) {
+    const match = {
+      id: `tm_${tournament.id}_r1_${i / 2}`,
+      tournamentId: tournament.id,
+      round: 1,
+      player1: players[i],
+      player2: players[i + 1] || null,
+      // Handle odd number of players (give a bye)
+      winnerId: players[i + 1] ? null : players[i].userId,
+      // If bye, player1 is winner
+      roomId: null,
+      status: players[i + 1] ? "pending" : "completed"
+    };
+    matches.push(match);
+  }
+  return matches;
+}
+function checkAndStartTournaments() {
+  const now = Date.now();
+  Object.values(store.tournaments).forEach(async (t) => {
+    if (t.status === "registration_open" && now >= t.startDate && t.players.length >= 2) {
+      t.status = "in_progress";
+      t.matches = createTournamentBracket(t);
+      t.currentRound = 1;
+      for (const match of t.matches) {
+        if (match.status === "pending" && match.player1 && match.player2) {
+          const room = startMatchedRoom(
+            [match.player1, match.player2],
+            0,
+            // No extra bet for tournament matches
+            2,
+            "solo"
+          );
+          match.roomId = room.id;
+          match.status = "in_progress";
+          room.tournamentDetails = { tournamentId: t.id, matchId: match.id };
+        }
+      }
+      await saveStoreAndWait();
+      broadcastToAll("tournament_started", t);
+    }
+  });
+}
+setInterval(checkAndStartTournaments, 1e4);
 app.get("/api/rooms/active", (req, res) => {
   const activeGames = Object.values(store.rooms).filter((r) => r.status === "playing").map((r) => ({
     id: r.id,
@@ -2348,6 +2618,58 @@ app.post("/api/admin/users/:userId/update", isAdmin, (req, res) => {
   broadcastUserUpdate(user.id);
   res.json(user);
 });
+app.get("/api/admin/agents", isAdmin, (req, res) => {
+  res.json(Object.values(store.agents || {}));
+});
+app.post("/api/admin/agents/create", isAdmin, async (req, res) => {
+  const { userId } = req.body;
+  if (!userId) {
+    return res.status(400).json({ error: "User ID is required to create an agent." });
+  }
+  const user = store.users[userId];
+  if (!user) {
+    return res.status(404).json({ error: "User not found." });
+  }
+  const existingAgent = Object.values(store.agents).find((a) => a.userId === userId);
+  if (existingAgent) {
+    return res.status(409).json({ error: "This user is already an agent." });
+  }
+  const newAgent = {
+    id: `agent_${Date.now()}`,
+    userId,
+    floatBalance: 0,
+    status: "Active",
+    createdAt: Date.now()
+  };
+  store.agents[newAgent.id] = newAgent;
+  await saveStoreAndWait();
+  res.status(201).json(newAgent);
+});
+app.post("/api/admin/agents/credit-float", isAdmin, async (req, res) => {
+  const { agentId, amount, discount } = req.body;
+  const creditAmount = parseFloat(amount);
+  const discountAmount = parseFloat(discount) || 0;
+  if (!agentId || !creditAmount || creditAmount <= 0) {
+    return res.status(400).json({ error: "Valid agentId and a positive amount are required." });
+  }
+  const agent = store.agents[agentId];
+  if (!agent) {
+    return res.status(404).json({ error: "Agent not found." });
+  }
+  agent.floatBalance += creditAmount;
+  const transaction = {
+    id: `atx_${Date.now()}`,
+    agentId,
+    type: "FloatPurchase",
+    amount: creditAmount,
+    discountAmount,
+    timestamp: Date.now(),
+    description: `Admin credited ${creditAmount} to float with a ${discountAmount} discount.`
+  };
+  store.agentTransactions.unshift(transaction);
+  await saveStoreAndWait();
+  res.json({ success: true, agent, transaction });
+});
 app.delete("/api/admin/users/:userId/delete", isAdmin, (req, res) => {
   const { userId } = req.params;
   if (store.users[userId]) {
@@ -2412,6 +2734,73 @@ app.post("/api/admin/broadcast", isAdmin, (req, res) => {
   broadcastToAll("global_message", { message });
   res.json({ success: true, message: "Broadcast sent." });
 });
+function isAgent(req, res, next) {
+  const agentId = req.query.agentId;
+  if (!agentId) {
+    return res.status(401).json({ error: "Agent ID is required for this operation." });
+  }
+  const agent = store.agents[agentId];
+  if (!agent || agent.status !== "Active") {
+    return res.status(403).json({ error: "Access denied. Invalid or inactive agent ID." });
+  }
+  req.agent = agent;
+  next();
+}
+app.get("/api/agent/profile", isAgent, (req, res) => {
+  const agent = req.agent;
+  res.json(agent);
+});
+app.get("/api/agent/player-lookup", isAgent, (req, res) => {
+  const { query } = req.query;
+  if (!query || typeof query !== "string" || query.length < 2) {
+    return res.status(400).json({ error: "A search query of at least 2 characters is required." });
+  }
+  const lowerCaseQuery = query.toLowerCase();
+  const results = Object.values(store.users).filter((u) => u.username.toLowerCase().includes(lowerCaseQuery) && !u.id.startsWith("bot_")).map((u) => ({ id: u.id, username: u.username, avatar: u.avatar })).slice(0, 10);
+  res.json(results);
+});
+app.get("/api/agent/transactions", isAgent, (req, res) => {
+  const agent = req.agent;
+  const transactions = store.agentTransactions.filter((t) => t.agentId === agent.id);
+  res.json(transactions);
+});
+app.post("/api/agent/deposit", isAgent, async (req, res) => {
+  const agent = req.agent;
+  const { playerId, amount } = req.body;
+  const depositAmount = parseFloat(amount);
+  if (!playerId || !depositAmount || depositAmount <= 0) {
+    return res.status(400).json({ error: "Valid playerId and a positive amount are required." });
+  }
+  const player = store.users[playerId];
+  if (!player) {
+    return res.status(404).json({ error: "Player not found." });
+  }
+  if (agent.floatBalance < depositAmount) {
+    return res.status(400).json({ error: "Insufficient float balance." });
+  }
+  agent.floatBalance -= depositAmount;
+  player.balance += depositAmount;
+  const agentTx = {
+    id: `atx_${Date.now()}`,
+    agentId: agent.id,
+    type: "PlayerDeposit",
+    amount: depositAmount,
+    playerId,
+    timestamp: Date.now(),
+    description: `Deposited ${depositAmount} into ${player.username}'s account.`
+  };
+  store.agentTransactions.unshift(agentTx);
+  addTransaction(
+    playerId,
+    "deposit",
+    depositAmount,
+    void 0,
+    `Deposit received from agent ${agent.id}.`
+  );
+  await saveStoreAndWait();
+  broadcastUserUpdate(player.id);
+  res.json({ success: true, newAgentBalance: agent.floatBalance, newPlayerBalance: player.balance });
+});
 async function startServer() {
   await loadStoreFromFirestore();
   purgeSimulatedUsers();
@@ -2425,6 +2814,12 @@ async function startServer() {
   } else {
     const distPath = import_path.default.join(process.cwd(), "dist");
     app.use(import_express.default.static(distPath));
+    app.get("/agent", (req, res) => {
+      res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      res.sendFile(import_path.default.join(distPath, "agent.html"));
+    });
     app.get(/^(?!\/api).*/, (req, res) => {
       res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
       res.setHeader("Pragma", "no-cache");

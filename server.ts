@@ -258,7 +258,6 @@ function loadStore() {
         ...(parsed.paymentProviders || {})
       };
       store.tournaments = parsed.tournaments || {};
-      };
       const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
       store.adminSettings = {
         username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
