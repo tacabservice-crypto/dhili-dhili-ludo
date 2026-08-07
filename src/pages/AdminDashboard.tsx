@@ -476,7 +476,7 @@ const AdminDashboard: React.FC = () => {
             setEditingRole(null);
         } catch (err: any) {
             console.error(err);
-            setError(err..message);
+            setError(err.message);
             throw err;
         }
     };
