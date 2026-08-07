@@ -367,13 +367,13 @@
   },
   "transactions": [
     {
-      "id": "tx_1786047232011_hb8qh",
+      "id": "tx_1786092517740_ws6ji",
       "userId": "user_1785704210390_bck7d",
       "type": "bet_escrow_locked",
       "amount": 0.3,
-      "timestamp": 1786047232011,
-      "matchId": "MATCH_RFU9F",
-      "description": "Escrow stake for Ludo Match MATCH_RFU9F."
+      "timestamp": 1786092517740,
+      "matchId": "MATCH_1RQHT",
+      "description": "Escrow stake for Ludo Match MATCH_1RQHT."
     },
     {
       "id": "tx_1785871808899_3505h",
@@ -53984,8 +53984,8 @@
       },
       "createdAt": 1785871809005
     },
-    "MATCH_RFU9F": {
-      "id": "MATCH_RFU9F",
+    "MATCH_1RQHT": {
+      "id": "MATCH_1RQHT",
       "status": "playing",
       "betAmount": 0.3,
       "players": [
@@ -54002,15 +54002,15 @@
           "balance": 100.45
         },
         {
-          "userId": "bot_match_1786047232011_1",
-          "username": "DesertFox AI #29",
+          "userId": "bot_match_1786092517740_1",
+          "username": "Dhili Master AI #68",
           "avatar": "🦊",
           "color": "blue",
           "isHost": false,
           "isReady": true,
           "status": "online",
-          "winCount": 25,
-          "lossCount": 23,
+          "winCount": 19,
+          "lossCount": 11,
           "balance": 100
         }
       ],
@@ -54048,25 +54048,25 @@
           },
           {
             "id": "token_blue_0",
-            "ownerId": "bot_match_1786047232011_1",
+            "ownerId": "bot_match_1786092517740_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_1",
-            "ownerId": "bot_match_1786047232011_1",
+            "ownerId": "bot_match_1786092517740_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_2",
-            "ownerId": "bot_match_1786047232011_1",
+            "ownerId": "bot_match_1786092517740_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_3",
-            "ownerId": "bot_match_1786047232011_1",
+            "ownerId": "bot_match_1786092517740_1",
             "color": "blue",
             "position": -1
           }
@@ -54076,19 +54076,19 @@
         "logs": [
           {
             "id": "1",
-            "timestamp": 1786047232024,
+            "timestamp": 1786092517791,
             "text": "Match found! Mode: Solo 2P"
           },
           {
             "id": "2",
-            "timestamp": 1786047232024,
+            "timestamp": 1786092517791,
             "text": "Stake of $0.3 locked in secure escrow pool ($0.60)"
           }
         ],
         "chat": [],
-        "lastActivity": 1786047232024
+        "lastActivity": 1786092517791
       },
-      "createdAt": 1786047232024
+      "createdAt": 1786092517791
     }
   },
   "matchmakingQueues": {
@@ -54232,7 +54232,7 @@
   },
   "adminSettings": {
     "username": "admin",
-    "password": "dhilidhili123",
+    "password": "password",
     "roles": [
       {
         "id": "admin",
