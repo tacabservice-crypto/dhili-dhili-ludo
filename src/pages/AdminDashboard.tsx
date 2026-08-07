@@ -144,6 +144,10 @@ const AdminDashboard: React.FC = () => {
                 fetchData('payment-settings', false);
                 fetchData('settings', false);
             }
+            if (view === 'stats') {
+                fetchData('rooms', false);
+                fetchData('manual-transactions', false);
+            }
         }
     }, [adminUser, view, fetchData]);
     
@@ -474,7 +478,7 @@ const AdminDashboard: React.FC = () => {
         const usersByRole = adminSettings?.usersByRole || {};
 
         switch (view) {
-            case 'stats': return <StatsGrid stats={stats} />;
+            case 'stats': return <StatsGrid stats={stats} rooms={rooms} manualTransactions={manualTransactions} setView={setView} />;
             case 'users': return <UsersTable users={users} onEdit={setEditingUser} onDelete={handleDeleteUser} onImpersonate={handleImpersonate} />;
             case 'rooms': return <RoomsTable rooms={rooms} onCancel={handleCancelGame} />;
             case 'transactions': return <TransactionsTable transactions={transactions} />;

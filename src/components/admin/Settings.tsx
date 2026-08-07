@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Lock, CreditCard, UserCheck, Trash2, Edit, Power, PowerOff } from 'lucide-react';
+import ChangePasswordForm from '../ChangePasswordForm';
 
 const Settings = ({ 
     adminSettings, 
@@ -15,19 +16,24 @@ const Settings = ({
 }) => {
   const [settingsView, setSettingsView] = useState('roles');
   const [editablePaymentSettings, setEditablePaymentSettings] = useState(paymentSettings);
+  const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
 
   useEffect(() => {
     setEditablePaymentSettings(paymentSettings);
   }, [paymentSettings]);
 
   const handlePaymentSettingsChange = (provider, key, value) => {
-    const updated = JSON.parse(JSON.stringify(editablePaymentSettings || { providers: {} }));
-    if (!updated.providers[provider]) updated.providers[provider] = { credentials: {} };
-    if(key === 'enabled'){
-      updated.providers[provider].enabled = value;
+    const updated = JSON.parse(JSON.stringify(editablePaymentSettings || {}));
+    if (!updated[provider]) {
+      updated[provider] = { credentials: {} };
+    }
+    if (key === 'enabled') {
+      updated[provider].enabled = value;
     } else {
-      if (!updated.providers[provider].credentials) updated.providers[provider].credentials = {};
-      updated.providers[provider].credentials[key] = value;
+      if (!updated[provider].credentials) {
+        updated[provider].credentials = {};
+      }
+      updated[provider].credentials[key] = value;
     }
     setEditablePaymentSettings(updated);
   };
@@ -37,6 +43,11 @@ const Settings = ({
   }
 
   const { roles, usersByRole } = adminSettings;
+
+  const showNotification = (type: 'success' | 'error', message: string) => {
+    setNotification({ type, message });
+    setTimeout(() => setNotification(null), 5000);
+  };
   
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
@@ -54,26 +65,49 @@ const Settings = ({
         </nav>
       </div>
 
+       {notification && (
+          <div className={`mt-4 p-4 rounded-md ${notification.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+            {notification.message}
+          </div>
+        )}
+
       <div className="mt-6">
-        {settingsView === 'admin' && usersByRole && (
+        {settingsView === 'admin' && (
           <div>
             <h3 className="text-xl font-bold mb-4">Admin Management</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {Object.keys(usersByRole).map(roleName => (
-                <div key={roleName} className="bg-gray-50 p-4 rounded-lg">
-                  <h4 className="font-bold text-lg mb-2">{roleName}</h4>
-                  <ul className="space-y-2">
-                    {usersByRole[roleName].map(user => (
-                      <li key={user.id} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
-                        <span className="font-medium">{user.username}</span>
-                        <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                          {user.status}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div>
+                    <h4 className='font-bold text-lg mb-2'>Change Your Password</h4>
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                        <ChangePasswordForm
+                            adminId={adminUser.id}
+                            onSuccess={(message) => showNotification('success', message)}
+                            onError={(message) => showNotification('error', message)}
+                        />
+                    </div>
                 </div>
-              ))}
+                {usersByRole && (
+                    <div>
+                        <h4 className='font-bold text-lg mb-2'>Admins by Role</h4>
+                        <div className="space-y-4">
+                        {Object.keys(usersByRole).map(roleName => (
+                            <div key={roleName} className="bg-gray-50 p-4 rounded-lg">
+                            <h5 className="font-semibold text-md mb-2">{roleName}</h5>
+                            <ul className="space-y-2">
+                                {usersByRole[roleName].map(user => (
+                                <li key={user.id} className="flex items-center justify-between p-2 bg-white rounded shadow-sm">
+                                    <span className="font-medium">{user.username}</span>
+                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                    {user.status}
+                                    </span>
+                                </li>
+                                ))}
+                            </ul>
+                            </div>
+                        ))}
+                        </div>
+                    </div>
+                )}
             </div>
           </div>
         )}
@@ -82,12 +116,12 @@ const Settings = ({
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">Payment Providers</h3>
-              <button onClick={() => onSavePaymentSettings(editablePaymentSettings)} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors">
+              <button onClick={() => { onSavePaymentSettings(editablePaymentSettings); showNotification('success', 'Payment settings saved!'); }} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors">
                 Save Settings
               </button>
             </div>
             <div className="space-y-6">
-              {Object.entries(editablePaymentSettings.providers || {}).map(([provider, config]: [string, any]) => (
+              {Object.entries(editablePaymentSettings || {}).map(([provider, config]: [string, any]) => (
                 <div key={provider} className="bg-gray-50 p-4 rounded-lg shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-lg font-semibold capitalize">{provider}</h4>
