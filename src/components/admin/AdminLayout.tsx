@@ -1,6 +1,5 @@
-
 import React from 'react';
-import { ShieldCheck, Users, Home, BarChart2, Settings, LogOut, Code } from 'lucide-react';
+import { ShieldCheck, Users, Home, BarChart2, Settings, LogOut, Code, Edit } from 'lucide-react';
 
 const AdminLayout = ({ user, onLogout, view, setView, hasPermission, children }) => {
   const navigationItems = [
@@ -8,6 +7,7 @@ const AdminLayout = ({ user, onLogout, view, setView, hasPermission, children })
     { name: 'users', label: 'Users', icon: Users, permission: 'users' },
     { name: 'rooms', label: 'Rooms', icon: Home, permission: 'rooms' },
     { name: 'transactions', label: 'Transactions', icon: Code, permission: 'transactions' },
+    { name: 'manual-transactions', label: 'Manual Transactions', icon: Edit, permission: 'transactions' },
     { name: 'agents', label: 'Agents', icon: ShieldCheck, permission: 'agents' },
     { name: 'settings', label: 'Settings', icon: Settings, permission: 'settings' },
   ];
@@ -18,6 +18,7 @@ const AdminLayout = ({ user, onLogout, view, setView, hasPermission, children })
       <div className="w-64 bg-gray-800 text-white flex flex-col">
         <div className="p-4 border-b border-gray-700">
           <h2 className="text-xl font-bold">Admin Panel</h2>
+          <p className="text-sm text-gray-400">Ludo Game</p>
         </div>
         <nav className="flex-1 p-2">
           {navigationItems.map(item =>
@@ -36,6 +37,15 @@ const AdminLayout = ({ user, onLogout, view, setView, hasPermission, children })
           )}
         </nav>
         <div className="p-4 border-t border-gray-700">
+            <div className='flex items-center mb-2'>
+                <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold mr-3">
+                    {user.username.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                    <span className="text-white font-semibold block">{user.username}</span>
+                    <span className="text-gray-400 text-xs">{user.role || 'Admin'}</span>
+                </div>
+            </div>
           <button
             onClick={onLogout}
             className="w-full flex items-center p-3 rounded-lg hover:bg-red-700 transition-colors"
@@ -49,18 +59,12 @@ const AdminLayout = ({ user, onLogout, view, setView, hasPermission, children })
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="bg-white shadow-sm">
-          <div className="p-4 flex justify-between items-center">
+          <div className="p-4">
             <h1 className="text-2xl font-bold text-gray-800 capitalize">{view.replace('-', ' ')}</h1>
-            <div className="flex items-center">
-              <span className="text-gray-600 mr-3">Welcome, {user.username}</span>
-              <div className="w-10 h-10 rounded-full bg-purple-600 text-white flex items-center justify-center font-bold">
-                {user.username.charAt(0).toUpperCase()}
-              </div>
-            </div>
           </div>
         </header>
-        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200 p-6">
-          {children}
+        <main className="flex-1 overflow-x-hidden overflow-y-auto bg-gray-200">
+            {children}
         </main>
       </div>
     </div>

@@ -1,11 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { UserProfile, GameRoom, Agent } from '../types/game';
 import UserEditModal from '../components/UserEditModal';
 import CreateAgentModal from '../components/CreateAgentModal';
 import EditAgentModal from '../components/EditAgentModal';
 import CreditAgentModal from '../components/CreditAgentModal';
-import EditRoleModal from '../components/EditRoleModal';
-import ChangePasswordForm from '../components/ChangePasswordForm';
 import { formatCurrency } from '../utils/number';
 import AdminLayout from '../components/admin/AdminLayout';
 import StatsGrid from '../components/admin/StatsGrid';
@@ -15,6 +13,8 @@ import TransactionsTable from '../components/admin/TransactionsTable';
 import AgentsTable from '../components/admin/AgentsTable';
 import Settings from '../components/admin/Settings';
 import ManualTransactionsTable from '../components/admin/ManualTransactionsTable';
+import EditRoleModal from '../components/EditRoleModal';
+
 
 const AdminDashboard: React.FC = () => {
     // Define AdminUser interface to match backend
@@ -22,16 +22,16 @@ const AdminDashboard: React.FC = () => {
         id: string;
         username: string;
         permissions: string[];
+        role?: string;
     }
 
     type AdminRole = {
         id: string;
         name: string;
-        username: string;
         permissions: string[];
         status: 'active' | 'suspended';
     }
-
+    
     const [adminUser, setAdminUser] = useState<AdminUser | null>(() => {
         const storedUser = localStorage.getItem('admin_user');
         try {
@@ -52,55 +52,59 @@ const AdminDashboard: React.FC = () => {
     const [rooms, setRooms] = useState<GameRoom[]>([]);
     const [transactions, setTransactions] = useState<any[]>([]);
     const [manualTransactions, setManualTransactions] = useState<any[]>([]);
-    const [paymentSettings, setPaymentSettings] = useState<any>({});
+    const [paymentSettings, setPaymentSettings] = useState<any>(null);
     const [adminSettings, setAdminSettings] = useState<any>(null);
-    const [agents, setAgents] = useState<any[]>([]);
+    const [agents, setAgents] = useState<Agent[]>([]);
 
     // Modal state
     const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
     const [editingAgent, setEditingAgent] = useState<Agent | null>(null);
     const [creditingAgent, setCreditingAgent] = useState<Agent | null>(null);
     const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
-    const [viewingUserGames, setViewingUserGames] = useState<GameRoom[] | null>(null);
-    const [viewingUser, setViewingUser] = useState<UserProfile | null>(null);
-    const [broadcastMessage, setBroadcastMessage] = useState('');
     const [isCreateAgentModalOpen, setCreateAgentModalOpen] = useState(false);
+    const [isCreateRoleModalOpen, setCreateRoleModalOpen] = useState(false);
 
-    const permissionsList = ['stats', 'users', 'rooms', 'transactions', 'manual-transactions', 'agents', 'settings'];
 
-    const handleApproveTransaction = async (transactionId: string) => {
-        if (!adminUser || !window.confirm('Are you sure you want to approve this transaction?')) return;
-        setError(null);
-        try {
-            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/approve?userId=${adminUser.id}`, {
-                method: 'POST',
-            });
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Failed to approve transaction');
-            }
-            fetchData('manual-transactions'); // Refresh the list
-        } catch (err: any) {
-            setError(err.message);
-        }
+    const permissionsList = ['stats', 'users', 'rooms', 'transactions', 'agents', 'settings'];
+
+    const handleLogout = () => {
+        localStorage.removeItem('admin_user');
+        setAdminUser(null);
     };
 
-    const handleRejectTransaction = async (transactionId: string) => {
-        if (!adminUser || !window.confirm('Are you sure you want to reject this transaction?')) return;
-        setError(null);
+    const fetchData = useCallback(async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'agents' | 'settings', showerror = true) => {
+        if (!adminUser) return;
+        if(showerror) setError(null);
         try {
-            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/reject?userId=${adminUser.id}`, {
-                method: 'POST',
-            });
+            const response = await fetch(`/api/admin/${type}?userId=${adminUser.id}`);
             if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || 'Failed to reject transaction');
+                let errMessage = `Failed to fetch ${type}`;
+                try {
+                    const err = await response.json();
+                    errMessage = err.error || errMessage;
+                } catch(e) { /* ignore json parsing error */ }
+
+                if (response.status === 403 || response.status === 401) {
+                    handleLogout(); // Log out if session is invalid
+                }
+                if(showerror) setError(errMessage);
+                return;
             }
-            fetchData('manual-transactions'); // Refresh the list
+            const data = await response.json();
+            switch (type) {
+                case 'stats': setStats(data); break;
+                case 'users': setUsers(data); break;
+                case 'rooms': setRooms(data); break;
+                case 'transactions': setTransactions(data); break;
+                case 'manual-transactions': setManualTransactions(data); break;
+                case 'payment-settings': setPaymentSettings(data); break;
+                case 'agents': setAgents(data); break;
+                case 'settings': setAdminSettings(data); break;
+            }
         } catch (err: any) {
-            setError(err.message);
+            if(showerror) setError(err.message);
         }
-    };
+    }, [adminUser]);
 
     const handleAuth = async () => {
         setError(null);
@@ -132,53 +136,16 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('admin_user');
-        setAdminUser(null);
-    };
-
-    const fetchData = async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'agents' | 'settings') => {
-        if (!adminUser) return;
-        setError(null);
-        try {
-            const response = await fetch(`/api/admin/${type}?userId=${adminUser.id}`);
-            if (!response.ok) {
-                let errMessage = `Failed to fetch ${type}`;
-                try {
-                    const err = await response.json();
-                    errMessage = err.error || errMessage;
-                } catch(e) { /* ignore json parsing error */ }
-
-                if (response.status === 403 || response.status === 401) {
-                    handleLogout(); // Log out if session is invalid
-                }
-                throw new Error(errMessage);
-            }
-            const data = await response.json();
-            switch (type) {
-                case 'stats': setStats(data); break;
-                case 'users': setUsers(data); break;
-                case 'rooms': setRooms(data); break;
-                case 'transactions': setTransactions(data); break;
-                case 'manual-transactions': setManualTransactions(data); break;
-                case 'payment-settings': setPaymentSettings(data); break;
-                case 'agents': setAgents(data); break;
-                case 'settings': setAdminSettings(data); break;
-            }
-        } catch (err: any) {
-            setError(err.message);
-        }
-    };
 
     useEffect(() => {
         if (adminUser) {
             fetchData(view);
             if (view === 'settings') {
-                fetchData('payment-settings');
-                fetchData('settings');
+                fetchData('payment-settings', false);
+                fetchData('settings', false);
             }
         }
-    }, [adminUser, view]);
+    }, [adminUser, view, fetchData]);
     
     const handleSaveUser = async (updatedData: Partial<UserProfile>) => {
         if (!editingUser || !adminUser) return;
@@ -226,11 +193,12 @@ const AdminDashboard: React.FC = () => {
             const response = await fetch(`/api/admin/impersonate?userId=${adminUser.id}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: userToImpersonate.id }),
+                body: JSON.stringify({ targetUserId: userToImpersonate.id }),
             });
             const data = await response.json();
             if (response.ok && data.success) {
-                localStorage.setItem('user', JSON.stringify(data.user));
+                // Should recieve a JWT token
+                localStorage.setItem('token', data.token);
                 window.location.href = '/';
             } else {
                 throw new Error(data.error || 'Impersonation failed');
@@ -252,47 +220,6 @@ const AdminDashboard: React.FC = () => {
                 throw new Error(err.error || 'Failed to cancel room');
             }
             fetchData('rooms'); // Refresh rooms list
-        } catch (err: any) {
-            setError(err.message);
-        }
-    };
-
-    const handleViewUserGames = async (user: UserProfile) => {
-        if (!adminUser) return;
-        setError(null);
-        try {
-            const response = await fetch(`/api/admin/users/${user.id}/games?userId=${adminUser.id}`);
-            if (!response.ok) {
-                const err = await response.json();
-                throw new Error(err.error || `Failed to fetch game history`);
-            }
-            const data = await response.json();
-            setViewingUser(user);
-            setViewingUserGames(data);
-        } catch (err: any) {
-            setError(err.message);
-        }
-    };
-
-    const handleBroadcast = async () => {
-        if (!adminId || !broadcastMessage) return;
-        setError(null);
-        try {
-            const response = await fetch(`/api/admin/broadcast?userId=${adminId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: broadcastMessage }),
-            });
-            if (!response.ok) {
-                let errMessage = 'Failed to broadcast message';
-                try {
-                  const err = await response.json();
-                  errMessage = err.error || errMessage;
-                } catch(e) {/*ignore json parse error */}
-                throw new Error(errMessage);
-            }
-            setBroadcastMessage('');
-            alert('Broadcast sent successfully!');
         } catch (err: any) {
             setError(err.message);
         }
@@ -336,7 +263,8 @@ const AdminDashboard: React.FC = () => {
                 const err = await response.json();
                 throw new Error(err.error || 'Failed to update agent');
             }
-            fetchData('agents');
+            await fetchData('agents');
+            setEditingAgent(null)
         } catch (err: any) {
             console.error(err);
             setError(err.message);
@@ -357,7 +285,7 @@ const AdminDashboard: React.FC = () => {
                 const err = await response.json();
                 throw new Error(err.error || 'Failed to create agent');
             }
-            fetchData('agents');
+            await fetchData('agents');
             setCreateAgentModalOpen(false);
         } catch (err: any) {
             console.error(err);
@@ -379,7 +307,7 @@ const AdminDashboard: React.FC = () => {
                 const err = await response.json();
                 throw new Error(err.error || 'Failed to credit agent');
             }
-            fetchData('agents');
+            await fetchData('agents');
             setCreditingAgent(null);
         } catch (err: any) {
             console.error(err);
@@ -388,7 +316,7 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const handleCreateRole = async (roleData) => {
+    const handleCreateRole = async (roleData: { name: string, permissions: string[]}) => {
         if (!adminUser) return;
         setError(null);
         try {
@@ -401,9 +329,11 @@ const AdminDashboard: React.FC = () => {
                 const err = await response.json();
                 throw new Error(err.error || 'Failed to create role');
             }
-            fetchData('settings');
+            await fetchData('settings');
+            setCreateRoleModalOpen(false)
         } catch (err: any) {
             setError(err.message);
+            throw err
         }
     };
 
@@ -437,7 +367,7 @@ const AdminDashboard: React.FC = () => {
                 const err = await response.json();
                 throw new Error(err.error || 'Failed to update role');
             }
-            fetchData('settings');
+            await fetchData('settings');
             setEditingRole(null);
         } catch (err: any) {
             console.error(err);
@@ -453,6 +383,7 @@ const AdminDashboard: React.FC = () => {
     };
 
     const handleSavePaymentSettings = async (updatedSettings: any) => {
+        if(!adminId) return;
         try {
             const response = await fetch(`/api/admin/payment-settings?userId=${adminId}`, {
                 method: 'POST',
@@ -468,16 +399,158 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
+    const handleApproveTransaction = async (transactionId: string) => {
+        if (!adminUser || !window.confirm('Are you sure you want to approve this transaction?')) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/approve?userId=${adminUser.id}`, {
+                method: 'POST',
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to approve transaction');
+            }
+            fetchData('manual-transactions'); // Refresh the list
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
+    const handleRejectTransaction = async (transactionId: string) => {
+        if (!adminUser || !window.confirm('Are you sure you want to reject this transaction?')) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/reject?userId=${adminUser.id}`, {
+                method: 'POST',
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to reject transaction');
+            }
+            fetchData('manual-transactions'); // Refresh the list
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
     if (!adminUser) {
         return (
             <div className="bg-gray-900 text-white min-h-screen flex items-center justify-center">
                 <div className="bg-gray-800 p-8 rounded-lg shadow-lg text-center w-full max-w-sm">
-                    <h1 className="text-2xl font-bold mb-4">Admin Authentication</h1>
-                    <p className="text-gray-400 mb-6">Please enter your admin credentials to continue.</p>
+                    <h1 className="text-2xl font-bold mb-4">Admin Login</h1>
+                    <p className="text-gray-400 mb-6">Restricted Access</p>
                     <input
                         type="text"
                         value={username}
                         onChange={(e) => setUsername(e.target.value)}
+                        placeholder="Username"
+                        className="bg-gray-700 text-white w-full px-4 py-2 rounded mb-4"
+                    />
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="Password"
+                        className="bg-gray-700 text-white w-full px-4 py-2 rounded mb-4"
+                    />
+                    <button onClick={handleAuth} className="bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded w-full">
+                        Login
+                    </button>
+                    {error && <p className="text-red-500 mt-4">{error}</p>}
+                </div>
+            </div>
+        );
+    }
+    
+    const hasPermission = (permission: string) => {
+        if (!adminUser) return false;
+        // Super admin has all permissions
+        if (adminUser.username === 'admin' || adminUser.role === 'Super Admin') return true;
+        return adminUser.permissions?.includes(permission);
+    };
+
+    const renderView = () => {
+        // Find user by role
+        const usersByRole = adminSettings?.usersByRole || {};
+
+        switch (view) {
+            case 'stats': return <StatsGrid stats={stats} />;
+            case 'users': return <UsersTable users={users} onEdit={setEditingUser} onDelete={handleDeleteUser} onImpersonate={handleImpersonate} />;
+            case 'rooms': return <RoomsTable rooms={rooms} onCancel={handleCancelGame} />;
+            case 'transactions': return <TransactionsTable transactions={transactions} />;
+            case 'manual-transactions': return <ManualTransactionsTable transactions={manualTransactions} onApprove={handleApproveTransaction} onReject={handleRejectTransaction} />;
+            case 'agents': return <AgentsTable agents={agents} onEdit={setEditingAgent} onCredit={setCreditingAgent} onDelete={handleDeleteAgent} onToggleStatus={handleToggleAgentStatus} onCreate={() => setCreateAgentModalOpen(true)} />;
+            case 'settings': return <Settings 
+                adminSettings={{...adminSettings, usersByRole}}
+                paymentSettings={paymentSettings} 
+                onSavePaymentSettings={handleSavePaymentSettings}
+                onCreateRole={() => setCreateRoleModalOpen(true)}
+                onDeleteRole={handleDeleteRole}
+                onUpdateRole={handleUpdateRole}
+                onToggleRoleStatus={handleToggleRoleStatus}
+                onEditRole={setEditingRole}
+                permissionsList={permissionsList}
+                adminUser={adminUser}
+            />;
+            default: return null;
+        }
+    };
+
+    return (
+        <AdminLayout 
+            user={adminUser} 
+            onLogout={handleLogout} 
+            view={view} 
+            setView={setView}
+            hasPermission={hasPermission}
+        >
+            <div className="p-6">
+                {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">{error}</div>}
+                {renderView()}
+            </div>
+            {editingUser && (
+                <UserEditModal 
+                    user={editingUser}
+                    onClose={() => setEditingUser(null)}
+                    onSave={handleSaveUser}
+                    isAdmin={true}
+                />
+            )}
+            <CreateAgentModal
+                isOpen={isCreateAgentModalOpen}
+                onClose={() => setCreateAgentModalOpen(false)}
+                onCreateAgent={handleCreateAgent}
+            />
+            {editingAgent && (
+                <EditAgentModal
+                    agent={editingAgent}
+                    onClose={() => setEditingAgent(null)}
+                    onSave={handleUpdateAgent}
+                />
+            )}
+            {creditingAgent && (
+                <CreditAgentModal
+                    agent={creditingAgent}
+                    onClose={() => setCreditingAgent(null)}
+                    onSave={handleCreditAgent}
+                />
+            )}
+            {(isCreateRoleModalOpen || editingRole) && (
+                <EditRoleModal
+                    isOpen={isCreateRoleModalOpen || !!editingRole}
+                    onClose={() => { setCreateRoleModalOpen(false); setEditingRole(null); }}
+                    onCreateRole={handleCreateRole}
+                    onUpdateRole={handleUpdateRole}
+                    role={editingRole}
+                    permissionsList={permissionsList}
+                />
+            )}
+        </AdminLayout>
+    );
+};
+
+export default AdminDashboard;
+t.value)}
                         placeholder="Username"
                         className="bg-gray-700 text-white w-full px-4 py-2 rounded mb-4"
                     />
