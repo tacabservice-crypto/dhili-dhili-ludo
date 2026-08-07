@@ -12,6 +12,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
     const [password, setPassword] = useState('');
     const [commissionRate, setCommissionRate] = useState('');
     const [location, setLocation] = useState('');
+    const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -20,6 +21,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
             setUsername(agent.username);
             setCommissionRate(String(agent.commissionRate));
             setLocation(agent.location || '');
+            setPhone(agent.phone || '');
             setPassword(''); // Don't pre-fill password
         }
     }, [agent]);
@@ -35,6 +37,10 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
             setError('New password must be at least 6 characters long.');
             return;
         }
+        if (!phone) {
+            setError('Phone number is required.');
+            return;
+        }
 
         setIsSaving(true);
         try {
@@ -42,6 +48,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
                 username,
                 commissionRate: rate,
                 location,
+                phone,
             };
             if (password) {
                 dataToSave.password = password;
@@ -67,6 +74,10 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
                     <div>
                         <label className="block text-sm font-medium text-gray-400">Reset Password</label>
                         <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Leave blank to keep current password" className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400">Phone Number</label>
+                        <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-400">Commission Rate (e.g., 0.05 for 5%)</label>

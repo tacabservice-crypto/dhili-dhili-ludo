@@ -3849,10 +3849,10 @@ app.get('/api/admin/agents', isAdmin, async (req, res) => {
 // Create a new agent
 app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Database not initialized' });
-  const { username, password, commissionRate } = req.body;
+  const { username, password, commissionRate, location, phone } = req.body;
 
-  if (!username || !password || !commissionRate) {
-    return res.status(400).json({ error: 'Username, password, and commission rate are required.' });
+  if (!username || !password || !commissionRate || !phone) {
+    return res.status(400).json({ error: 'Username, password, commission rate, and phone are required.' });
   }
 
   // More validation
@@ -3880,123 +3880,7 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
       id: agentId,
       username,
       password, // In a real app, this should be hashed and salted
-      commissionRate: rate,
-      balance: 0,
-      floatBalance: 0,
-      status: 'Active',
-      createdAt: Date.now(),
-    };
-
-    await agentsRef.doc(agentId).set(newAgent);
-
-    res.status(201).json(newAgent);
-  } catch (error) {
-    console.error('Failed to create agent:', error);
-    res.status(500).json({ error: 'Failed to create agent in database.' });
-  }
-});
-
-// Update an agent's details
-app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { agentId } = req.params;
-    const { username, password, commissionRate, status } = req.body;
-    
-    try {
-        const agentRef = db.collection('agents').doc(agentId);
-        const agentDoc = await agentRef.get();
-
-        if (!agentDoc.exists) {
-            return res.status(404).json({ error: 'Agent not found.' });
-        }
-
-        const updateData: Partial<Agent> = {};
-
-        if (username && typeof username === 'string' && username.length >= 3) {
-            updateData.username = username;
-        }
-        if (password && typeof password === 'string' && password.length >= 6) {
-            updateData.password = password; // Should be hashed
-        }
-        
-        const newCommissionRate = parseFloat(commissionRate);
-        if (commissionRate !== undefined && !isNaN(newCommissionRate) && newCommissionRate >= 0 && newCommissionRate <= 1) {
-            updateData.commissionRate = newCommissionRate;
-        }
-
-        if (status && ['Active', 'Suspended'].includes(status)) {
-            updateData.status = status;
-        }
-
-        if (Object.keys(updateData).length === 0) {
-            return res.status(400).json({ error: 'No valid fields to update.' });
-        }
-
-        await agentRef.update(updateData);
-        
-        const updatedAgentDoc = await agentRef.get();
-        res.json({ success: true, agent: updatedAgentDoc.data() });
-    } catch (error) {
-        console.error(`Failed to update agent ${agentId}:`, error);
-        res.status(500).json({ error: 'Failed to update agent in database.' });
-    }
-});
-
-// Delete an agent
-app.delete('/api/admin/agents/:agentId/delete', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { agentId } = req.params;
-
-    try {
-        const agentRef = db.collection('agents').doc(agentId);
-        const agentDoc = await agentRef.get();
-
-        if (!agentDoc.exists) {
-            return res.status(404).json({ error: 'Agent not found.' });
-        }
-
-        await agentRef.delete();
-        res.json({ success: true, message: 'Agent deleted successfully.' });
-    } catch (error) {
-        console.error(`Failed to delete agent ${agentId}:`, error);
-        res.status(500).json({ error: 'Failed to delete agent from database.' });
-    }
-});
-
-// Create a new agent
-app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: 'Database not initialized' });
-  const { username, password, commissionRate, location } = req.body;
-
-  if (!username || !password || !commissionRate) {
-    return res.status(400).json({ error: 'Username, password, and commission rate are required.' });
-  }
-
-  // More validation
-  if (typeof username !== 'string' || username.length < 3) {
-    return res.status(400).json({ error: 'Username must be a string of at least 3 characters.' });
-  }
-  if (typeof password !== 'string' || password.length < 6) {
-    return res.status(400).json({ error: 'Password must be a string of at least 6 characters.' });
-  }
-  const rate = parseFloat(commissionRate);
-  if (isNaN(rate) || rate < 0 || rate > 1) {
-    return res.status(400).json({ error: 'Commission rate must be a number between 0 and 1.' });
-  }
-
-  try {
-    // Check if username already exists in Firestore
-    const agentsRef = db.collection('agents');
-    const existingAgentSnapshot = await agentsRef.where('username', '==', username).get();
-    if (!existingAgentSnapshot.empty) {
-      return res.status(409).json({ error: 'Agent with this username already exists.' });
-    }
-
-    const agentId = `agent_${Date.now()}`;
-    const newAgent: Agent = {
-      id: agentId,
-      username,
-      password, // In a real app, this should be hashed and salted
+      phone,
       location: location || '',
       commissionRate: rate,
       balance: 0,
@@ -4018,7 +3902,7 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
 app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
     if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { agentId } = req.params;
-    const { username, password, commissionRate, status, location } = req.body;
+    const { username, password, commissionRate, status, location, phone } = req.body;
     
     try {
         const agentRef = db.collection('agents').doc(agentId);
@@ -4035,6 +3919,9 @@ app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
         }
         if (password && typeof password === 'string' && password.length >= 6) {
             updateData.password = password; // Should be hashed
+        }
+        if (phone && typeof phone === 'string') {
+            updateData.phone = phone;
         }
         
         const newCommissionRate = parseFloat(commissionRate);
