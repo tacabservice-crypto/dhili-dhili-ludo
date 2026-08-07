@@ -4622,40 +4622,58 @@ app.post('/api/agent/player-requests/:requestId/approve', isAgent, async (req, r
             throw new Error("Database not initialized");
         }
 
-        const agentRef = db.collection('agents').doc(agent.id);
-        const agentDoc = await agentRef.get();
-        if (!agentDoc.exists) {
-            throw new Error("Agent not found in database");
-        }
-        const agentData = agentDoc.data() as Agent;
-        const currentFloat = agentData.floatBalance || 0;
+        await db.runTransaction(async (t) => {
+            const agentRef = db.collection('agents').doc(agent.id);
+            const agentDoc = await t.get(agentRef);
 
-        if (tx.transactionType === 'deposit') {
-            // For a deposit, the agent is giving money to the player, so agent's float decreases.
-            if (currentFloat < tx.amount) {
-                return res.status(400).json({ error: "Insufficient float balance to approve this deposit." });
+            if (!agentDoc.exists) {
+                throw new Error("Agent not found in database");
             }
-            newAgentFloat = currentFloat - tx.amount;
-            user.balance += tx.amount;
-            addTransaction(user.id, 'deposit', tx.amount, undefined, `Manual deposit approved by agent ${agent.username}. Request ID: ${tx.id}`);
+            const agentData = agentDoc.data() as Agent;
+            const currentFloat = agentData.floatBalance || 0;
+            let newAgentFloat: number;
 
-        } else { // withdrawal
-            // For a withdrawal, the agent is receiving money from the player, so agent's float increases.
-            if (user.balance < tx.amount) {
-                tx.status = 'rejected';
-                await saveStoreAndWait();
-                return res.status(400).json({ error: 'Player has insufficient balance for this withdrawal. Transaction has been rejected.' });
+            if (tx.transactionType === 'deposit') {
+                // Agent gives money to player, agent float decreases.
+                if (currentFloat < tx.amount) {
+                    throw new Error("Insufficient float balance to approve this deposit.");
+                }
+                newAgentFloat = currentFloat - tx.amount;
+                user.balance += tx.amount;
+                addTransaction(user.id, 'deposit', tx.amount, undefined, `Manual deposit approved by agent ${agent.username}. Request ID: ${tx.id}`);
+            } else { // withdrawal
+                // Agent receives money from player, agent float increases.
+                if (user.balance < tx.amount) {
+                    // This transaction should just fail, not be rejected. Rejection is an explicit agent action.
+                    throw new Error('Player has insufficient balance for this withdrawal.');
+                }
+                newAgentFloat = currentFloat + tx.amount;
+                user.balance -= tx.amount;
+                addTransaction(user.id, 'withdrawal', tx.amount, undefined, `Manual withdrawal approved by agent ${agent.username}. Request ID: ${tx.id}`);
             }
-            newAgentFloat = currentFloat + tx.amount;
-            user.balance -= tx.amount;
-            addTransaction(user.id, 'withdrawal', tx.amount, undefined, `Manual withdrawal approved by agent ${agent.username}. Request ID: ${tx.id}`);
-        }
 
+            // Create the agent transaction record
+            const agentTxRef = db.collection('agentTransactions').doc();
+            const agentTx: AgentTransaction = {
+                id: agentTxRef.id,
+                agentId: agent.id,
+                type: tx.transactionType === 'deposit' ? 'PlayerDeposit' : 'PlayerWithdrawal',
+                amount: tx.amount,
+                playerId: user.id,
+                playerName: user.username,
+                timestamp: Date.now(),
+                description: `Approved ${tx.transactionType} of $${tx.amount} for player ${user.username}.`
+            };
+            t.set(agentTxRef, agentTx);
+
+            // Update the agent's float balance
+            t.update(agentRef, { floatBalance: newAgentFloat });
+        });
+
+        // If transaction is successful, update in-memory store
         tx.status = 'approved';
-        (tx as any).resolvedBy = agent.id; // Track who resolved it
+        (tx as any).resolvedBy = agent.id;
         (tx as any).resolverUsername = agent.username;
-        
-        await agentRef.update({ floatBalance: newAgentFloat });
         await saveStoreAndWait();
 
         broadcastUserUpdate(user.id);
@@ -4664,6 +4682,9 @@ app.post('/api/agent/player-requests/:requestId/approve', isAgent, async (req, r
     } catch (error) {
         console.error("Error processing agent transaction approval:", error);
         const message = error instanceof Error ? error.message : "An unknown error occurred.";
+        if (message.includes('Insufficient')) {
+            return res.status(400).json({ error: message });
+        }
         return res.status(500).json({ error: `Failed to process approval: ${message}` });
     }
 });

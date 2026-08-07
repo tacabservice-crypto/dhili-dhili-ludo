@@ -7,6 +7,9 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import { Agent, AgentTransaction, AgentRequest, PlayerAgentRequest } from './types/game';
+import { db } from './firebase-client';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import toast, { Toaster } from 'react-hot-toast';
 
 // A simple API client
 const AgentDashboard = () => {
@@ -20,6 +23,14 @@ const AgentDashboard = () => {
     const [requestAmount, setRequestAmount] = useState('');
     const [agentRequests, setAgentRequests] = useState<AgentRequest[]>([]);
     const [playerRequests, setPlayerRequests] = useState<PlayerAgentRequest[]>([]);
+    const [currentPage, setCurrentPage] = useState(1);
+
+
+    const ITEMS_PER_PAGE = 10;
+    const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
+    const indexOfFirstItem = indexOfLastItem - ITEMS_PER_PAGE;
+    const currentTransactions = transactions.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(transactions.length / ITEMS_PER_PAGE);
 
     const fetchAgentRequests = async (agentId: string) => {
         try {
@@ -32,17 +43,6 @@ const AgentDashboard = () => {
         }
     };
     
-    const fetchPlayerRequests = async (agentId: string) => {
-        try {
-            const response = await fetch(`/api/agent/player-requests?agentId=${agentId}`);
-            if (!response.ok) throw new Error('Failed to fetch player requests');
-            const data = await response.json();
-            setPlayerRequests(data);
-        } catch (err: any) {
-            setError(err.message);
-        }
-    };
-
     const handleApprove = async (requestId: string) => {
         const agentId = localStorage.getItem('agentId');
         if (!agentId) return;
@@ -53,7 +53,6 @@ const AgentDashboard = () => {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to approve request');
-            await fetchPlayerRequests(agentId);
             await fetchProfile(agentId); // Re-fetch agent profile to update float balance
         } catch (err: any) {
             setError(err.message);
@@ -72,7 +71,6 @@ const AgentDashboard = () => {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to reject request');
-            await fetchPlayerRequests(agentId);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -129,7 +127,6 @@ const AgentDashboard = () => {
             setIsLoggedIn(true);
             await fetchTransactions(data.agent.id);
             await fetchAgentRequests(data.agent.id);
-            await fetchPlayerRequests(data.agent.id);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -170,7 +167,6 @@ const AgentDashboard = () => {
             setIsLoggedIn(true);
             await fetchTransactions(data.id);
             await fetchAgentRequests(data.id);
-            await fetchPlayerRequests(data.id);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -186,6 +182,29 @@ const AgentDashboard = () => {
             setLoading(false);
         }
     }, []);
+
+    useEffect(() => {
+        if (!isLoggedIn || !agent?.id) return;
+    
+        const q = query(collection(db, 'player-agent-requests'), where('agentId', '==', agent.id));
+    
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const newRequests: PlayerAgentRequest[] = [];
+            let isInitialLoad = playerRequests.length === 0;
+
+            snapshot.forEach(doc => {
+                newRequests.push({ id: doc.id, ...doc.data() } as PlayerAgentRequest);
+            });
+    
+            setPlayerRequests(newRequests);
+    
+            if (!isInitialLoad && snapshot.docChanges().some(change => change.type === 'added')) {
+                toast.success('You have a new player transaction request!');
+            }
+        });
+    
+        return () => unsubscribe();
+    }, [isLoggedIn, agent?.id, playerRequests.length]);
 
     if (loading && !isLoggedIn) {
         return <div className="h-screen bg-gray-900 text-white flex items-center justify-center"><div>Loading...</div></div>;
@@ -237,6 +256,7 @@ const AgentDashboard = () => {
 
     return (
         <div className="bg-slate-900 text-white min-h-screen p-4 md:p-8">
+          <Toaster />
           <div className="max-w-4xl mx-auto">
             <div className="flex justify-between items-center">
               <h1 className="text-3xl font-bold text-purple-400">Agent Dashboard</h1>
@@ -350,11 +370,15 @@ const AgentDashboard = () => {
                             </tr>
                         </thead>
                         <tbody>
-                            {transactions.map(tx => (
+                            {currentTransactions.map(tx => (
                                 <tr key={tx.id} className="border-b border-slate-700 last:border-b-0">
                                     <td className="px-4 py-3 text-slate-400">{new Date(tx.timestamp).toLocaleString()}</td>
                                     <td className="px-4 py-3">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${tx.type === 'PlayerDeposit' ? 'bg-blue-900 text-blue-200' : 'bg-green-900 text-green-200'}`}>
+                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                            tx.type === 'PlayerDeposit' ? 'bg-blue-900 text-blue-200' : 
+                                            tx.type === 'PlayerWithdrawal' ? 'bg-yellow-900 text-yellow-200' : 
+                                            'bg-green-900 text-green-200'
+                                        }`}>
                                             {tx.type}
                                         </span>
                                     </td>
@@ -367,6 +391,33 @@ const AgentDashboard = () => {
                         </tbody>
                     </table>
                 </div>
+                {totalPages > 1 && (
+                    <div className="mt-4 flex justify-center items-center gap-2">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                            className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50"
+                        >
+                            &laquo;
+                        </button>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                            <button
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`px-3 py-1 rounded ${currentPage === page ? 'bg-purple-600' : 'bg-slate-700'}`}
+                            >
+                                {page}
+                            </button>
+                        ))}
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                            className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50"
+                        >
+                            &raquo;
+                        </button>
+                    </div>
+                )}
             </div>
 
             <div className="mt-8">

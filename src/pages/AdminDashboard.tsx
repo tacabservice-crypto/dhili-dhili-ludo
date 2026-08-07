@@ -15,6 +15,9 @@ import CreditAgentModal from '../components/CreditAgentModal';
 import EditRoleModal from '../components/EditRoleModal';
 import { Agent, AgentRequest, ManualTransaction, UserProfile } from '../types/game';
 import AgentRequestsTable from '../components/admin/AgentRequestsTable';
+import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { db } from '../firebase-client';
+import toast, { Toaster } from 'react-hot-toast';
 
 
 const AdminDashboard: React.FC = () => {
@@ -215,13 +218,35 @@ const AdminDashboard: React.FC = () => {
             }
             if (view === 'stats') {
                 fetchData('rooms', false);
-                fetchData('manual-transactions', false);
             }
             if (view === 'agent-requests') {
                 fetchAgentRequests();
             }
         }
     }, [adminUser, view, fetchData]);
+
+    useEffect(() => {
+        if (!adminUser) return;
+    
+        const q = query(collection(db, 'manual-transactions'));
+    
+        const unsubscribe = onSnapshot(q, (snapshot) => {
+            const newTransactions: ManualTransaction[] = [];
+            let isInitialLoad = manualTransactions.length === 0;
+    
+            snapshot.forEach(doc => {
+                newTransactions.push({ id: doc.id, ...doc.data() } as ManualTransaction);
+            });
+    
+            setManualTransactions(newTransactions);
+    
+            if (!isInitialLoad && snapshot.docChanges().some(change => change.type === 'added')) {
+                toast.success('Codsiga macaamilka ciyaaryahan ayaa la helay!');
+            }
+        });
+    
+        return () => unsubscribe();
+    }, [adminUser, manualTransactions.length]);
     
     const handleSaveUser = async (updatedData: Partial<UserProfile>) => {
         if (!editingUser || !adminUser) return;
@@ -451,7 +476,7 @@ const AdminDashboard: React.FC = () => {
             setEditingRole(null);
         } catch (err: any) {
             console.error(err);
-            setError(err.message);
+            setError(err..message);
             throw err;
         }
     };
@@ -585,6 +610,7 @@ const AdminDashboard: React.FC = () => {
             setView={setView}
             hasPermission={hasPermission}
         >
+            <Toaster />
             <div className="p-6">
                 {error && <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">{error}</div>}
                 {renderView()}

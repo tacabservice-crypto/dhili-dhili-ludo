@@ -266,7 +266,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                               {confirmationLoading ? 'Submitting...' : 'Please Confirm'}
                             </button>
                          )}
-                         <button type="button" onClick={() => setWithdrawPreviewVisible(false)} className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl">Edit Request</button>
+                         <button type="button" onClick={onClose} className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl">Go back home</button>
                        </div>
                     )}
                 </div>
