@@ -3,7 +3,7 @@ import React from 'react';
 import { Edit, ShieldCheck, DollarSign, Power, PowerOff, Trash2 } from 'lucide-react';
 import { formatCurrency } from '../../utils/number';
 
-const AgentsTable = ({ agents, onCredit, onEdit, onToggleStatus, onDelete }) => {
+const AgentsTable = ({ agents, onCredit, onEdit, onToggleStatus, onDelete, onCreate }) => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <div className="flex justify-between items-center mb-4">

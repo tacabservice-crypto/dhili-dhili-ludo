@@ -1,26 +1,44 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 interface EditRoleModalProps {
+    isOpen: boolean;
     role: {
         id: string;
         name: string;
         username: string;
         permissions: string[];
         status: 'active' | 'suspended';
-    };
+    } | null;
     permissionsList: string[];
     onClose: () => void;
-    onSave: (updatedRole: any) => Promise<void>;
+    onUpdateRole: (roleId: string, updatedData: any) => Promise<void>;
+    onCreateRole: (newRoleData: any) => Promise<void>;
 }
 
-const EditRoleModal: React.FC<EditRoleModalProps> = ({ role, permissionsList, onClose, onSave }) => {
+const EditRoleModal: React.FC<EditRoleModalProps> = ({ isOpen, role, permissionsList, onClose, onUpdateRole, onCreateRole }) => {
     const [formData, setFormData] = useState({
-        name: role.name,
-        username: role.username,
-        permissions: [...role.permissions],
+        name: '',
+        username: '',
+        password: '',
+        permissions: [],
     });
     const [isSaving, setIsSaving] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (role) {
+            setFormData({
+                name: role.name,
+                username: role.username,
+                password: '', // Password is not edited here for security, can be a separate feature
+                permissions: [...role.permissions],
+            });
+        } else {
+            setFormData({ name: '', username: '', password: '', permissions: [] });
+        }
+    }, [role, isOpen]);
+
+    if (!isOpen) return null;
 
     const handlePermissionChange = (permission: string) => {
         setFormData(prev => {
@@ -35,7 +53,11 @@ const EditRoleModal: React.FC<EditRoleModalProps> = ({ role, permissionsList, on
         setError(null);
         setIsSaving(true);
         try {
-            await onSave(formData);
+            if (role) { // We are editing
+                await onUpdateRole(role.id, formData);
+            } else { // We are creating
+                await onCreateRole(formData);
+            }
             onClose();
         } catch (e: any) {
             setError(e.message || 'An unexpected error occurred.');
@@ -47,7 +69,7 @@ const EditRoleModal: React.FC<EditRoleModalProps> = ({ role, permissionsList, on
     return (
         <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
             <div className="bg-gray-800 rounded-lg shadow-xl p-6 w-full max-w-md">
-                <h2 className="text-xl font-bold mb-4 text-white">Edit Role: {role.name}</h2>
+                <h2 className="text-xl font-bold mb-4 text-white">{role ? `Edit Role: ${role.name}` : 'Create New Role'}</h2>
                 
                 <div className="space-y-4">
                     <div>
@@ -70,6 +92,18 @@ const EditRoleModal: React.FC<EditRoleModalProps> = ({ role, permissionsList, on
                             className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" 
                         />
                     </div>
+                    {!role && ( // Only show password field when creating a new role
+                         <div>
+                            <label className="block text-sm font-medium text-gray-400">Password</label>
+                            <input 
+                                type="password" 
+                                name="password" 
+                                value={formData.password} 
+                                onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))} 
+                                className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" 
+                            />
+                        </div>
+                    )}
                     <div>
                         <h3 className="text-lg font-bold text-white mb-2">Permissions</h3>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-2">

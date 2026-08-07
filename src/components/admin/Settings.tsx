@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Lock, CreditCard, UserCheck, Trash2, Edit, Power, PowerOff } from 'lucide-react';
 
 const Settings = ({ 
@@ -16,23 +16,28 @@ const Settings = ({
   const [settingsView, setSettingsView] = useState('roles');
   const [editablePaymentSettings, setEditablePaymentSettings] = useState(paymentSettings);
 
+  useEffect(() => {
+    setEditablePaymentSettings(paymentSettings);
+  }, [paymentSettings]);
+
   const handlePaymentSettingsChange = (provider, key, value) => {
-    const updated = JSON.parse(JSON.stringify(editablePaymentSettings));
+    const updated = JSON.parse(JSON.stringify(editablePaymentSettings || { providers: {} }));
+    if (!updated.providers[provider]) updated.providers[provider] = { credentials: {} };
     if(key === 'enabled'){
       updated.providers[provider].enabled = value;
     } else {
+      if (!updated.providers[provider].credentials) updated.providers[provider].credentials = {};
       updated.providers[provider].credentials[key] = value;
     }
     setEditablePaymentSettings(updated);
   };
   
-  if (!adminSettings || !paymentSettings) {
+  if (!adminSettings || !editablePaymentSettings) {
     return <p>Loading settings...</p>;
   }
 
   const { roles, usersByRole } = adminSettings;
   
-
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <div className="border-b border-gray-200">
@@ -50,7 +55,7 @@ const Settings = ({
       </div>
 
       <div className="mt-6">
-        {settingsView === 'admin' && (
+        {settingsView === 'admin' && usersByRole && (
           <div>
             <h3 className="text-xl font-bold mb-4">Admin Management</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -82,7 +87,7 @@ const Settings = ({
               </button>
             </div>
             <div className="space-y-6">
-              {Object.entries(editablePaymentSettings.providers).map(([provider, config]: [string, any]) => (
+              {Object.entries(editablePaymentSettings.providers || {}).map(([provider, config]: [string, any]) => (
                 <div key={provider} className="bg-gray-50 p-4 rounded-lg shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-lg font-semibold capitalize">{provider}</h4>
@@ -91,7 +96,7 @@ const Settings = ({
                         <input
                           type="checkbox"
                           className="sr-only"
-                          checked={config.enabled}
+                          checked={!!config.enabled}
                           onChange={e => handlePaymentSettingsChange(provider, 'enabled', e.target.checked)}
                         />
                         <div className={`block w-14 h-8 rounded-full ${config.enabled ? 'bg-purple-600' : 'bg-gray-300'}`}></div>
@@ -104,7 +109,7 @@ const Settings = ({
                   </div>
                   {config.enabled && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.keys(config.credentials).map(key => (
+                      {Object.keys(config.credentials || {}).map(key => (
                         <div key={key}>
                           <label className="block text-sm font-medium text-gray-700">{key}</label>
                           <input
@@ -142,12 +147,12 @@ const Settings = ({
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
-                  {roles?.map(role => (
+                  {roles?.map((role:any) => (
                     <tr key={role.id}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{role.name}</td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                         <div className="flex flex-wrap gap-1">
-                          {role.permissions.map(p => <span key={p} className="px-2 py-1 bg-gray-200 text-gray-800 rounded-full text-xs">{p}</span>)}
+                          {role.permissions.map((p:string) => <span key={p} className="px-2 py-1 bg-gray-200 text-gray-800 rounded-full text-xs">{p}</span>)}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
