@@ -15,8 +15,6 @@ import CreditAgentModal from '../components/CreditAgentModal';
 import EditRoleModal from '../components/EditRoleModal';
 import { Agent, AgentRequest, ManualTransaction, UserProfile } from '../types/game';
 import AgentRequestsTable from '../components/admin/AgentRequestsTable';
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
-import { db } from '../firebase-client';
 import toast, { Toaster } from 'react-hot-toast';
 
 
@@ -55,7 +53,7 @@ const AdminDashboard: React.FC = () => {
     const [users, setUsers] = useState<UserProfile[]>([]);
     const [rooms, setRooms] = useState<GameRoom[]>([]);
     const [transactions, setTransactions] = useState<any[]>([]);
-    const [manualTransactions, setManualTransactions] = useState<any[]>([]);
+    const [manualTransactions, setManualTransactions] = useState<ManualTransaction[]>([]);
     const [paymentSettings, setPaymentSettings] = useState<any>(null);
     const [adminSettings, setAdminSettings] = useState<any>(null);
     const [agents, setAgents] = useState<Agent[]>([]);
@@ -218,6 +216,7 @@ const AdminDashboard: React.FC = () => {
             }
             if (view === 'stats') {
                 fetchData('rooms', false);
+                fetchData('manual-transactions', false);
             }
             if (view === 'agent-requests') {
                 fetchAgentRequests();
@@ -227,26 +226,38 @@ const AdminDashboard: React.FC = () => {
 
     useEffect(() => {
         if (!adminUser) return;
-    
-        const q = query(collection(db, 'manual-transactions'));
-    
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const newTransactions: ManualTransaction[] = [];
-            let isInitialLoad = manualTransactions.length === 0;
-    
-            snapshot.forEach(doc => {
-                newTransactions.push({ id: doc.id, ...doc.data() } as ManualTransaction);
-            });
-    
-            setManualTransactions(newTransactions);
-    
-            if (!isInitialLoad && snapshot.docChanges().some(change => change.type === 'added')) {
-                toast.success('Codsiga macaamilka ciyaaryahan ayaa la helay!');
+
+        const fetchAndNotify = async () => {
+            try {
+                const response = await fetch(`/api/admin/manual-transactions?userId=${adminUser.id}`);
+                if (!response.ok) return;
+                const data: ManualTransaction[] = await response.json();
+
+                if (manualTransactions.length > 0) {
+                    const existingIds = new Set(manualTransactions.map(tx => tx.id));
+                    const newTransactions = data.filter(tx => !existingIds.has(tx.id));
+                    if (newTransactions.length > 0) {
+                        toast.success(`${newTransactions.length} new manual transaction request(s)!`);
+                    }
+                }
+                
+                setManualTransactions(data);
+
+            } catch (err) {
+                console.error("Polling for manual transactions failed", err);
             }
-        });
-    
-        return () => unsubscribe();
-    }, [adminUser, manualTransactions.length]);
+        };
+
+        const intervalId = setInterval(() => {
+            // Only poll if the user is on the manual-transactions tab
+            // or on the main stats tab where manual transactions are shown.
+            if (view === 'manual-transactions' || view === 'stats') {
+                fetchAndNotify();
+            }
+        }, 5000); // Poll every 5 seconds
+
+        return () => clearInterval(intervalId);
+    }, [adminUser, view, manualTransactions]);
     
     const handleSaveUser = async (updatedData: Partial<UserProfile>) => {
         if (!editingUser || !adminUser) return;
