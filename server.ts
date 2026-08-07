@@ -3851,9 +3851,10 @@ app.delete('/api/admin/agents/:agentId/delete', isAdmin, async (req, res) => {
 });
 
 // Credit an agent's float balance
-app.post('/api/admin/agents/credit-float', isAdmin, async (req, res) => {
+app.post('/api/admin/agents/:agentId/credit', isAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Database not initialized' });
-  const { agentId, amount, discount } = req.body;
+  const { agentId } = req.params;
+  const { amount, discount } = req.body;
   const creditAmount = parseFloat(amount);
   const discountAmount = parseFloat(discount) || 0;
 

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Shield, CreditCard, UserPlus, Edit, Trash2, Power, PowerOff } from 'lucide-react';
 import ChangePasswordForm from '../ChangePasswordForm';
 
-const Settings = ({ adminSettings, paymentSettings, onSavePaymentSettings, onUpdateRole, onDeleteRole, onCreateRole, onToggleRoleStatus, permissionsList, adminUser }) => {
+const Settings = ({ adminSettings, paymentSettings, onSavePaymentSettings, onUpdateRole, onDeleteRole, onCreateRole, onToggleRoleStatus, onEditRole, permissionsList, adminUser }) => {
   const [settingsView, setSettingsView] = useState('admin');
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleUsername, setNewRoleUsername] = useState('');
@@ -140,7 +140,7 @@ const Settings = ({ adminSettings, paymentSettings, onSavePaymentSettings, onUpd
                             </span>
                         </td>
                         <td className="px-6 py-4 text-right space-x-2">
-                            <button onClick={() => onUpdateRole(role.id, {})} className="text-indigo-600 hover:text-indigo-900"><Edit size={18} /></button>
+                            <button onClick={() => onEditRole(role)} className="text-indigo-600 hover:text-indigo-900"><Edit size={18} /></button>
                             <button onClick={() => onToggleRoleStatus(role)} className={role.status === 'active' ? 'text-yellow-600 hover:text-yellow-900' : 'text-green-600 hover:text-green-900'}>
                                 {role.status === 'active' ? <PowerOff size={18} /> : <Power size={18} />}
                             </button>

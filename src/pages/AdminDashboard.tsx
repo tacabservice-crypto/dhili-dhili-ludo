@@ -14,6 +14,7 @@ import RoomsTable from '../components/admin/RoomsTable';
 import TransactionsTable from '../components/admin/TransactionsTable';
 import AgentsTable from '../components/admin/AgentsTable';
 import Settings from '../components/admin/Settings';
+import ManualTransactionsTable from '../components/admin/ManualTransactionsTable';
 
 const AdminDashboard: React.FC = () => {
     // Define AdminUser interface to match backend
@@ -66,6 +67,40 @@ const AdminDashboard: React.FC = () => {
     const [isCreateAgentModalOpen, setCreateAgentModalOpen] = useState(false);
 
     const permissionsList = ['stats', 'users', 'rooms', 'transactions', 'manual-transactions', 'agents', 'settings'];
+
+    const handleApproveTransaction = async (transactionId: string) => {
+        if (!adminUser || !window.confirm('Are you sure you want to approve this transaction?')) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/approve?userId=${adminUser.id}`, {
+                method: 'POST',
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to approve transaction');
+            }
+            fetchData('manual-transactions'); // Refresh the list
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
+    const handleRejectTransaction = async (transactionId: string) => {
+        if (!adminUser || !window.confirm('Are you sure you want to reject this transaction?')) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/manual-transactions/${transactionId}/reject?userId=${adminUser.id}`, {
+                method: 'POST',
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to reject transaction');
+            }
+            fetchData('manual-transactions'); // Refresh the list
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
 
     const handleAuth = async () => {
         setError(null);
@@ -161,6 +196,7 @@ const AdminDashboard: React.FC = () => {
             setEditingUser(null);
             fetchData('users'); // Refresh user list
         } catch (err: any) {
+            console.error(err);
             setError(err.message);
             throw err;
         }
@@ -302,6 +338,51 @@ const AdminDashboard: React.FC = () => {
             }
             fetchData('agents');
         } catch (err: any) {
+            console.error(err);
+            setError(err.message);
+            throw err;
+        }
+    };
+
+    const handleCreateAgent = async (agentData: { username: string, password: string, commissionRate: string }) => {
+        if (!adminId) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/agents/create?userId=${adminId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(agentData),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to create agent');
+            }
+            fetchData('agents');
+            setCreateAgentModalOpen(false);
+        } catch (err: any) {
+            console.error(err);
+            setError(err.message);
+            throw err;
+        }
+    };
+
+    const handleCreditAgent = async (agentId: string, amount: number, discount: number) => {
+        if (!adminId) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/agents/${agentId}/credit?userId=${adminId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount, discount }),
+            });
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to credit agent');
+            }
+            fetchData('agents');
+            setCreditingAgent(null);
+        } catch (err: any) {
+            console.error(err);
             setError(err.message);
             throw err;
         }
@@ -359,6 +440,7 @@ const AdminDashboard: React.FC = () => {
             fetchData('settings');
             setEditingRole(null);
         } catch (err: any) {
+            console.error(err);
             setError(err.message);
             throw err;
         }
@@ -370,12 +452,12 @@ const AdminDashboard: React.FC = () => {
         await handleUpdateRole(role.id, { status: newStatus });
     };
 
-    const handleSavePaymentSettings = async () => {
+    const handleSavePaymentSettings = async (updatedSettings: any) => {
         try {
             const response = await fetch(`/api/admin/payment-settings?userId=${adminId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ paymentSettings }),
+                body: JSON.stringify({ paymentSettings: updatedSettings }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to save payment settings');
@@ -427,7 +509,8 @@ const AdminDashboard: React.FC = () => {
             case 'users': return <UsersTable users={users} onEdit={setEditingUser} onDelete={handleDeleteUser} onImpersonate={handleImpersonate} onViewGames={handleViewUserGames} />;
             case 'rooms': return <RoomsTable rooms={rooms} onCancel={handleCancelGame} />;
             case 'transactions': return <TransactionsTable transactions={transactions} />;
-            case 'agents': return <AgentsTable agents={agents} onEdit={setEditingAgent} onCredit={setCreditingAgent} onDelete={handleDeleteAgent} onToggleStatus={handleToggleAgentStatus} />;
+            case 'manual-transactions': return <ManualTransactionsTable transactions={manualTransactions} onApprove={handleApproveTransaction} onReject={handleRejectTransaction} />;
+            case 'agents': return <AgentsTable agents={agents} onEdit={setEditingAgent} onCredit={setCreditingAgent} onDelete={handleDeleteAgent} onToggleStatus={handleToggleAgentStatus} onCreate={() => setCreateAgentModalOpen(true)} />;
             case 'settings': return <Settings 
                 adminSettings={adminSettings} 
                 paymentSettings={paymentSettings} 
@@ -436,6 +519,7 @@ const AdminDashboard: React.FC = () => {
                 onDeleteRole={handleDeleteRole}
                 onUpdateRole={handleUpdateRole}
                 onToggleRoleStatus={handleToggleRoleStatus}
+                onEditRole={setEditingRole}
                 permissionsList={permissionsList}
                 adminUser={adminUser}
             />;
@@ -464,7 +548,25 @@ const AdminDashboard: React.FC = () => {
                     roles={adminSettings?.roles || []}
                 />
             )}
-            {/* Other modals can be added here */}
+            <CreateAgentModal
+                isOpen={isCreateAgentModalOpen}
+                onClose={() => setCreateAgentModalOpen(false)}
+                onCreateAgent={handleCreateAgent}
+            />
+            {editingAgent && (
+                <EditAgentModal
+                    agent={editingAgent}
+                    onClose={() => setEditingAgent(null)}
+                    onSave={handleUpdateAgent}
+                />
+            )}
+            {creditingAgent && (
+                <CreditAgentModal
+                    agent={creditingAgent}
+                    onClose={() => setCreditingAgent(null)}
+                    onSave={handleCreditAgent}
+                />
+            )}
         </AdminLayout>
     );
 };

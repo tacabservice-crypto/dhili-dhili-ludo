@@ -9,7 +9,7 @@ const AgentsTable = ({ agents, onCredit, onEdit, onToggleStatus, onDelete }) => 
       <div className="flex justify-between items-center mb-4">
         <h3 className="text-xl font-bold text-gray-800">Agents</h3>
         <button 
-            onClick={() => {}} 
+            onClick={onCreate} 
             className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
         >
           Create Agent
