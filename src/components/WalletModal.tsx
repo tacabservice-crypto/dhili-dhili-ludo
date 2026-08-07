@@ -44,14 +44,14 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
 
   useEffect(() => {
     const fetchPrerequisites = async () => {
-      // Fetch agents for the deposit tab
-      if (activeTab === 'deposit') {
+      // Fetch agents for deposit and withdraw tabs
+      if (activeTab === 'deposit' || activeTab === 'withdraw') {
         try {
           const agentsRes = await fetch(`/api/agents?location=${user.location || ''}`);
           if (agentsRes.ok) {
             const data = await agentsRes.json();
             setAgents(data);
-            if (data.length > 0) {
+            if (data.length > 0 && !selectedAgentId) {
               setSelectedAgentId(data[0].id);
             }
           }
@@ -84,6 +84,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 userId: user.id,
+                agentId: selectedAgentId,
                 amount: parseFloat(amount),
                 phone: activeTab === 'withdraw' ? phone : (agents.find(a => a.id === selectedAgentId)?.phone || DEPOSIT_PHONE_NUMBER),
                 senderPhone: activeTab === 'deposit' ? senderPhone : undefined,
@@ -127,6 +128,10 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
         return;
       }
     } else { // withdraw
+      if (!selectedAgentId) {
+        setError('Please select an agent to withdraw from.');
+        return;
+      }
       if (amtFloat > user.balance) {
         setError('Insufficient balance for this withdrawal.');
         return;
@@ -268,9 +273,11 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
              ) : (
               <form className="space-y-4" onSubmit={handleGenerateUssd}>
                 
-                {activeTab === 'deposit' && (
+                {(activeTab === 'deposit' || activeTab === 'withdraw') && (
                   <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Agent</label>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                      {activeTab === 'deposit' ? 'Deposit to Agent' : 'Withdraw from Agent'}
+                    </label>
                     <select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white">
                       {agents.length === 0 && <option>Loading agents...</option>}
                       {agents.map(agent => (
