@@ -1116,15 +1116,15 @@ const AdminDashboard: React.FC = () => {
                 <EditAgentModal
                     agent={editingAgent}
                     onClose={() => setEditingAgent(null)}
-                    onSave={(data) => handleUpdateAgent(editingAgent.id, data)}
+                    onSave={(agentId, data) => handleUpdateAgent(agentId, data)}
                 />
             )}
             {creditingAgent && (
                 <CreditAgentModal
                     agent={creditingAgent}
                     onClose={() => setCreditingAgent(null)}
-                    onSave={(amount, discount) => {
-                        handleCreditAgentFloat(creditingAgent.id, amount, discount);
+                    onSave={(agentId, amount, discount) => {
+                        handleCreditAgentFloat(agentId, amount, discount);
                         setCreditingAgent(null);
                     }}
                 />

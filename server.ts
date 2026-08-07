@@ -3362,7 +3362,7 @@ app.post('/api/admin/admins/create', hasPermission('all'), async (req, res) => {
 // It verifies that the request comes from a valid admin user in the new system,
 // but doesn't check for specific granular permissions.
 // This will be replaced with hasPermission('permission_name') calls on each endpoint.
-const isAdmin = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+const isAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
     if (!db) return res.status(500).json({ error: 'Database not initialized' });
 
     const adminId = req.query.userId as string;
@@ -3370,16 +3370,17 @@ const isAdmin = (req: express.Request, res: express.Response, next: express.Next
         return res.status(403).json({ error: 'Access denied. Admin user ID is required.' });
     }
 
-    db.collection('adminUsers').doc(adminId).get().then(doc => {
+    try {
+        const doc = await db.collection('adminUsers').doc(adminId).get();
         if (doc.exists) {
             next(); // It's a valid admin, let them pass for now.
         } else {
             res.status(403).json({ error: 'Access denied. Invalid admin user.' });
         }
-    }).catch(error => {
+    } catch (error) {
         console.error('Admin validation failed:', error);
         res.status(500).json({ error: 'An error occurred during admin validation.' });
-    });
+    }
 };
 
 app.get('/api/admin/settings', isAdmin, async (req, res) => {
