@@ -2050,11 +2050,11 @@ app.post('/api/request-to-agent', authMiddleware, async (req, res) => {
     if (!db) return res.status(500).json({ error: 'Database not initialized' });
     
     const player: UserProfile = (req as any).user;
-    const { agentId, amount, type, playerPhone } = req.body;
+    const { agentId, amount, type, playerPhone, provider } = req.body;
     const requestAmount = parseFloat(amount);
 
-    if (!agentId || !requestAmount || requestAmount <= 0 || !['deposit', 'withdrawal'].includes(type) || !playerPhone) {
-        return res.status(400).json({ error: 'Missing or invalid parameters. Requires agentId, amount, type (deposit/withdrawal), and playerPhone.' });
+    if (!agentId || !requestAmount || requestAmount <= 0 || !['deposit', 'withdrawal'].includes(type) || !playerPhone || !provider) {
+        return res.status(400).json({ error: 'Missing or invalid parameters. Requires agentId, amount, type, playerPhone, and provider.' });
     }
 
     if (type === 'withdrawal' && player.balance < requestAmount) {
@@ -2075,6 +2075,7 @@ app.post('/api/request-to-agent', authMiddleware, async (req, res) => {
             playerAvatar: player.avatar,
             agentId: agentId,
             playerPhone: playerPhone,
+            provider: provider,
             type: type,
             amount: requestAmount,
             status: 'pending',

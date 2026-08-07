@@ -159,6 +159,7 @@ export interface PlayerAgentRequest {
   playerAvatar: string;
   agentId: string;
   playerPhone: string;
+  provider: 'evc' | 'edahab' | 'sahal' | 'premier';
   type: 'deposit' | 'withdrawal';
   amount: number;
   status: 'pending' | 'approved' | 'rejected';

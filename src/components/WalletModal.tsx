@@ -24,6 +24,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
   
   const [phone, setPhone] = useState('');
   const [senderPhone, setSenderPhone] = useState('');
+  const [provider, setProvider] = useState<'evc' | 'edahab' | 'sahal' | 'premier'>('evc');
 
   // Agent related state
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -102,6 +103,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                 amount: requestAmount,
                 type: activeTab,
                 playerPhone: playerPhone,
+                provider: provider,
             }),
         });
         const data = await response.json();
@@ -126,6 +128,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     setRequestMessage('');
     setPhone('');
     setSenderPhone('');
+    setProvider('evc');
     if (agents.length > 0) {
         setSelectedAgent(agents[0].id);
     }
@@ -191,6 +194,38 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
 
           {activeTab !== 'history' ? (
               <form className="space-y-4" onSubmit={handleAgentRequest}>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                    {language === 'so' ? 'Shirkadda Lacagta' : 'Payment Provider'}
+                  </label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {[
+                      { id: 'evc', name: 'EVC Plus', colors: 'from-yellow-500 to-orange-600', desc: 'Hormuud' },
+                      { id: 'edahab', name: 'eDahab', colors: 'from-yellow-400 to-green-600', desc: 'Somtel' },
+                      { id: 'sahal', name: 'Sahal', colors: 'from-blue-600 to-blue-800', desc: 'Golis' },
+                      { id: 'premier', name: 'Premier', colors: 'from-slate-700 to-indigo-950', desc: 'Bank Wallet' }
+                    ].map((prov) => (
+                      <button
+                        key={prov.id}
+                        type="button"
+                        onClick={() => setProvider(prov.id as any)}
+                        className={`p-2 rounded-xl text-center border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
+                          provider === prov.id
+                            ? 'bg-white/10 border-blue-400 scale-[1.03] shadow-lg'
+                            : 'bg-black/30 border-white/5 hover:border-white/10'
+                        }`}
+                      >
+                        <span className={`text-[10px] font-black tracking-tighter uppercase px-1.5 py-0.5 rounded-md bg-gradient-to-r ${prov.colors} text-white`}>
+                          {prov.name}
+                        </span>
+                        <span className="text-[8px] text-slate-400 font-bold uppercase mt-1">
+                          {prov.desc}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
                 <div className="space-y-1.5">
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-2">
                         <Building className="w-3 h-3" />
