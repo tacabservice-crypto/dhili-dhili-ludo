@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Check, Phone, User, Building } from 'lucide-react';
-import { UserProfile, WalletTransaction, Agent } from '../types/game';
+import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Check, Phone } from 'lucide-react';
+import { UserProfile, WalletTransaction, Agent, PlayerAgentRequest } from '../types/game';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency } from '../utils/number';
 
@@ -14,6 +14,8 @@ interface WalletModalProps {
   onClose: () => void;
   onBalanceUpdated: () => void;
 }
+
+const DEPOSIT_PHONE_NUMBER = '907243775'; // Fallback admin number
 
 export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletModalProps) {
   const { t, language } = useLanguage();
@@ -24,118 +26,147 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
   
   const [phone, setPhone] = useState('');
   const [senderPhone, setSenderPhone] = useState('');
-  const [provider, setProvider] = useState<'evc' | 'edahab' | 'sahal' | 'premier'>('evc');
 
-  // Agent related state
   const [agents, setAgents] = useState<Agent[]>([]);
-  const [selectedAgent, setSelectedAgent] = useState<string>('');
-  const [isRequesting, setIsRequesting] = useState(false);
-  const [requestMessage, setRequestMessage] = useState('');
-
-  const fetchTransactions = async () => {
-    try {
-      const response = await fetch(`/api/wallet/transactions/${user.id}`);
-      if (response.ok) {
-        const data = await response.json();
-        setTransactions(data);
-      }
-    } catch (err) {
-      console.error('Failed to load transaction history', err);
-    }
-  };
-
-  useEffect(() => {
-    if (activeTab === 'history') {
-      fetchTransactions();
-    }
-  }, [user.id, activeTab]);
-
-  useEffect(() => {
-    const fetchAgents = async () => {
-        try {
-            const agentsRes = await fetch(`/api/agents?location=${user.location || ''}`);
-            if (agentsRes.ok) {
-                const data = await agentsRes.json();
-                setAgents(data);
-                if (data.length > 0) {
-                    setSelectedAgent(data[0].id);
-                }
-            }
-        } catch (err) {
-            console.error('Failed to load agents', err);
-        }
-    };
-    fetchAgents();
-  }, [user.location]);
+  const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   
-  const handleAgentRequest = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const [provider, setProvider] = useState<'evc' | 'edahab' | 'sahal' | 'premier'>('evc');
+  const [paymentSettings, setPaymentSettings] = useState<Record<string, any>>({});
+  const [apiProcessing, setApiProcessing] = useState(false);
+  const [apiMessage, setApiMessage] = useState<string>('');
+  const [apiError, setApiError] = useState<string>('');
+
+  const [ussdString, setUssdString] = useState('');
+  const [confirmationRequested, setConfirmationRequested] = useState(false);
+  const [confirmationLoading, setConfirmationLoading] = useState(false);
+  const [withdrawPreviewVisible, setWithdrawPreviewVisible] = useState(false);
+  const [depositAwaitingConfirmation, setDepositAwaitingConfirmation] = useState(false);
+
+  useEffect(() => {
+    const fetchPrerequisites = async () => {
+      // Fetch agents for the deposit tab
+      if (activeTab === 'deposit') {
+        try {
+          const agentsRes = await fetch(`/api/agents?location=${user.location || ''}`);
+          if (agentsRes.ok) {
+            const data = await agentsRes.json();
+            setAgents(data);
+            if (data.length > 0) {
+              setSelectedAgentId(data[0].id);
+            }
+          }
+        } catch (err) {
+          console.error('Failed to load agents', err);
+        }
+      }
+      // Fetch transactions for the history tab
+      if (activeTab === 'history') {
+        try {
+          const response = await fetch(`/api/wallet/transactions/${user.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            setTransactions(data);
+          }
+        } catch (err) {
+          console.error('Failed to load transaction history', err);
+        }
+      }
+    };
+    fetchPrerequisites();
+  }, [user.id, user.location, activeTab]);
+
+  const handleRequestConfirmation = async () => {
+    setConfirmationLoading(true);
     setError('');
-    setRequestMessage('');
-
-    const requestAmount = parseFloat(amount);
-    const playerPhone = activeTab === 'deposit' ? senderPhone : phone;
-
-    if (!selectedAgent) {
-        setError('Please select an agent.');
-        return;
-    }
-    if (!playerPhone.trim()) {
-        setError(`Please enter the phone number you are ${activeTab === 'deposit' ? 'sending from' : 'withdrawing to'}.`);
-        return;
-    }
-    if (isNaN(requestAmount) || requestAmount <= 0) {
-      setError('Please enter a valid positive amount.');
-      return;
-    }
-    if (activeTab === 'withdrawal' && user.balance < requestAmount) {
-        setError('Insufficient balance for this withdrawal request.');
-        return;
-    }
-
-    setIsRequesting(true);
     try {
-        const response = await fetch('/api/request-to-agent', {
+        const response = await fetch('/api/wallet/request-manual-confirmation', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'x-user-id': user.id },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                agentId: selectedAgent,
-                amount: requestAmount,
-                type: activeTab,
-                playerPhone: playerPhone,
+                userId: user.id,
+                amount: parseFloat(amount),
+                phone: activeTab === 'withdraw' ? phone : (agents.find(a => a.id === selectedAgentId)?.phone || DEPOSIT_PHONE_NUMBER),
+                senderPhone: activeTab === 'deposit' ? senderPhone : undefined,
                 provider: provider,
+                transactionType: activeTab,
             }),
         });
         const data = await response.json();
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to submit request.');
+        if (response.ok) {
+            setConfirmationRequested(true);
+        } else {
+            setError(data.error || 'Failed to submit confirmation request.');
         }
-        setRequestMessage('Your request has been successfully sent to the agent.');
-        setAmount('');
-        setPhone('');
-        setSenderPhone('');
-        onBalanceUpdated();
-    } catch (err: any) {
-        setError(err.message);
+    } catch (err) {
+        setError('An unexpected error occurred. Please try again.');
     } finally {
-        setIsRequesting(false);
+        setConfirmationLoading(false);
     }
+  };
+
+  const handleGenerateUssd = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setUssdString('');
+    setConfirmationRequested(false);
+    setWithdrawPreviewVisible(false);
+
+    const amtFloat = parseFloat(amount);
+    if (isNaN(amtFloat) || amtFloat <= 0) {
+      setError(language === 'so' ? 'Fadlan geli lacag sax ah oo togan.' : 'Please enter a valid positive amount.');
+      return;
+    }
+
+    if (activeTab === 'deposit') {
+      if (!selectedAgentId) {
+        setError('Please select an agent to deposit to.');
+        return;
+      }
+      if (!senderPhone.trim()) {
+        setError('Please enter your phone number (sending from).');
+        return;
+      }
+    } else { // withdraw
+      if (amtFloat > user.balance) {
+        setError('Insufficient balance for this withdrawal.');
+        return;
+      }
+      if (!phone.trim()) {
+        setError('Please enter the phone number for the withdrawal.');
+        return;
+      }
+      setWithdrawPreviewVisible(true);
+      return;
+    }
+      
+    const selectedAgent = agents.find(a => a.id === selectedAgentId);
+    let targetPhone = activeTab === 'deposit' ? (selectedAgent?.phone || null) : phone;
+
+    if (activeTab === 'deposit' && !targetPhone) {
+        setError("The selected agent does not have a phone number configured. Please choose another agent.");
+        return;
+    }
+
+    let code = '';
+    switch (provider) {
+      case 'evc': code = `*712*${targetPhone}*${amtFloat}#`; break;
+      case 'sahal': code = `*883*${targetPhone}*${amtFloat}#`; break;
+      case 'edahab': code = `*110*${targetPhone}*${amtFloat}#`; break;
+      default: setError('Unknown provider.'); return;
+    }
+
+    setUssdString(code);
   };
   
   const resetForm = () => {
+    setUssdString('');
     setAmount('');
     setError('');
-    setRequestMessage('');
-    setPhone('');
-    setSenderPhone('');
-    setProvider('evc');
-    if (agents.length > 0) {
-        setSelectedAgent(agents[0].id);
-    }
+    setApiError('');
+    setApiMessage('');
+    setConfirmationRequested(false);
+    setDepositAwaitingConfirmation(false);
   }
-
-  const localAgents = agents.filter(agent => agent.location && user.location && agent.location.toLowerCase() === user.location.toLowerCase());
-  const otherAgents = agents.filter(agent => !agent.location || !user.location || agent.location.toLowerCase() !== user.location.toLowerCase());
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -163,10 +194,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
           {(['deposit', 'withdraw', 'history'] as const).map((tab) => (
             <button
               key={tab}
-              onClick={() => {
-                setActiveTab(tab);
-                resetForm();
-              }}
+              onClick={() => { setActiveTab(tab); resetForm(); }}
               className={`py-3 text-center border-b-2 capitalize transition-all cursor-pointer ${
                 activeTab === tab
                   ? 'border-blue-400 text-blue-400'
@@ -185,192 +213,135 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
               <span>{error}</span>
             </div>
           )}
-          {requestMessage && (
-            <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
-              <CheckCircle className="w-4 h-4 shrink-0" />
-              <span>{requestMessage}</span>
-            </div>
-          )}
 
           {activeTab !== 'history' ? (
-              <form className="space-y-4" onSubmit={handleAgentRequest}>
+             ((activeTab === 'withdraw' && withdrawPreviewVisible) || (activeTab === 'deposit' && ussdString)) ? (
+                <div className="py-6 text-center space-y-4 animate-in fade-in duration-300">
+                    <h3 className="text-sm font-black text-yellow-400 uppercase tracking-widest">
+                        {activeTab === 'withdraw' ? 'Withdrawal Request' : 'Deposit Code'}
+                    </h3>
+                    <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
+                      {activeTab === 'deposit' 
+                        ? 'Your deposit code is ready. Tap Dir to open the USSD dialer.'
+                        : 'Please review the details below before submitting your withdrawal request.'}
+                    </p>
+
+                    {activeTab === 'deposit' && ussdString && (
+                       <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                        {!depositAwaitingConfirmation ? (
+                          <>
+                            <a href={`tel:${ussdString}`} onClick={() => setDepositAwaitingConfirmation(true)} className="w-full inline-flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-600 text-white font-black text-sm py-3 px-4 rounded-xl shadow gap-2">
+                              <Phone className="w-4 h-4" /> Dir
+                            </a>
+                            <button type="button" onClick={() => { setUssdString(''); }} className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl">Edit Details</button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs text-slate-300 font-semibold">After sending, press Please Confirm to notify admin.</p>
+                            <button onClick={handleRequestConfirmation} disabled={confirmationLoading} className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-black text-sm py-3 px-4 rounded-xl disabled:opacity-50 flex items-center justify-center gap-2">
+                              {confirmationLoading ? <><RefreshCw className="w-4 h-4 animate-spin" /> Submitting...</> : 'Please Confirm'}
+                            </button>
+                            {confirmationRequested && <div className="text-green-400 text-xs">Request submitted for review.</div>}
+                          </>
+                        )}
+                       </div>
+                    )}
+                    
+                    {activeTab === 'withdraw' && (
+                       <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
+                         <div className="bg-black/40 border border-white/10 rounded-xl p-4 text-left text-sm text-white space-y-2">
+                           <div className="flex justify-between"><span>Amount:</span><span>${parseFloat(amount).toFixed(2)}</span></div>
+                           <div className="flex justify-between"><span>Phone:</span><span>{phone}</span></div>
+                           <div className="flex justify-between"><span>Provider:</span><span className="uppercase">{provider}</span></div>
+                         </div>
+                         {confirmationRequested ? (
+                            <div className="text-green-400 text-xs">Request submitted. Admin will review.</div>
+                         ) : (
+                            <button onClick={handleRequestConfirmation} disabled={confirmationLoading} className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 text-white font-black text-sm py-3 px-4 rounded-xl disabled:opacity-50">
+                              {confirmationLoading ? 'Submitting...' : 'Please Confirm'}
+                            </button>
+                         )}
+                         <button type="button" onClick={() => setWithdrawPreviewVisible(false)} className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl">Edit Request</button>
+                       </div>
+                    )}
+                </div>
+             ) : (
+              <form className="space-y-4" onSubmit={handleGenerateUssd}>
+                
+                {activeTab === 'deposit' && (
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Agent</label>
+                    <select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white">
+                      {agents.length === 0 && <option>Loading agents...</option>}
+                      {agents.map(agent => (
+                        <option key={agent.id} value={agent.id}>{agent.username} ({agent.location || 'N/A'})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                    {language === 'so' ? 'Shirkadda Lacagta' : 'Payment Provider'}
-                  </label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Payment Provider</label>
                   <div className="grid grid-cols-4 gap-1.5">
-                    {[
-                      { id: 'evc', name: 'EVC Plus', colors: 'from-yellow-500 to-orange-600', desc: 'Hormuud' },
-                      { id: 'edahab', name: 'eDahab', colors: 'from-yellow-400 to-green-600', desc: 'Somtel' },
-                      { id: 'sahal', name: 'Sahal', colors: 'from-blue-600 to-blue-800', desc: 'Golis' },
-                      { id: 'premier', name: 'Premier', colors: 'from-slate-700 to-indigo-950', desc: 'Bank Wallet' }
-                    ].map((prov) => (
-                      <button
-                        key={prov.id}
-                        type="button"
-                        onClick={() => setProvider(prov.id as any)}
-                        className={`p-2 rounded-xl text-center border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
-                          provider === prov.id
-                            ? 'bg-white/10 border-blue-400 scale-[1.03] shadow-lg'
-                            : 'bg-black/30 border-white/5 hover:border-white/10'
-                        }`}
-                      >
-                        <span className={`text-[10px] font-black tracking-tighter uppercase px-1.5 py-0.5 rounded-md bg-gradient-to-r ${prov.colors} text-white`}>
-                          {prov.name}
-                        </span>
-                        <span className="text-[8px] text-slate-400 font-bold uppercase mt-1">
-                          {prov.desc}
-                        </span>
+                    {['evc', 'edahab', 'sahal', 'premier'].map((p) => (
+                      <button key={p} type="button" onClick={() => setProvider(p as any)} className={`p-2 rounded-xl text-center border ${provider === p ? 'bg-white/10 border-blue-400' : 'bg-black/30 border-white/5'}`}>
+                        <span className="text-xs font-black uppercase">{p}</span>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-2">
-                        <Building className="w-3 h-3" />
-                        Agent
-                    </label>
-                    <select 
-                        value={selectedAgent}
-                        onChange={(e) => setSelectedAgent(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
-                    >
-                        {agents.length === 0 && <option>Loading agents...</option>}
-                        {localAgents.length > 0 && (
-                            <optgroup label="Local Agents">
-                                {localAgents.map(agent => (
-                                    <option key={agent.id} value={agent.id}>{agent.username} ({agent.location})</option>
-                                ))}
-                            </optgroup>
-                        )}
-                        {otherAgents.length > 0 && (
-                            <optgroup label="Other Agents">
-                                {otherAgents.map(agent => (
-                                    <option key={agent.id} value={agent.id}>{agent.username} ({agent.location || 'Unknown'})</option>
-                                ))}
-                            </optgroup>
-                        )}
-                    </select>
-                </div>
-
                 {activeTab === 'withdraw' && (
-                  <div className="space-y-1 animate-in fade-in duration-300">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-2">
-                      <Phone className="w-3 h-3" />
-                      {language === 'so' ? 'Lambarka Talefanka Kala Bax' : 'Withdrawal Phone Number'}
-                    </label>
-                    <input
-                      type="tel"
-                      required
-                      placeholder="e.g. 061XXXXXXX"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
-                    />
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Withdrawal Phone Number</label>
+                    <input type="tel" required placeholder="e.g. 061XXXXXXX" value={phone} onChange={(e) => setPhone(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white" />
                   </div>
                 )}
                  
                 {activeTab === 'deposit' && (
-                    <div className="space-y-1 animate-in fade-in duration-300">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-2">
-                            <Phone className="w-3 h-3" />
-                            {language === 'so' ? 'Lambarkaaga Talefanka ee aad lacagta ka soo direyso' : 'Your Phone Number (Sending From)'}
-                        </label>
-                        <input
-                        type="tel"
-                        required
-                        placeholder="e.g. 061XXXXXXX"
-                        value={senderPhone}
-                        onChange={(e) => setSenderPhone(e.target.value)}
-                        className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
-                        />
-                    </div>
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Your Phone Number (Sending From)</label>
+                    <input type="tel" required placeholder="e.g. 061XXXXXXX" value={senderPhone} onChange={(e) => setSenderPhone(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white" />
+                  </div>
                 )}
 
                 <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                    {language === 'so' ? 'Lacagta ($)' : 'Amount ($)'}
-                  </label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Amount ($)</label>
                   <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-extrabold text-lg">$</span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
-                      required
-                      placeholder={language === 'so' ? 'Geli qaddarka' : 'Enter amount'}
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl pl-8 pr-4 py-2.5 text-lg font-black text-white placeholder-slate-600 outline-none transition-all"
-                    />
+                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400">$</span>
+                    <input type="number" step="0.01" min="0.01" required placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl pl-8 pr-4 py-2.5 text-lg font-black text-white" />
                   </div>
                 </div>
 
                 <div className="grid grid-cols-4 gap-2">
                   {[5, 10, 25, 50].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setAmount(preset.toString())}
-                      className="bg-black/30 border border-white/10 hover:border-blue-400 text-xs font-bold py-2 rounded-lg transition-all hover:bg-white/5 cursor-pointer text-white"
-                    >
+                    <button key={preset} type="button" onClick={() => setAmount(preset.toString())} className="bg-black/30 border border-white/10 hover:border-blue-400 text-xs font-bold py-2 rounded-lg">
                       +${preset}
                     </button>
                   ))}
                 </div>
 
-                <button
-                    type="submit"
-                    disabled={isRequesting}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-blue-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {isRequesting ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
-                      </>
-                    ) : activeTab === 'deposit' ? (
-                      <>
-                        <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Dir Codsiga Dhigaalka' : 'Send Deposit Request'}
-                      </>
-                    ) : (
-                      <>
-                        <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Dir Codsiga Kala-bixidda' : 'Send Withdraw Request'}
-                      </>
-                    )}
-                  </button>
+                <button type="submit" className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 text-white font-extrabold text-sm py-3 px-4 rounded-xl">
+                  {activeTab === 'deposit' ? 'Generate Deposit Code' : 'Generate Withdraw Code'}
+                </button>
               </form>
+            )
           ) : (
             <div className="space-y-2">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-                {language === 'so' ? 'Taariikhda Dhiganaha' : 'Transaction History'}
-              </h3>
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Transaction History</h3>
               {transactions.length === 0 ? (
-                <div className="text-center py-8 text-gray-500 text-xs font-medium">
-                  {language === 'so' ? 'Wali wax shubaal ama kala bixid ah ma jiraan.' : 'No previous transactions recorded.'}
-                </div>
+                <div className="text-center py-8 text-gray-500 text-xs">No previous transactions.</div>
               ) : (
                 <div className="space-y-2 max-h-[35vh] overflow-y-auto pr-1">
-                  {transactions.map((tx) => {
-                    const isCredit = tx.type === 'deposit' || tx.type === 'win_payout' || tx.type === 'bet_escrow_refund';
-                    return (
-                      <div
-                        key={tx.id}
-                        className="bg-black/30 border border-white/5 p-3 rounded-xl flex items-center justify-between text-xs"
-                      >
-                        <div className="space-y-1">
-                          <p className="font-bold text-slate-200">{tx.description}</p>
-                          <p className="text-[10px] text-slate-500">
-                            {new Date(tx.timestamp).toLocaleString()}
-                          </p>
-                        </div>
-                        <span className={`font-black text-sm whitespace-nowrap ml-2 font-mono ${isCredit ? 'text-green-400' : 'text-red-400'}`}>
-                          {isCredit ? '+' : '-'}{formatCurrency(tx.amount)}
-                        </span>
+                  {transactions.map((tx) => (
+                    <div key={tx.id} className="bg-black/30 border border-white/5 p-3 rounded-xl flex items-center justify-between text-xs">
+                      <div>
+                        <p className="font-bold">{tx.description}</p>
+                        <p className="text-[10px] text-slate-500">{new Date(tx.timestamp).toLocaleString()}</p>
                       </div>
-                    );
-                  })}
+                      <span className={`font-black ${tx.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{tx.type === 'deposit' ? '+' : '-'}{formatCurrency(tx.amount)}</span>
+                    </div>
+                  ))}
                 </div>
               )}
             </div>

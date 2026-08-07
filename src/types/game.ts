@@ -120,6 +120,7 @@ export interface GameRoom {
 export interface Agent {
   id: string;
   username: string;
+  phone: string;
   password?: string; // Should be hashed
   location?: string;
   commissionRate: number;
