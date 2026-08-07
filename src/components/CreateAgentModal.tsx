@@ -3,13 +3,14 @@ import React, { useState } from 'react';
 interface CreateAgentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onCreateAgent: (agentData: { username: string, password: string, commissionRate: string }) => Promise<void>;
+    onCreateAgent: (agentData: { username: string, password: string, commissionRate: string, location?: string }) => Promise<void>;
 }
 
 const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, onCreateAgent }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [commissionRate, setCommissionRate] = useState('0.1');
+    const [location, setLocation] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -19,7 +20,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, on
         setError(null);
         setIsSubmitting(true);
         try {
-            await onCreateAgent({ username, password, commissionRate });
+            await onCreateAgent({ username, password, commissionRate, location });
             onClose();
         } catch (err: any) {
             setError(err.message);
@@ -58,6 +59,14 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, on
                         step="0.01"
                         min="0"
                         max="1"
+                        className="bg-gray-700 text-white w-full px-4 py-2 rounded"
+                        disabled={isSubmitting}
+                    />
+                    <input
+                        type="text"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="Location (e.g., Mogadishu)"
                         className="bg-gray-700 text-white w-full px-4 py-2 rounded"
                         disabled={isSubmitting}
                     />

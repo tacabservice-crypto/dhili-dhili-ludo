@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Check, Phone } from 'lucide-react';
-import { UserProfile, WalletTransaction } from '../types/game';
+import { UserProfile, WalletTransaction, Agent, PlayerAgentRequest } from '../types/game';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency } from '../utils/number';
 
@@ -20,7 +20,7 @@ const DEPOSIT_PHONE_NUMBER = '907243775';
 
 export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletModalProps) {
   const { t, language } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit');
+  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history' | 'agent'>('deposit');
   const [amount, setAmount] = useState('');
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [error, setError] = useState('');
@@ -33,6 +33,13 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     apiUrl?: string;
     accountNumber?: string;
   };
+
+  // Agent request state
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [selectedAgent, setSelectedAgent] = useState<string>('');
+  const [requestType, setRequestType] = useState<'deposit' | 'withdrawal'>('deposit');
+  const [playerRequests, setPlayerRequests] = useState<PlayerAgentRequest[]>([]);
+  const [agentRequesting, setAgentRequesting] = useState(false);
 
   const [provider, setProvider] = useState<'evc' | 'edahab' | 'sahal' | 'premier'>('evc');
   const [paymentSettings, setPaymentSettings] = useState<Record<string, PaymentProviderConfig>>({});
@@ -77,6 +84,78 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
     };
     fetchSettings();
   }, []);
+
+  useEffect(() => {
+    const fetchAgentData = async () => {
+        try {
+            const [agentsRes, requestsRes] = await Promise.all([
+                fetch(`/api/agents?location=${user.location || ''}`),
+                fetch(`/api/player/requests?userId=${user.id}`) // Assuming endpoint needs userId
+            ]);
+            if (agentsRes.ok) {
+                const data = await agentsRes.json();
+                setAgents(data);
+                if (data.length > 0) {
+                    setSelectedAgent(data[0].id);
+                }
+            }
+            if (requestsRes.ok) {
+                const data = await requestsRes.json();
+                setPlayerRequests(data);
+            }
+        } catch (err) {
+            console.error('Failed to load agent data', err);
+        }
+    };
+
+    if (activeTab === 'agent') {
+        fetchAgentData();
+    }
+  }, [user.id, user.location, activeTab]);
+
+  const handleAgentRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    const requestAmount = parseFloat(amount);
+    if (!selectedAgent || !requestAmount || requestAmount <= 0) {
+        setError('Please select an agent and enter a valid positive amount.');
+        return;
+    }
+    if (requestType === 'withdrawal' && user.balance < requestAmount) {
+        setError('Insufficient balance for this withdrawal request.');
+        return;
+    }
+
+    setAgentRequesting(true);
+    try {
+        const response = await fetch('/api/request-to-agent', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-user-id': user.id },
+            body: JSON.stringify({
+                agentId: selectedAgent,
+                amount: requestAmount,
+                type: requestType,
+            }),
+        });
+        const data = await response.json();
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to submit request.');
+        }
+        setAmount('');
+        // Refresh requests list
+        const requestsRes = await fetch(`/api/player/requests?userId=${user.id}`);
+        if (requestsRes.ok) {
+            const data = await requestsRes.json();
+            setPlayerRequests(data);
+        }
+        // Assuming that approving a deposit/withdrawal also updates player balance
+        onBalanceUpdated();
+    } catch (err: any) {
+        setError(err.message);
+    } finally {
+        setAgentRequesting(false);
+    }
+  };
 
   const selectedPaymentProvider = paymentSettings[provider];
   const isProviderApiConfigured = !!selectedPaymentProvider?.enabled && !!selectedPaymentProvider?.apiKey;
@@ -250,7 +329,13 @@ const handleGenerateUssd = (e: React.FormEvent) => {
     setApiMessage('');
     setConfirmationRequested(false);
     setDepositAwaitingConfirmation(false);
+    // Agent tab specific resets
+    setSelectedAgent(agents.length > 0 ? agents[0].id : '');
+    setRequestType('deposit');
   }
+
+  const localAgents = agents.filter(agent => agent.location && user.location && agent.location.toLowerCase() === user.location.toLowerCase());
+  const otherAgents = agents.filter(agent => !agent.location || !user.location || agent.location.toLowerCase() !== user.location.toLowerCase());
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4">
@@ -274,8 +359,8 @@ const handleGenerateUssd = (e: React.FormEvent) => {
           <span className="text-3xl font-black font-mono">{formatCurrency(user.balance)}</span>
         </div>
 
-        <div className="grid grid-cols-3 gap-1 px-4 text-sm font-bold border-b border-white/10">
-          {(['deposit', 'withdraw', 'history'] as const).map((tab) => (
+        <div className="grid grid-cols-4 gap-1 px-4 text-sm font-bold border-b border-white/10">
+          {(['deposit', 'withdraw', 'agent', 'history'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => {
@@ -288,7 +373,7 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                   : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
-              {tab === 'deposit' ? t('deposit') : tab === 'withdraw' ? t('withdraw') : t('history')}
+              {tab === 'deposit' ? t('deposit') : tab === 'withdraw' ? t('withdraw') : tab === 'agent' ? 'Agent' : t('history')}
             </button>
           ))}
         </div>
@@ -301,7 +386,7 @@ const handleGenerateUssd = (e: React.FormEvent) => {
             </div>
           )}
 
-          {activeTab !== 'history' ? (
+          {activeTab !== 'history' && activeTab !== 'agent' ? (
              ((activeTab === 'withdraw' && withdrawPreviewVisible) || (activeTab === 'deposit' && ussdString)) ? (
                 <div className="py-6 text-center space-y-4 animate-in fade-in duration-300">
                     <h3 className="text-sm font-black text-yellow-400 uppercase tracking-widest">
@@ -621,6 +706,80 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                 )}
               </form>
             )
+          ) : activeTab === 'agent' ? (
+            <div className="space-y-4">
+                <div>
+                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Request from Agent</h3>
+                    <form onSubmit={handleAgentRequestSubmit} className="mt-2 space-y-4 p-4 bg-black/30 border border-white/10 rounded-xl">
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Agent</label>
+                            <select 
+                                value={selectedAgent}
+                                onChange={(e) => setSelectedAgent(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                            >
+                                {localAgents.length > 0 && (
+                                    <optgroup label="Local Agents">
+                                        {localAgents.map(agent => (
+                                            <option key={agent.id} value={agent.id}>{agent.username} ({agent.location})</option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                                {otherAgents.length > 0 && (
+                                    <optgroup label="Other Agents">
+                                        {otherAgents.map(agent => (
+                                            <option key={agent.id} value={agent.id}>{agent.username} ({agent.location || 'Unknown'})</option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Request Type</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => setRequestType('deposit')} className={`p-2 rounded-lg text-center font-bold text-sm ${requestType === 'deposit' ? 'bg-blue-600' : 'bg-black/30'}`}>Deposit</button>
+                                <button type="button" onClick={() => setRequestType('withdrawal')} className={`p-2 rounded-lg text-center font-bold text-sm ${requestType === 'withdrawal' ? 'bg-blue-600' : 'bg-black/30'}`}>Withdrawal</button>
+                            </div>
+                        </div>
+                         <div className="space-y-1">
+                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Amount ($)</label>
+                            <div className="relative">
+                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-extrabold text-lg">$</span>
+                                <input type="number" step="0.01" min="0.01" required placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)}
+                                className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl pl-8 pr-4 py-2.5 text-lg font-black text-white placeholder-slate-600 outline-none transition-all" />
+                            </div>
+                        </div>
+                        <button type="submit" disabled={agentRequesting} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 rounded-lg disabled:opacity-50">
+                            {agentRequesting ? 'Submitting...' : 'Submit Request to Agent'}
+                        </button>
+                    </form>
+                </div>
+                <div>
+                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Requests to Agents</h3>
+                    <div className="mt-2 space-y-2 max-h-[20vh] overflow-y-auto pr-1">
+                        {playerRequests.length === 0 ? (
+                             <div className="text-center py-4 text-gray-500 text-xs font-medium">No previous requests to agents.</div>
+                        ): (
+                            playerRequests.map(req => (
+                                <div key={req.id} className="bg-black/30 border border-white/5 p-3 rounded-xl flex items-center justify-between text-xs">
+                                    <div className="space-y-1">
+                                        <p className="font-bold text-slate-200">{req.type === 'deposit' ? 'Deposit from' : 'Withdrawal to'} {req.agentUsername}</p>
+                                        <p className="text-[10px] text-slate-500">{new Date(req.createdAt).toLocaleString()}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className={`font-black text-sm font-mono ${req.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(req.amount)}</span>
+                                        <div className={`mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold inline-block ${
+                                            req.status === 'pending' ? 'bg-yellow-400/20 text-yellow-300' :
+                                            req.status === 'approved' ? 'bg-green-400/20 text-green-300' :
+                                            'bg-red-400/20 text-red-300'
+                                        }`}>{req.status}</div>
+                                    </div>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+            </div>
           ) : (
             <div className="space-y-2">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
@@ -660,4 +819,3 @@ const handleGenerateUssd = (e: React.FormEvent) => {
     </div>
   );
 }
-

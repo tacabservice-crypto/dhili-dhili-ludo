@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import { Agent, AgentTransaction, UserProfile } from './types/game';
+import { Agent, AgentTransaction, AgentRequest, PlayerAgentRequest } from './types/game';
 
 // A simple API client
 const AgentDashboard = () => {
@@ -17,10 +17,98 @@ const AgentDashboard = () => {
     const [password, setPassword] = useState('');
     const [transactions, setTransactions] = useState<AgentTransaction[]>([]);
     const [loading, setLoading] = useState(true);
-    const [searchQuery, setSearchQuery] = useState('');
-    const [searchResults, setSearchResults] = useState<Partial<UserProfile>[]>([]);
-    const [selectedPlayer, setSelectedPlayer] = useState<Partial<UserProfile> | null>(null);
-    const [depositAmount, setDepositAmount] = useState('');
+    const [requestAmount, setRequestAmount] = useState('');
+    const [agentRequests, setAgentRequests] = useState<AgentRequest[]>([]);
+    const [playerRequests, setPlayerRequests] = useState<PlayerAgentRequest[]>([]);
+
+    const fetchAgentRequests = async (agentId: string) => {
+        try {
+            const response = await fetch(`/api/agent/requests?agentId=${agentId}`);
+            if (!response.ok) throw new Error('Failed to fetch agent requests');
+            const data = await response.json();
+            setAgentRequests(data);
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+    
+    const fetchPlayerRequests = async (agentId: string) => {
+        try {
+            const response = await fetch(`/api/agent/player-requests?agentId=${agentId}`);
+            if (!response.ok) throw new Error('Failed to fetch player requests');
+            const data = await response.json();
+            setPlayerRequests(data);
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
+
+    const handleApprove = async (requestId: string) => {
+        const agentId = localStorage.getItem('agentId');
+        if (!agentId) return;
+        setLoading(true);
+        try {
+            const response = await fetch(`/api/agent/player-requests/${requestId}/approve?agentId=${agentId}`, {
+                method: 'POST',
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to approve request');
+            await fetchPlayerRequests(agentId);
+            await fetchProfile(agentId); // Re-fetch agent profile to update float balance
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleReject = async (requestId: string) => {
+        const agentId = localStorage.getItem('agentId');
+        if (!agentId) return;
+        setLoading(true);
+        try {
+            const response = await fetch(`/api/agent/player-requests/${requestId}/reject?agentId=${agentId}`, {
+                method: 'POST',
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to reject request');
+            await fetchPlayerRequests(agentId);
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRequestFloat = async (e: React.FormEvent) => {
+        e.preventDefault();
+        const agentId = localStorage.getItem('agentId');
+        if (!requestAmount || parseFloat(requestAmount) <= 0 || !agentId) {
+          setError('Please enter a valid amount to request.');
+          return;
+        }
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await fetch(`/api/agent/request-float?agentId=${agentId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    amount: requestAmount,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Float request failed');
+            
+            alert(`Success! Your request for $${requestAmount} has been submitted.`);
+            await fetchAgentRequests(agentId); // Refresh requests
+            setRequestAmount('');
+        } catch (err: any) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+    };
 
     const handleLogin = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -40,6 +128,8 @@ const AgentDashboard = () => {
             setAgent(data.agent);
             setIsLoggedIn(true);
             await fetchTransactions(data.agent.id);
+            await fetchAgentRequests(data.agent.id);
+            await fetchPlayerRequests(data.agent.id);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -79,6 +169,8 @@ const AgentDashboard = () => {
             setAgent(data);
             setIsLoggedIn(true);
             await fetchTransactions(data.id);
+            await fetchAgentRequests(data.id);
+            await fetchPlayerRequests(data.id);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -94,58 +186,6 @@ const AgentDashboard = () => {
             setLoading(false);
         }
     }, []);
-
-    const handleSearch = async () => {
-        const agentId = localStorage.getItem('agentId');
-        if (searchQuery.length < 2 || !agentId) {
-          setSearchResults([]);
-          return;
-        };
-        setLoading(true);
-        try {
-          const response = await fetch(`/api/agent/player-lookup?query=${searchQuery}&agentId=${agentId}`);
-          if (!response.ok) throw new Error('Player search failed');
-          const results = await response.json();
-          setSearchResults(results);
-        } catch (err: any) {
-          setError(err.message);
-        } finally {
-          setLoading(false);
-        }
-    };
-
-    const handleDeposit = async () => {
-        const agentId = localStorage.getItem('agentId');
-        if (!selectedPlayer || !depositAmount || parseFloat(depositAmount) <= 0 || !agentId) {
-          setError('Please select a player and enter a valid amount.');
-          return;
-        }
-        setLoading(true);
-        setError(null);
-        try {
-            const response = await fetch(`/api/agent/deposit?agentId=${agentId}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    playerId: selectedPlayer.id,
-                    amount: depositAmount,
-                }),
-            });
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Deposit failed');
-            
-            alert(`Success! Deposited $${depositAmount} to ${selectedPlayer.username}. Your new float balance is $${result.newAgentBalance.toFixed(2)}`);
-            await fetchProfile(agentId); // Refresh all data
-            setSelectedPlayer(null);
-            setDepositAmount('');
-            setSearchQuery('');
-            setSearchResults([]);
-        } catch (err: any) {
-          setError(err.message);
-        } finally {
-          setLoading(false);
-        }
-    };
 
     if (loading && !isLoggedIn) {
         return <div className="h-screen bg-gray-900 text-white flex items-center justify-center"><div>Loading...</div></div>;
@@ -213,66 +253,84 @@ const AgentDashboard = () => {
             {error && <div className="mt-4 p-3 bg-red-800/50 border border-red-500 rounded-xl text-white">{error}</div>}
             
             <div className="mt-8 p-6 bg-slate-800 border border-slate-700 rounded-xl">
-              <h2 className="text-2xl font-semibold">Player Deposit</h2>
-              
-              <div className="mt-4">
-                <label className="font-bold">1. Find Player</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="text" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Enter Player Username..." 
-                    className="mt-2 flex-grow bg-slate-700 p-2 rounded-lg border border-slate-600" 
-                  />
-                  <button onClick={handleSearch} disabled={loading} className="mt-2 bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded-lg font-bold disabled:bg-slate-500">Search</button>
-                </div>
+              <h2 className="text-2xl font-semibold">Player Transaction Requests</h2>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-700 text-xs text-slate-300 uppercase">
+                        <tr>
+                            <th className="px-4 py-3">Date</th>
+                            <th className="px-4 py-3">Player</th>
+                            <th className="px-4 py-3">Type</th>
+                            <th className="px-4 py-3 text-right">Amount</th>
+                            <th className="px-4 py-3 text-center">Status</th>
+                            <th className="px-4 py-3 text-center">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {playerRequests.map(req => (
+                            <tr key={req.id} className="border-b border-slate-700 last:border-b-0">
+                                <td className="px-4 py-3 text-slate-400">{new Date(req.createdAt).toLocaleString()}</td>
+                                <td className="px-4 py-3 font-medium flex items-center gap-2">
+                                    <span className="text-xl">{req.playerAvatar}</span>
+                                    {req.playerUsername}
+                                </td>
+                                <td className="px-4 py-3">
+                                    <span className={`font-semibold ${req.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
+                                        {req.type.toUpperCase()}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3 font-mono text-right">${req.amount.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-center">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                        req.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
+                                        req.status === 'approved' ? 'bg-green-900 text-green-200' :
+                                        'bg-red-900 text-red-200'
+                                    }`}>
+                                        {req.status}
+                                    </span>
+                                </td>
+                                <td className="px-4 py-3 text-center">
+                                    {req.status === 'pending' && (
+                                        <div className="flex gap-2 justify-center">
+                                            <button 
+                                                onClick={() => handleApprove(req.id)} 
+                                                disabled={loading}
+                                                className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded font-bold text-xs disabled:bg-slate-500">
+                                                Approve
+                                            </button>
+                                            <button 
+                                                onClick={() => handleReject(req.id)} 
+                                                disabled={loading}
+                                                className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded font-bold text-xs disabled:bg-slate-500">
+                                                Reject
+                                            </button>
+                                        </div>
+                                    )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
               </div>
-              
-              {searchResults.length > 0 && !selectedPlayer && (
-                <div className="mt-4 space-y-2">
-                  {searchResults.map(player => (
-                    <div key={player.id} onClick={() => setSelectedPlayer(player)} className="flex items-center gap-3 p-2 bg-slate-700 hover:bg-slate-600 rounded-lg cursor-pointer">
-                      <span className="text-2xl">{player.avatar}</span>
-                      <span>{player.username}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-    
-              {selectedPlayer && (
-                <div className="mt-6 border-t border-purple-500/30 pt-6">
-                  <div className="flex justify-between items-start p-3 bg-slate-700 rounded-lg">
-                    <div>
-                      <label className="font-bold text-purple-300">2. Deposit to Player</label>
-                      <div className="flex items-center gap-3 mt-1">
-                        <span className="text-3xl">{selectedPlayer.avatar}</span>
-                        <span className="text-xl font-bold">{selectedPlayer.username}</span>
-                      </div>
-                    </div>
-                    <button onClick={() => { setSelectedPlayer(null); setSearchResults([]); setSearchQuery(''); }} className="text-sm text-amber-400 hover:underline">Change Player</button>
-                  </div>
-    
-                  <div className="mt-4">
-                    <label className="font-bold">3. Enter Amount</label>
-                    <input 
-                      type="number" 
-                      value={depositAmount}
-                      onChange={(e) => setDepositAmount(e.target.value)}
-                      placeholder="$0.00" 
-                      className="mt-2 w-full bg-slate-900 font-mono text-lg p-2 rounded-lg border border-slate-600" 
-                    />
-                  </div>
-    
-                  <button 
-                    onClick={handleDeposit} 
-                    disabled={loading}
-                    className="mt-6 w-full bg-green-600 hover:bg-green-700 px-4 py-3 rounded-lg text-lg font-bold disabled:bg-slate-500"
-                  >
-                    {loading ? 'Processing...' : `Confirm Deposit of $${depositAmount || 0}`}
+            </div>
+
+            <div className="mt-8 p-6 bg-slate-800 border border-slate-700 rounded-xl">
+              <h2 className="text-2xl font-semibold">Request Float</h2>
+              <form onSubmit={handleRequestFloat} className="mt-4">
+                <div className="flex gap-2">
+                  <input
+                    type="number"
+                    value={requestAmount}
+                    onChange={(e) => setRequestAmount(e.target.value)}
+                    placeholder="Enter amount to request"
+                    className="flex-grow bg-slate-700 p-2 rounded-lg border border-slate-600"
+                    required
+                  />
+                  <button type="submit" disabled={loading} className="bg-purple-600 hover:bg-purple-700 px-5 py-2 rounded-lg font-bold disabled:bg-slate-500">
+                    {loading ? 'Submitting...' : 'Submit Request'}
                   </button>
                 </div>
-              )}
+              </form>
             </div>
     
             <div className="mt-8">
@@ -299,6 +357,38 @@ const AgentDashboard = () => {
                                     <td className="px-4 py-3">{tx.description}</td>
                                     <td className={`px-4 py-3 font-mono text-right ${tx.type === 'PlayerDeposit' ? 'text-red-400' : 'text-green-400'}`}>
                                         {tx.type === 'PlayerDeposit' ? '-' : '+'}${tx.amount.toFixed(2)}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div className="mt-8">
+                <h2 className="text-2xl font-semibold">My Float Requests</h2>
+                <div className="mt-4 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-700 text-xs text-slate-300 uppercase">
+                            <tr>
+                                <th className="px-4 py-3">Date</th>
+                                <th className="px-4 py-3">Amount</th>
+                                <th className="px-4 py-3">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {agentRequests.map(req => (
+                                <tr key={req.id} className="border-b border-slate-700 last:border-b-0">
+                                    <td className="px-4 py-3 text-slate-400">{new Date(req.createdAt).toLocaleString()}</td>
+                                    <td className="px-4 py-3 font-mono">${req.amount.toFixed(2)}</td>
+                                    <td className="px-4 py-3">
+                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                            req.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
+                                            req.status === 'approved' ? 'bg-green-900 text-green-200' :
+                                            'bg-red-900 text-red-200'
+                                        }`}>
+                                            {req.status}
+                                        </span>
                                     </td>
                                 </tr>
                             ))}

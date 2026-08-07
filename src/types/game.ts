@@ -8,6 +8,7 @@ export interface UserProfile {
   username: string;
   email?: string;
   phone?: string;
+  location?: string;
   avatar: string;
   balance: number;
   winCount: number;
@@ -120,6 +121,7 @@ export interface Agent {
   id: string;
   username: string;
   password?: string; // Should be hashed
+  location?: string;
   commissionRate: number;
   balance: number;
   floatBalance?: number;
@@ -136,6 +138,31 @@ export interface AgentTransaction {
   playerId?: string; // For PlayerDeposit, the user who received the funds
   timestamp: number;
   description: string;
+}
+
+export interface AgentRequest {
+  id: string;
+  agentId: string;
+  agentUsername: string;
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+  resolvedAt?: number;
+  resolvedBy?: string; // Admin user ID
+  resolverUsername?: string;
+}
+
+export interface PlayerAgentRequest {
+  id: string;
+  playerId: string;
+  playerUsername: string;
+  playerAvatar: string;
+  agentId: string;
+  type: 'deposit' | 'withdrawal';
+  amount: number;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: number;
+  resolvedAt?: number;
 }
 
 export interface VipSubscription {

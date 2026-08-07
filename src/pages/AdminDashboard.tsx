@@ -13,6 +13,8 @@ import CreateAgentModal from '../components/CreateAgentModal';
 import EditAgentModal from '../components/EditAgentModal';
 import CreditAgentModal from '../components/CreditAgentModal';
 import EditRoleModal from '../components/EditRoleModal';
+import { Agent, AgentRequest, ManualTransaction, UserProfile } from '../types/game';
+import AgentRequestsTable from '../components/admin/AgentRequestsTable';
 
 
 const AdminDashboard: React.FC = () => {
@@ -42,7 +44,7 @@ const AdminDashboard: React.FC = () => {
     const adminId = adminUser?.id;
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'agents' | 'settings'>('stats');
+    const [view, setView] = useState<'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'agents' | 'settings' | 'agent-requests'>('stats');
     const [error, setError] = useState<string | null>(null);
     
     // Data states
@@ -54,6 +56,8 @@ const AdminDashboard: React.FC = () => {
     const [paymentSettings, setPaymentSettings] = useState<any>(null);
     const [adminSettings, setAdminSettings] = useState<any>(null);
     const [agents, setAgents] = useState<Agent[]>([]);
+    const [agentRequests, setAgentRequests] = useState<AgentRequest[]>([]);
+    const [processingRequestId, setProcessingRequestId] = useState<string | null>(null);
 
     // Modal state
     const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
@@ -70,6 +74,71 @@ const AdminDashboard: React.FC = () => {
     const handleLogout = () => {
         localStorage.removeItem('admin_user');
         setAdminUser(null);
+    };
+    
+    const fetchAgentRequests = useCallback(async () => {
+        if (!adminUser) return;
+        setError(null);
+        try {
+            const response = await fetch(`/api/admin/agent-requests?userId=${adminUser.id}`);
+            if (!response.ok) {
+                let errMessage = 'Failed to fetch agent requests';
+                try {
+                    const err = await response.json();
+                    errMessage = err.error || errMessage;
+                } catch(e) { /* ignore json parsing error */ }
+                
+                if (response.status === 403 || response.status === 401) {
+                    handleLogout(); // Log out if session is invalid
+                }
+                setError(errMessage);
+                return;
+            }
+            const data = await response.json();
+            setAgentRequests(data);
+        } catch (err: any) {
+            setError(err.message);
+        }
+    }, [adminUser]);
+
+    const handleApproveAgentRequest = async (requestId: string) => {
+        if (!adminUser) return;
+        setProcessingRequestId(requestId);
+        try {
+            const response = await fetch(`/api/admin/agent-requests/${requestId}/approve?userId=${adminUser.id}`, {
+                method: 'POST',
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to approve request');
+            await fetchAgentRequests();
+            // Also refetch main data to update agent balances etc.
+            if(view === 'agents') {
+                fetchData('agents');
+            } else if (view === 'stats') {
+                fetchData('stats');
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setProcessingRequestId(null);
+        }
+    };
+
+    const handleRejectAgentRequest = async (requestId: string) => {
+        if (!adminUser) return;
+        setProcessingRequestId(requestId);
+        try {
+            const response = await fetch(`/api/admin/agent-requests/${requestId}/reject?userId=${adminUser.id}`, {
+                method: 'POST',
+            });
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Failed to reject request');
+            await fetchAgentRequests();
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setProcessingRequestId(null);
+        }
     };
 
     const fetchData = useCallback(async (type: 'stats' | 'users' | 'rooms' | 'transactions' | 'manual-transactions' | 'payment-settings' | 'agents' | 'settings', showerror = true) => {
@@ -147,6 +216,9 @@ const AdminDashboard: React.FC = () => {
             if (view === 'stats') {
                 fetchData('rooms', false);
                 fetchData('manual-transactions', false);
+            }
+            if (view === 'agent-requests') {
+                fetchAgentRequests();
             }
         }
     }, [adminUser, view, fetchData]);
@@ -280,7 +352,7 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const handleCreateAgent = async (agentData: { username: string, password: string, commissionRate: string }) => {
+    const handleCreateAgent = async (agentData: { username: string, password: string, commissionRate: string, location?: string }) => {
         if (!adminId) return;
         setError(null);
         try {
@@ -488,6 +560,7 @@ const AdminDashboard: React.FC = () => {
             case 'transactions': return <TransactionsTable transactions={transactions} />;
             case 'manual-transactions': return <ManualTransactionsTable transactions={manualTransactions} onApprove={handleApproveTransaction} onReject={handleRejectTransaction} />;
             case 'agents': return <AgentsTable agents={agents} onEdit={setEditingAgent} onCredit={setCreditingAgent} onDelete={handleDeleteAgent} onToggleStatus={handleToggleAgentStatus} onCreate={() => setCreateAgentModalOpen(true)} />;
+            case 'agent-requests': return <AgentRequestsTable requests={agentRequests} onApprove={handleApproveAgentRequest} onReject={handleRejectAgentRequest} isProcessing={(id) => processingRequestId === id} />;
             case 'settings': return <Settings 
                 adminSettings={{...adminSettings, usersByRole}}
                 paymentSettings={paymentSettings} 

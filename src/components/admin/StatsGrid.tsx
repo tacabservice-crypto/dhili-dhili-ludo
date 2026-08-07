@@ -111,9 +111,9 @@ const StatsGrid = ({ stats, rooms = [], manualTransactions = [], setView }) => {
                         <p className="text-2xl font-bold text-gray-900">{pendingWithdrawals.length}</p>
                     </div>
                 </div>
-                <div 
+                <div
                     className="bg-gray-50 p-4 rounded-lg flex items-center cursor-pointer hover:bg-gray-100"
-                    onClick={() => alert('Agent requests coming soon!')}
+                    onClick={() => setView('agent-requests')}
                 >
                     <div className="p-3 rounded-lg bg-purple-100 text-purple-600"><DollarSign size={24} /></div>
                     <div className="ml-4">

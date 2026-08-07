@@ -11,6 +11,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [commissionRate, setCommissionRate] = useState('');
+    const [location, setLocation] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -18,6 +19,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
         if (agent) {
             setUsername(agent.username);
             setCommissionRate(String(agent.commissionRate));
+            setLocation(agent.location || '');
             setPassword(''); // Don't pre-fill password
         }
     }, [agent]);
@@ -39,6 +41,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
             const dataToSave: Partial<Agent> = {
                 username,
                 commissionRate: rate,
+                location,
             };
             if (password) {
                 dataToSave.password = password;
@@ -68,6 +71,10 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
                     <div>
                         <label className="block text-sm font-medium text-gray-400">Commission Rate (e.g., 0.05 for 5%)</label>
                         <input type="text" value={commissionRate} onChange={(e) => setCommissionRate(e.target.value)} className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-gray-400">Location</label>
+                        <input type="text" value={location} onChange={(e) => setLocation(e.target.value)} placeholder="e.g., Mogadishu" className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" />
                     </div>
                 </div>
                 {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
