@@ -1,6 +1,7 @@
 import React from 'react';
 import { Users, Home, Activity, DollarSign, Wifi, AlertTriangle, ArrowUpCircle, ArrowDownCircle, Eye, TrendingUp, TrendingDown } from 'lucide-react';
 import { formatCurrency } from '../../utils/number';
+import MonthlyStatsChart from './MonthlyStatsChart';
 
 const StatCard = ({ title, value, icon: Icon, color, percentage }) => (
   <div className={`p-5 rounded-xl text-white shadow-lg`} style={{ background: `linear-gradient(135deg, ${color[0]} 0%, ${color[1]} 100%)` }}>
@@ -65,6 +66,15 @@ const StatsGrid = ({ stats, rooms = [], manualTransactions = [], setView }) => {
     { title: 'Active Games', value: stats.activeRooms, icon: Activity, color: ['#ef4444', '#dc2626'], percentage: -3 },
   ];
 
+  const monthlyData = [
+    { month: 'Jan', sales: 4000, views: 2400 },
+    { month: 'Feb', sales: 3000, views: 1398 },
+    { month: 'Mar', sales: 2000, views: 9800 },
+    { month: 'Apr', sales: 2780, views: 3908 },
+    { month: 'May', sales: 1890, views: 4800 },
+    { month: 'Jun', sales: 2390, views: 3800 },
+  ];
+
   return (
     <div className="space-y-8">
         {/* Main Stats Cards */}
@@ -113,6 +123,9 @@ const StatsGrid = ({ stats, rooms = [], manualTransactions = [], setView }) => {
                 </div>
             </div>
         </div>
+
+        {/* Monthly Stats Chart */}
+        <MonthlyStatsChart data={monthlyData} />
 
         {/* Active Games */}
         <div>

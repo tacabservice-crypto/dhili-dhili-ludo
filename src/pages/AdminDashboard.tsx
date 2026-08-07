@@ -1,19 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { UserProfile, GameRoom, Agent } from '../types/game';
-import UserEditModal from '../components/UserEditModal';
-import CreateAgentModal from '../components/CreateAgentModal';
-import EditAgentModal from '../components/EditAgentModal';
-import CreditAgentModal from '../components/CreditAgentModal';
-import { formatCurrency } from '../utils/number';
-import AdminLayout from '../components/admin/AdminLayout';
-import StatsGrid from '../components/admin/StatsGrid';
-import UsersTable from '../components/admin/UsersTable';
-import RoomsTable from '../components/admin/RoomsTable';
-import TransactionsTable from '../components/admin/TransactionsTable';
-import AgentsTable from '../components/admin/AgentsTable';
-import Settings from '../components/admin/Settings';
-import ManualTransactionsTable from '../components/admin/ManualTransactionsTable';
-import EditRoleModal from '../components/EditRoleModal';
+import GameRoomComponent from '../components/GameRoom';
 
 
 const AdminDashboard: React.FC = () => {
@@ -63,6 +48,7 @@ const AdminDashboard: React.FC = () => {
     const [editingRole, setEditingRole] = useState<AdminRole | null>(null);
     const [isCreateAgentModalOpen, setCreateAgentModalOpen] = useState(false);
     const [isCreateRoleModalOpen, setCreateRoleModalOpen] = useState(false);
+    const [spectatingRoomId, setSpectatingRoomId] = useState<string | null>(null);
 
 
     const permissionsList = ['stats', 'users', 'rooms', 'transactions', 'agents', 'settings'];
@@ -227,6 +213,10 @@ const AdminDashboard: React.FC = () => {
         } catch (err: any) {
             setError(err.message);
         }
+    };
+
+    const handleSpectate = (roomId: string) => {
+        setSpectatingRoomId(roomId);
     };
 
     const handleDeleteAgent = async (agentId: string) => {
@@ -480,7 +470,7 @@ const AdminDashboard: React.FC = () => {
         switch (view) {
             case 'stats': return <StatsGrid stats={stats} rooms={rooms} manualTransactions={manualTransactions} setView={setView} />;
             case 'users': return <UsersTable users={users} onEdit={setEditingUser} onDelete={handleDeleteUser} onImpersonate={handleImpersonate} />;
-            case 'rooms': return <RoomsTable rooms={rooms} onCancel={handleCancelGame} />;
+            case 'rooms': return <RoomsTable rooms={rooms} onCancel={handleCancelGame} onSpectate={handleSpectate} />;
             case 'transactions': return <TransactionsTable transactions={transactions} />;
             case 'manual-transactions': return <ManualTransactionsTable transactions={manualTransactions} onApprove={handleApproveTransaction} onReject={handleRejectTransaction} />;
             case 'agents': return <AgentsTable agents={agents} onEdit={setEditingAgent} onCredit={setCreditingAgent} onDelete={handleDeleteAgent} onToggleStatus={handleToggleAgentStatus} onCreate={() => setCreateAgentModalOpen(true)} />;
@@ -548,6 +538,25 @@ const AdminDashboard: React.FC = () => {
                     role={editingRole}
                     permissionsList={permissionsList}
                 />
+            )}
+            {spectatingRoomId && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl h-3/4 overflow-auto relative">
+                        <button 
+                            onClick={() => setSpectatingRoomId(null)} 
+                            className="absolute top-2 right-2 text-gray-500 hover:text-gray-800 z-10"
+                        >
+                            <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        <GameRoomComponent 
+                            roomId={spectatingRoomId} 
+                            user={adminUser} 
+                            isSpectator={true} 
+                        />
+                    </div>
+                </div>
             )}
         </AdminLayout>
     );

@@ -1,8 +1,7 @@
-
 import React from 'react';
-import { XCircle } from 'lucide-react';
+import { XCircle, Eye } from 'lucide-react';
 
-const RoomsTable = ({ rooms, onCancel }) => {
+const RoomsTable = ({ rooms, onCancel, onSpectate }) => {
   return (
     <div className="bg-white p-6 rounded-lg shadow-md">
       <h3 className="text-xl font-bold mb-4 text-gray-800">Game Rooms</h3>
@@ -32,7 +31,11 @@ const RoomsTable = ({ rooms, onCancel }) => {
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{room.players.length} / {room.capacity}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-blue-600 font-semibold">${room.betAmount}</td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(room.createdAt).toLocaleString()}</td>
-                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium flex items-center justify-end space-x-2">
+                  <button onClick={() => onSpectate(room.id)} className="text-blue-500 hover:text-blue-700 flex items-center">
+                    <Eye size={18} className="mr-1" />
+                    Spectate
+                  </button>
                   <button onClick={() => onCancel(room.id)} className="text-red-500 hover:text-red-700 flex items-center">
                     <XCircle size={18} className="mr-1" />
                     Cancel
