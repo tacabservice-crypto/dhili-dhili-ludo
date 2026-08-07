@@ -1,6 +1,18 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import GameRoomComponent from '../components/GameRoom';
 import AdminLayout from '../components/admin/AdminLayout';
+import StatsGrid from '../components/admin/StatsGrid';
+import UsersTable from '../components/admin/UsersTable';
+import RoomsTable from '../components/admin/RoomsTable';
+import TransactionsTable from '../components/admin/TransactionsTable';
+import ManualTransactionsTable from '../components/admin/ManualTransactionsTable';
+import AgentsTable from '../components/admin/AgentsTable';
+import Settings from '../components/admin/Settings';
+import UserEditModal from '../components/UserEditModal';
+import CreateAgentModal from '../components/CreateAgentModal';
+import EditAgentModal from '../components/EditAgentModal';
+import CreditAgentModal from '../components/CreditAgentModal';
+import EditRoleModal from '../components/EditRoleModal';
 
 
 const AdminDashboard: React.FC = () => {
