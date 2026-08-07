@@ -33,6 +33,7 @@ export interface ManualTransactionRequest {
   id: string;
   userId: string;
   username: string;
+  agentId: string;
   amount: number;
   phone: string; // For withdrawals, this is the destination phone number
   senderPhone?: string; // For deposits, this is the source phone number

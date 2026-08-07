@@ -1471,10 +1471,10 @@ app.post('/api/wallet/withdraw', (req, res) => {
 });
 
 app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
-  const { userId, amount, phone, senderPhone, provider, transactionType } = req.body;
+  const { userId, agentId, amount, phone, senderPhone, provider, transactionType } = req.body;
 
-  if (!userId || !amount || !provider || !transactionType) {
-    return res.status(400).json({ error: 'Missing required fields for manual confirmation.' });
+  if (!userId || !agentId || !amount || !provider || !transactionType) {
+    return res.status(400).json({ error: 'Missing required fields. `userId`, `agentId`, `amount`, `provider`, and `transactionType` are all required.' });
   }
 
   const user = store.users[userId];
@@ -1490,13 +1490,28 @@ app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
     return res.status(400).json({ error: 'Sender phone number is required for deposit requests.' });
   }
 
+  // Verify the agent exists
+  if (db) {
+      try {
+        const agentDoc = await db.collection('agents').doc(agentId).get();
+        if (!agentDoc.exists) {
+            return res.status(404).json({ error: 'The selected agent does not exist.' });
+        }
+      } catch (err) {
+        console.error("Failed to verify agent for manual transaction request:", err);
+        return res.status(500).json({ error: "Could not verify the selected agent." });
+      }
+  }
+
+
   const newRequest: ManualTransactionRequest = {
     id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     userId,
     username: user.username,
+    agentId: agentId,
     amount: parseFloat(amount),
-    phone, // This will be the destination for withdrawals, or the company number for deposits
-    senderPhone, // This is the new field for the source number for deposits
+    phone, // This will be the destination for withdrawals
+    senderPhone, // This is the source number for deposits
     provider,
     transactionType,
     status: 'pending',
@@ -4560,9 +4575,9 @@ app.get('/api/agent/requests', isAgent, async (req, res) => {
 app.get('/api/agent/player-requests', isAgent, (req, res) => {
     const agent: Agent = (req as any).agent;
 
-    const pendingManualTxs = store.pendingManualTransactions.filter(tx => tx.status === 'pending');
+    const agentSpecificTxs = store.pendingManualTransactions.filter(tx => tx.status === 'pending' && tx.agentId === agent.id);
 
-    const responsePayload: PlayerAgentRequest[] = pendingManualTxs.map(tx => {
+    const responsePayload: PlayerAgentRequest[] = agentSpecificTxs.map(tx => {
         const user = store.users[tx.userId];
         return {
             id: tx.id,
