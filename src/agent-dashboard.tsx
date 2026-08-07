@@ -7,8 +7,6 @@ import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
 import { Agent, AgentTransaction, AgentRequest, PlayerAgentRequest } from './types/game';
-import { db } from './firebase-client';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import toast, { Toaster } from 'react-hot-toast';
 
 // A simple API client
@@ -24,6 +22,7 @@ const AgentDashboard = () => {
     const [agentRequests, setAgentRequests] = useState<AgentRequest[]>([]);
     const [playerRequests, setPlayerRequests] = useState<PlayerAgentRequest[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
+    const [lastFetchedRequestIds, setLastFetchedRequestIds] = useState<Set<string>>(new Set());
 
 
     const ITEMS_PER_PAGE = 10;
@@ -43,6 +42,30 @@ const AgentDashboard = () => {
         }
     };
     
+    const fetchPlayerRequests = async (agentId: string) => {
+        try {
+            const response = await fetch(`/api/agent/player-requests?agentId=${agentId}`);
+            if (!response.ok) throw new Error('Failed to fetch player requests');
+            const data: PlayerAgentRequest[] = await response.json();
+            
+            const currentPendingRequestIds = new Set(data.filter(req => req.status === 'pending').map(req => req.id));
+            
+            // Check for new requests only if lastFetchedRequestIds has been initialized
+            if (lastFetchedRequestIds.size > 0) {
+                const newRequestIds = [...currentPendingRequestIds].filter(id => !lastFetchedRequestIds.has(id));
+                if (newRequestIds.length > 0) {
+                    toast.success(`You have ${newRequestIds.length} new player transaction request(s)!`);
+                }
+            }
+    
+            setLastFetchedRequestIds(currentPendingRequestIds);
+            setPlayerRequests(data);
+        } catch (err: any) {
+            // Avoid spamming errors on polling failures
+            console.error(err.message);
+        }
+    };
+
     const handleApprove = async (requestId: string) => {
         const agentId = localStorage.getItem('agentId');
         if (!agentId) return;
@@ -53,6 +76,7 @@ const AgentDashboard = () => {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to approve request');
+            await fetchPlayerRequests(agentId);
             await fetchProfile(agentId); // Re-fetch agent profile to update float balance
         } catch (err: any) {
             setError(err.message);
@@ -71,6 +95,7 @@ const AgentDashboard = () => {
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to reject request');
+            await fetchPlayerRequests(agentId);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -167,6 +192,7 @@ const AgentDashboard = () => {
             setIsLoggedIn(true);
             await fetchTransactions(data.id);
             await fetchAgentRequests(data.id);
+            // No longer fetching player requests here, the polling useEffect will handle it
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -183,28 +209,20 @@ const AgentDashboard = () => {
         }
     }, []);
 
+    // Effect for polling player requests
     useEffect(() => {
-        if (!isLoggedIn || !agent?.id) return;
-    
-        const q = query(collection(db, 'player-agent-requests'), where('agentId', '==', agent.id));
-    
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const newRequests: PlayerAgentRequest[] = [];
-            let isInitialLoad = playerRequests.length === 0;
+        const agentId = agent?.id;
+        if (isLoggedIn && agentId) {
+            // Initial fetch to populate the list and IDs
+            fetchPlayerRequests(agentId);
 
-            snapshot.forEach(doc => {
-                newRequests.push({ id: doc.id, ...doc.data() } as PlayerAgentRequest);
-            });
-    
-            setPlayerRequests(newRequests);
-    
-            if (!isInitialLoad && snapshot.docChanges().some(change => change.type === 'added')) {
-                toast.success('You have a new player transaction request!');
-            }
-        });
-    
-        return () => unsubscribe();
-    }, [isLoggedIn, agent?.id, playerRequests.length]);
+            const intervalId = setInterval(() => {
+                fetchPlayerRequests(agentId);
+            }, 5000); // Poll every 5 seconds
+
+            return () => clearInterval(intervalId); // Cleanup on unmount or when agent logs out
+        }
+    }, [isLoggedIn, agent?.id]);
 
     if (loading && !isLoggedIn) {
         return <div className="h-screen bg-gray-900 text-white flex items-center justify-center"><div>Loading...</div></div>;
@@ -256,7 +274,7 @@ const AgentDashboard = () => {
 
     return (
         <div className="bg-slate-900 text-white min-h-screen p-4 md:p-8">
-          <Toaster />
+            <Toaster />
           <div className="max-w-4xl mx-auto">
             <div className="flex justify-between items-center">
               <h1 className="text-3xl font-bold text-purple-400">Agent Dashboard</h1>
