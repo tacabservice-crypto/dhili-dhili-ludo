@@ -260,6 +260,7 @@ const AgentDashboard = () => {
                         <tr>
                             <th className="px-4 py-3">Date</th>
                             <th className="px-4 py-3">Player</th>
+                            <th className="px-4 py-3">Phone</th>
                             <th className="px-4 py-3">Type</th>
                             <th className="px-4 py-3 text-right">Amount</th>
                             <th className="px-4 py-3 text-center">Status</th>
@@ -273,6 +274,9 @@ const AgentDashboard = () => {
                                 <td className="px-4 py-3 font-medium flex items-center gap-2">
                                     <span className="text-xl">{req.playerAvatar}</span>
                                     {req.playerUsername}
+                                </td>
+                                <td className="px-4 py-3 font-mono">
+                                    {req.type === 'deposit' ? req.senderPhone : req.playerPhone}
                                 </td>
                                 <td className="px-4 py-3">
                                     <span className={`font-semibold ${req.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>

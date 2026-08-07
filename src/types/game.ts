@@ -159,7 +159,8 @@ export interface PlayerAgentRequest {
   playerUsername: string;
   playerAvatar: string;
   agentId: string;
-  playerPhone: string;
+  playerPhone: string; // for withdrawals
+  senderPhone?: string; // for deposits
   provider: 'evc' | 'edahab' | 'sahal' | 'premier';
   type: 'deposit' | 'withdrawal';
   amount: number;
