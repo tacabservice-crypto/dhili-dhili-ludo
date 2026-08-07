@@ -9,6 +9,35 @@ import './index.css';
 import { Agent, AgentTransaction, AgentRequest, PlayerAgentRequest } from './types/game';
 import toast, { Toaster } from 'react-hot-toast';
 
+// Transaction Detail Modal Component
+const TransactionDetailModal: React.FC<{ transaction: AgentTransaction; onClose: () => void }> = ({ transaction, onClose }) => {
+    return (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 p-6 rounded-lg shadow-xl w-full max-w-md relative border border-slate-700">
+                <button
+                    onClick={onClose}
+                    className="absolute top-3 right-3 text-gray-400 hover:text-gray-200 text-2xl"
+                >
+                    &times;
+                </button>
+                <h3 className="text-2xl font-bold text-purple-400 mb-4">Transaction Details</h3>
+                <div className="space-y-3 text-slate-300">
+                    <p><strong>ID:</strong> <span className="font-mono text-sm">{transaction.id}</span></p>
+                    <p><strong>Type:</strong> <span className={`font-semibold ${transaction.type === 'PlayerDeposit' || transaction.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{transaction.type}</span></p>
+                    <p><strong>Amount:</strong> <span className="font-mono">${transaction.amount.toFixed(2)}</span></p>
+                    {transaction.discountAmount && <p><strong>Discount:</strong> <span className="font-mono">${transaction.discountAmount.toFixed(2)}</span></p>}
+                    <p><strong>Date:</strong> {new Date(transaction.timestamp).toLocaleString()}</p>
+                    {transaction.description && <p><strong>Description:</strong> {transaction.description}</p>}
+                    {transaction.playerId && <p><strong>Player ID:</strong> <span className="font-mono text-sm">{transaction.playerId}</span></p>}
+                    {transaction.playerName && <p><strong>Player Name:</strong> {transaction.playerName}</p>}
+                    {transaction.agentId && <p><strong>Agent ID:</strong> <span className="font-mono text-sm">{transaction.agentId}</span></p>}
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 // A simple API client
 const AgentDashboard = () => {
     const [agent, setAgent] = useState<Agent | null>(null);
@@ -23,6 +52,7 @@ const AgentDashboard = () => {
     const [playerRequests, setPlayerRequests] = useState<PlayerAgentRequest[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [lastFetchedRequestIds, setLastFetchedRequestIds] = useState<Set<string>>(new Set());
+    const [selectedTransaction, setSelectedTransaction] = useState<AgentTransaction | null>(null); // New state
 
 
     const ITEMS_PER_PAGE = 10;
@@ -389,11 +419,14 @@ const AgentDashboard = () => {
                         </thead>
                         <tbody>
                             {currentTransactions.map(tx => (
-                                <tr key={tx.id} className="border-b border-slate-700 last:border-b-0">
+                                <tr key={tx.id} 
+                                    className="border-b border-slate-700 last:border-b-0 cursor-pointer hover:bg-slate-700"
+                                    onClick={() => setSelectedTransaction(tx)}
+                                >
                                     <td className="px-4 py-3 text-slate-400">{new Date(tx.timestamp).toLocaleString()}</td>
                                     <td className="px-4 py-3">
                                         <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                            tx.type === 'PlayerDeposit' ? 'bg-blue-900 text-blue-200' : 
+                                            tx.type === 'PlayerDeposit' || tx.type === 'FloatPurchase' ? 'bg-blue-900 text-blue-200' : 
                                             tx.type === 'PlayerWithdrawal' ? 'bg-yellow-900 text-yellow-200' : 
                                             'bg-green-900 text-green-200'
                                         }`}>
@@ -471,6 +504,12 @@ const AgentDashboard = () => {
             </div>
     
           </div>
+          {selectedTransaction && (
+                <TransactionDetailModal
+                    transaction={selectedTransaction}
+                    onClose={() => setSelectedTransaction(null)}
+                />
+            )}
         </div>
       );
 };

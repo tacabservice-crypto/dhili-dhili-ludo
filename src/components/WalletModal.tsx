@@ -22,6 +22,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
   const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit');
   const [amount, setAmount] = useState('');
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
+  const [selectedTx, setSelectedTx] = useState<WalletTransaction | null>(null);
   const [error, setError] = useState('');
   
   const [phone, setPhone] = useState('');
@@ -341,7 +342,7 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
               ) : (
                 <div className="space-y-2 max-h-[35vh] overflow-y-auto pr-1">
                   {transactions.map((tx) => (
-                    <div key={tx.id} className="bg-black/30 border border-white/5 p-3 rounded-xl flex items-center justify-between text-xs">
+                    <div key={tx.id} onClick={() => setSelectedTx(tx)} className="bg-black/30 border border-white/5 p-3 rounded-xl flex items-center justify-between text-xs cursor-pointer hover:bg-black/50">
                       <div>
                         <p className="font-bold">{tx.description}</p>
                         <p className="text-[10px] text-slate-500">{new Date(tx.timestamp).toLocaleString()}</p>
@@ -353,6 +354,70 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
               )}
             </div>
           )}
+        </div>
+
+        {selectedTx && (
+          <TransactionDetailModal transaction={selectedTx} onClose={() => setSelectedTx(null)} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TransactionDetailModal({ transaction, onClose }: { transaction: WalletTransaction, onClose: () => void }) {
+  const { t } = useLanguage();
+  const isDeposit = transaction.type === 'deposit';
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-sm bg-gray-900 border border-white/10 rounded-2xl shadow-2xl text-white animate-in fade-in zoom-in-95 duration-300">
+        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+          <h3 className="font-bold text-lg">{t('transactionDetails')}</h3>
+          <button onClick={onClose} className="p-1 hover:bg-white/10 rounded-full">
+            <X className="w-5 h-5 text-slate-400" />
+          </button>
+        </div>
+
+        <div className="p-6 space-y-4">
+          <div className="flex justify-between items-center pb-4 border-b border-dashed border-white/10">
+            <span className="text-sm text-slate-400">{t('amount')}</span>
+            <span className={`text-2xl font-black ${isDeposit ? 'text-green-400' : 'text-red-400'}`}>
+              {isDeposit ? '+' : '-'}{formatCurrency(transaction.amount)}
+            </span>
+          </div>
+
+          <div className="space-y-3 text-sm">
+            <div className="flex justify-between">
+              <span className="text-slate-400">{t('description')}</span>
+              <span className="font-semibold text-right">{transaction.description}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">{t('date')}</span>
+              <span className="font-semibold">{new Date(transaction.timestamp).toLocaleDateString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">{t('time')}</span>
+              <span className="font-semibold">{new Date(transaction.timestamp).toLocaleTimeString()}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">{t('transactionType')}</span>
+              <span className={`font-semibold capitalize ${isDeposit ? 'text-green-400' : 'text-red-400'}`}>{transaction.type}</span>
+            </div>
+             <div className="flex justify-between">
+              <span className="text-slate-400">{t('status')}</span>
+              <span className="font-semibold capitalize">{transaction.status}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-400">{t('transactionId')}</span>
+              <span className="font-mono text-xs text-slate-500">{transaction.id}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="px-6 py-4 bg-black/20 rounded-b-2xl">
+           <button onClick={onClose} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2.5 rounded-lg transition-all">
+            {t('close')}
+          </button>
         </div>
       </div>
     </div>
