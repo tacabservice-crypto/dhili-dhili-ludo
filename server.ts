@@ -4650,6 +4650,23 @@ app.post('/api/agent/request-float', isAgent, async (req, res) => {
     }
 });
 
+// Agent gets their own list of float requests
+app.get('/api/agent/requests', isAgent, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+    const agent: Agent = (req as any).agent;
+    try {
+        const requestsSnapshot = await db.collection('agentRequests')
+            .where('agentId', '==', agent.id)
+            .get();
+        const requests = requestsSnapshot.docs.map(doc => doc.data());
+        requests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+        res.json(requests);
+    } catch (error) {
+        console.error(`Failed to get float requests for agent ${agent.id}:`, error);
+        res.status(500).json({ error: 'Failed to retrieve float requests.' });
+    }
+});
+
 // Agent gets their list of player requests
 app.get('/api/agent/player-requests', isAgent, async (req, res) => {
     if (!db) return res.status(500).json({ error: 'Database not initialized' });
@@ -4657,9 +4674,10 @@ app.get('/api/agent/player-requests', isAgent, async (req, res) => {
     try {
         const requestsSnapshot = await db.collection('playerAgentRequests')
             .where('agentId', '==', agent.id)
-            .orderBy('createdAt', 'desc')
             .get();
         const requests = requestsSnapshot.docs.map(doc => doc.data());
+        // Sort in-memory to avoid needing a composite index
+        requests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         res.json(requests);
     } catch (error) {
         console.error(`Failed to get player requests for agent ${agent.id}:`, error);
