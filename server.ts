@@ -3804,9 +3804,12 @@ app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
         if (password && typeof password === 'string' && password.length >= 6) {
             updateData.password = password; // Should be hashed
         }
-        if (commissionRate && typeof commissionRate === 'number' && commissionRate >= 0 && commissionRate <= 1) {
-            updateData.commissionRate = commissionRate;
+        
+        const newCommissionRate = parseFloat(commissionRate);
+        if (commissionRate !== undefined && !isNaN(newCommissionRate) && newCommissionRate >= 0 && newCommissionRate <= 1) {
+            updateData.commissionRate = newCommissionRate;
         }
+
         if (status && ['Active', 'Suspended'].includes(status)) {
             updateData.status = status;
         }
@@ -3984,6 +3987,44 @@ app.post('/api/admin/broadcast', isAdmin, (req, res) => {
 // ==========================================
 // 6a. AGENT API ENDPOINTS
 // ==========================================
+
+// Agent Login
+app.post('/api/agent/login', async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+        return res.status(400).json({ error: 'Username and password are required.' });
+    }
+
+    try {
+        const agentsRef = db.collection('agents');
+        const snapshot = await agentsRef.where('username', '==', username).limit(1).get();
+
+        if (snapshot.empty) {
+            return res.status(401).json({ error: 'Invalid credentials.' });
+        }
+
+        const agentDoc = snapshot.docs[0];
+        const agent = agentDoc.data() as Agent;
+
+        // WARNING: Plaintext password comparison. Not secure.
+        if (agent.password !== password) {
+            return res.status(401).json({ error: 'Invalid credentials.' });
+        }
+
+        if (agent.status !== 'Active') {
+            return res.status(403).json({ error: 'This agent account is not active.' });
+        }
+
+        res.json({ success: true, agent });
+
+    } catch (error) {
+        console.error('Agent login failed:', error);
+        res.status(500).json({ error: 'An internal server error occurred during login.' });
+    }
+});
+
 
 // Middleware to check for agent access
 async function isAgent(req: any, res: express.Response, next: express.NextFunction) {

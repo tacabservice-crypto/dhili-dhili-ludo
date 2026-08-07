@@ -1123,7 +1123,7 @@ const AdminDashboard: React.FC = () => {
                 <CreditAgentModal
                     agent={creditingAgent}
                     onClose={() => setCreditingAgent(null)}
-                    onCredit={(amount, discount) => {
+                    onSave={(amount, discount) => {
                         handleCreditAgentFloat(creditingAgent.id, amount, discount);
                         setCreditingAgent(null);
                     }}
