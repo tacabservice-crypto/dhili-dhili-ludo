@@ -158,6 +158,7 @@ export interface PlayerAgentRequest {
   playerUsername: string;
   playerAvatar: string;
   agentId: string;
+  playerPhone: string;
   type: 'deposit' | 'withdrawal';
   amount: number;
   status: 'pending' | 'approved' | 'rejected';

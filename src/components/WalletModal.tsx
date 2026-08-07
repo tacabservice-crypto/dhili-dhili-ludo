@@ -4,54 +4,32 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Check, Phone } from 'lucide-react';
-import { UserProfile, WalletTransaction, Agent, PlayerAgentRequest } from '../types/game';
+import { X, ArrowUpRight, ArrowDownLeft, Wallet, ShieldAlert, CheckCircle, RefreshCw, Check, Phone, User, Building } from 'lucide-react';
+import { UserProfile, WalletTransaction, Agent } from '../types/game';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency } from '../utils/number';
 
 interface WalletModalProps {
   user: UserProfile;
   onClose: () => void;
-  // onBalanceUpdated is kept for potential future API integration
-  onBalanceUpdated: () => void; 
+  onBalanceUpdated: () => void;
 }
-
-const DEPOSIT_PHONE_NUMBER = '907243775';
 
 export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletModalProps) {
   const { t, language } = useLanguage();
-  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history' | 'agent'>('deposit');
+  const [activeTab, setActiveTab] = useState<'deposit' | 'withdraw' | 'history'>('deposit');
   const [amount, setAmount] = useState('');
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [error, setError] = useState('');
   
   const [phone, setPhone] = useState('');
   const [senderPhone, setSenderPhone] = useState('');
-  type PaymentProviderConfig = {
-    enabled: boolean;
-    apiKey?: string;
-    apiUrl?: string;
-    accountNumber?: string;
-  };
 
-  // Agent request state
+  // Agent related state
   const [agents, setAgents] = useState<Agent[]>([]);
   const [selectedAgent, setSelectedAgent] = useState<string>('');
-  const [requestType, setRequestType] = useState<'deposit' | 'withdrawal'>('deposit');
-  const [playerRequests, setPlayerRequests] = useState<PlayerAgentRequest[]>([]);
-  const [agentRequesting, setAgentRequesting] = useState(false);
-
-  const [provider, setProvider] = useState<'evc' | 'edahab' | 'sahal' | 'premier'>('evc');
-  const [paymentSettings, setPaymentSettings] = useState<Record<string, PaymentProviderConfig>>({});
-  const [apiProcessing, setApiProcessing] = useState(false);
-  const [apiMessage, setApiMessage] = useState<string>('');
-  const [apiError, setApiError] = useState<string>('');
-
-  const [ussdString, setUssdString] = useState('');
-  const [confirmationRequested, setConfirmationRequested] = useState(false);
-  const [confirmationLoading, setConfirmationLoading] = useState(false);
-  const [withdrawPreviewVisible, setWithdrawPreviewVisible] = useState(false);
-  const [depositAwaitingConfirmation, setDepositAwaitingConfirmation] = useState(false);
+  const [isRequesting, setIsRequesting] = useState(false);
+  const [requestMessage, setRequestMessage] = useState('');
 
   const fetchTransactions = async () => {
     try {
@@ -72,26 +50,9 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
   }, [user.id, activeTab]);
 
   useEffect(() => {
-    const fetchSettings = async () => {
-      try {
-        const response = await fetch('/api/payment/settings');
-        if (!response.ok) return;
-        const data = await response.json();
-        setPaymentSettings(data);
-      } catch (err) {
-        console.error('Unable to fetch payment settings', err);
-      }
-    };
-    fetchSettings();
-  }, []);
-
-  useEffect(() => {
-    const fetchAgentData = async () => {
+    const fetchAgents = async () => {
         try {
-            const [agentsRes, requestsRes] = await Promise.all([
-                fetch(`/api/agents?location=${user.location || ''}`),
-                fetch(`/api/player/requests?userId=${user.id}`) // Assuming endpoint needs userId
-            ]);
+            const agentsRes = await fetch(`/api/agents?location=${user.location || ''}`);
             if (agentsRes.ok) {
                 const data = await agentsRes.json();
                 setAgents(data);
@@ -99,34 +60,39 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                     setSelectedAgent(data[0].id);
                 }
             }
-            if (requestsRes.ok) {
-                const data = await requestsRes.json();
-                setPlayerRequests(data);
-            }
         } catch (err) {
-            console.error('Failed to load agent data', err);
+            console.error('Failed to load agents', err);
         }
     };
-
-    if (activeTab === 'agent') {
-        fetchAgentData();
-    }
-  }, [user.id, user.location, activeTab]);
-
-  const handleAgentRequestSubmit = async (e: React.FormEvent) => {
+    fetchAgents();
+  }, [user.location]);
+  
+  const handleAgentRequest = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setRequestMessage('');
+
     const requestAmount = parseFloat(amount);
-    if (!selectedAgent || !requestAmount || requestAmount <= 0) {
-        setError('Please select an agent and enter a valid positive amount.');
+    const playerPhone = activeTab === 'deposit' ? senderPhone : phone;
+
+    if (!selectedAgent) {
+        setError('Please select an agent.');
         return;
     }
-    if (requestType === 'withdrawal' && user.balance < requestAmount) {
+    if (!playerPhone.trim()) {
+        setError(`Please enter the phone number you are ${activeTab === 'deposit' ? 'sending from' : 'withdrawing to'}.`);
+        return;
+    }
+    if (isNaN(requestAmount) || requestAmount <= 0) {
+      setError('Please enter a valid positive amount.');
+      return;
+    }
+    if (activeTab === 'withdrawal' && user.balance < requestAmount) {
         setError('Insufficient balance for this withdrawal request.');
         return;
     }
 
-    setAgentRequesting(true);
+    setIsRequesting(true);
     try {
         const response = await fetch('/api/request-to-agent', {
             method: 'POST',
@@ -134,204 +100,35 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
             body: JSON.stringify({
                 agentId: selectedAgent,
                 amount: requestAmount,
-                type: requestType,
+                type: activeTab,
+                playerPhone: playerPhone,
             }),
         });
         const data = await response.json();
         if (!response.ok) {
             throw new Error(data.error || 'Failed to submit request.');
         }
+        setRequestMessage('Your request has been successfully sent to the agent.');
         setAmount('');
-        // Refresh requests list
-        const requestsRes = await fetch(`/api/player/requests?userId=${user.id}`);
-        if (requestsRes.ok) {
-            const data = await requestsRes.json();
-            setPlayerRequests(data);
-        }
-        // Assuming that approving a deposit/withdrawal also updates player balance
+        setPhone('');
+        setSenderPhone('');
         onBalanceUpdated();
     } catch (err: any) {
         setError(err.message);
     } finally {
-        setAgentRequesting(false);
+        setIsRequesting(false);
     }
-  };
-
-  const selectedPaymentProvider = paymentSettings[provider];
-  const isProviderApiConfigured = !!selectedPaymentProvider?.enabled && !!selectedPaymentProvider?.apiKey;
-
-  const handleRequestConfirmation = async () => {
-    setConfirmationLoading(true);
-    setError('');
-    setApiError('');
-    setApiMessage('');
-    try {
-        const response = await fetch('/api/wallet/request-manual-confirmation', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: user.id,
-                amount: parseFloat(amount),
-                phone: activeTab === 'withdraw' ? phone : DEPOSIT_PHONE_NUMBER,
-                senderPhone: activeTab === 'deposit' ? senderPhone : undefined,
-                provider: provider,
-                transactionType: activeTab,
-            }),
-        });
-        const data = await response.json();
-        if (response.ok) {
-            setConfirmationRequested(true);
-        } else {
-            setError(data.error || 'Failed to submit confirmation request.');
-        }
-    } catch (err) {
-        setError('An unexpected error occurred. Please try again.');
-        console.error('Confirmation request failed:', err);
-    } finally {
-        setConfirmationLoading(false);
-    }
-};
-
-const handleProcessApiPayment = async () => {
-  setApiProcessing(true);
-  setError('');
-  setApiError('');
-  setApiMessage('');
-
-  const amtFloat = parseFloat(amount);
-  if (isNaN(amtFloat) || amtFloat <= 0) {
-    setApiError(language === 'so' ? 'Fadlan geli lacag sax ah oo togan.' : 'Please enter a valid positive amount.');
-    setApiProcessing(false);
-    return;
-  }
-
-  if (activeTab === 'withdraw') {
-    if (amtFloat > user.balance) {
-      setApiError(language === 'so' ? 'Haraagaaga kuma filna kala bixiddaan.' : 'Insufficient balance for this withdrawal.');
-      setApiProcessing(false);
-      return;
-    }
-    if (!phone.trim()) {
-      setApiError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta kula baxayso.' : 'Please enter the phone number for the withdrawal.');
-      setApiProcessing(false);
-      return;
-    }
-  }
-
-  if (activeTab === 'deposit' && !senderPhone.trim()) {
-    setApiError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta ka soo direyso.' : 'Please enter the phone number you are sending from.');
-    setApiProcessing(false);
-    return;
-  }
-
-  try {
-    const response = await fetch('/api/wallet/process-api-payment', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        userId: user.id,
-        amount: amtFloat,
-        phone: activeTab === 'withdraw' ? phone : undefined,
-        senderPhone: activeTab === 'deposit' ? senderPhone : undefined,
-        provider,
-        transactionType: activeTab,
-      }),
-    });
-
-    const data = await response.json();
-    if (!response.ok) {
-      setApiError(data.error || 'Failed to process payment via API.');
-    } else {
-      setApiMessage(data.message || (language === 'so' ? 'Lacagta si guul leh ayaa loo farsameeyay.' : 'Payment processed successfully via API.'));
-      setConfirmationRequested(true);
-      onBalanceUpdated();
-      setAmount('');
-      setPhone('');
-      setSenderPhone('');
-    }
-  } catch (err) {
-    console.error('API payment failed:', err);
-    setApiError(language === 'so' ? 'Waxaa dhacay cilad lama filaan ah. Fadlan isku day markale.' : 'An unexpected error occurred. Please try again.');
-  } finally {
-    setApiProcessing(false);
-  }
-};
-
-const handleGenerateUssd = (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setApiError('');
-    setApiMessage('');
-    setUssdString('');
-    setConfirmationRequested(false);
-    setWithdrawPreviewVisible(false);
-
-    const amtFloat = parseFloat(amount);
-
-    if (isNaN(amtFloat) || amtFloat <= 0) {
-      setError(language === 'so' ? 'Fadlan geli lacag sax ah oo togan.' : 'Please enter a valid positive amount.');
-      return;
-    }
-
-    if (activeTab === 'withdraw') {
-      if (amtFloat > user.balance) {
-        setError(language === 'so' ? 'Haraagaaga kuma filna kala bixiddaan.' : 'Insufficient balance for this withdrawal.');
-        return;
-      }
-      if (!phone.trim()) {
-        setError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta kula baxayso.' : 'Please enter the phone number for the withdrawal.');
-        return;
-      }
-
-      setWithdrawPreviewVisible(true);
-      return;
-    }
-
-    if (activeTab === 'deposit') {
-        if (!senderPhone.trim()) {
-            setError(language === 'so' ? 'Fadlan qor lambarkaaga talefanka ee aad lacagta ka soo direyso.' : 'Please enter the phone number you are sending from.');
-            return;
-        }
-    }
-      
-    // Disable USSD generation for Premier Bank unless API is configured.
-    if (provider === 'premier' && !isProviderApiConfigured) {
-        setError(language === 'so' ? 'Kani waa hab bangi oo u baahan is-dhexgalka API. Fadlan dooro bixiye kale oo USSD ah ama ku xidh API Settings-ka.' : 'This is a bank method that requires API integration. Please select another USSD provider or configure API settings.' );
-        return;
-    }
-
-    let targetPhone = activeTab === 'deposit' ? DEPOSIT_PHONE_NUMBER : phone;
-    let code = '';
-
-    switch (provider) {
-      case 'evc':
-        code = `*712*${targetPhone}*${amtFloat}#`;
-        break;
-      case 'sahal':
-        code = `*883*${targetPhone}*${amtFloat}#`;
-        break;
-      case 'edahab':
-        code = `*110*${targetPhone}*${amtFloat}#`;
-        break;
-      default:
-        setError(language === 'so' ? 'Bixiye aan la aqoon.' : 'Unknown provider.');
-        return;
-    }
-
-    setUssdString(code);
   };
   
   const resetForm = () => {
-    setUssdString('');
     setAmount('');
     setError('');
-    setApiError('');
-    setApiMessage('');
-    setConfirmationRequested(false);
-    setDepositAwaitingConfirmation(false);
-    // Agent tab specific resets
-    setSelectedAgent(agents.length > 0 ? agents[0].id : '');
-    setRequestType('deposit');
+    setRequestMessage('');
+    setPhone('');
+    setSenderPhone('');
+    if (agents.length > 0) {
+        setSelectedAgent(agents[0].id);
+    }
   }
 
   const localAgents = agents.filter(agent => agent.location && user.location && agent.location.toLowerCase() === user.location.toLowerCase());
@@ -359,8 +156,8 @@ const handleGenerateUssd = (e: React.FormEvent) => {
           <span className="text-3xl font-black font-mono">{formatCurrency(user.balance)}</span>
         </div>
 
-        <div className="grid grid-cols-4 gap-1 px-4 text-sm font-bold border-b border-white/10">
-          {(['deposit', 'withdraw', 'agent', 'history'] as const).map((tab) => (
+        <div className="grid grid-cols-3 gap-1 px-4 text-sm font-bold border-b border-white/10">
+          {(['deposit', 'withdraw', 'history'] as const).map((tab) => (
             <button
               key={tab}
               onClick={() => {
@@ -373,7 +170,7 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                   : 'border-transparent text-slate-400 hover:text-white'
               }`}
             >
-              {tab === 'deposit' ? t('deposit') : tab === 'withdraw' ? t('withdraw') : tab === 'agent' ? 'Agent' : t('history')}
+              {tab === 'deposit' ? t('deposit') : tab === 'withdraw' ? t('withdraw') : t('history')}
             </button>
           ))}
         </div>
@@ -385,216 +182,52 @@ const handleGenerateUssd = (e: React.FormEvent) => {
               <span>{error}</span>
             </div>
           )}
+          {requestMessage && (
+            <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
+              <CheckCircle className="w-4 h-4 shrink-0" />
+              <span>{requestMessage}</span>
+            </div>
+          )}
 
-          {activeTab !== 'history' && activeTab !== 'agent' ? (
-             ((activeTab === 'withdraw' && withdrawPreviewVisible) || (activeTab === 'deposit' && ussdString)) ? (
-                <div className="py-6 text-center space-y-4 animate-in fade-in duration-300">
-                    <h3 className="text-sm font-black text-yellow-400 uppercase tracking-widest">
-                        {activeTab === 'withdraw'
-                            ? language === 'so' ? 'Codsiga Kala-Bixid' : 'Withdrawal Request'
-                            : language === 'so' ? 'Koodhka Dhigaalka' : 'Deposit Code'}
-                    </h3>
-                    {activeTab === 'deposit' ? (
-                      <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
-                          {language === 'so'
-                              ? 'Koodhka dhigaalka waa diyaar. Taabo Dir si aad USSD-ga u furto.'
-                              : 'Your deposit code is ready. Tap Dir to open the USSD dialer.'}
-                      </p>
-                    ) : (
-                      <p className="text-xs text-slate-300 font-semibold leading-relaxed px-4">
-                          {language === 'so'
-                              ? 'Fadlan hubi xogta hoos ka muuqata ka hor intaadan codsiga u dirin maamulka.'
-                              : 'Please review the details below before submitting your withdrawal request to admin.'}
-                      </p>
-                    )}
-
-                    <div className="bg-black/40 border border-white/10 rounded-xl px-4 py-4 text-left text-sm text-white space-y-2">
-                        {activeTab === 'deposit' ? null : (
-                          <>
-                            <div className="flex justify-between gap-4">
-                                <span className="font-semibold text-slate-200">{language === 'so' ? 'Lacag' : 'Amount'}:</span>
-                                <span className="font-mono">${parseFloat(amount).toFixed(2)}</span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                                <span className="font-semibold text-slate-200">{language === 'so' ? 'Lambarka' : 'Phone'}:</span>
-                                <span>{phone}</span>
-                            </div>
-                            <div className="flex justify-between gap-4">
-                                <span className="font-semibold text-slate-200">{language === 'so' ? 'Bixiyaha' : 'Provider'}:</span>
-                                <span className="uppercase">{provider}</span>
-                            </div>
-                          </>
-                        )}
-                    </div>
-
-                    {activeTab === 'withdraw' ? (
-                      <>
-                        <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                            {confirmationRequested ? (
-                                <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4 shrink-0" />
-                                    <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
-                                </div>
-                            ) : (
-                                <>
-                                    <p className="text-xs text-slate-300 font-semibold">
-                                        {language === 'so'
-                                            ? 'Haddii aad diyaar tahay, riix "Fadlan Xaqiiji" si uu codsigaagu u gaaro maamulka.'
-                                            : 'When ready, press "Please Confirm" to send your request to admin.'}
-                                    </p>
-                                    <button
-                                        onClick={handleRequestConfirmation}
-                                        disabled={confirmationLoading}
-                                        className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {confirmationLoading ? (
-                                            <>
-                                                <RefreshCw className="w-4 h-4 animate-spin" />
-                                                {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
-                                            </>
-                                        ) : (
-                                            language === 'so' ? 'Fadlan Xaqiiji' : 'Please Confirm'
-                                        )}
-                                    </button>
-                                </>
-                            )}
-                        </div>
-
-                        <div className="text-[10px] text-yellow-400 leading-relaxed bg-yellow-500/10 p-3 rounded-xl border border-yellow-500/20">
-                            <p className='font-bold uppercase'>{language === 'so' ? 'Ogeysiis Muhiim Ah' : 'Important Notice'}</p>
-                            <p>{language === 'so' ? 'Codsigan waa codsi gacanta lagu xaqiijinayo. Haraagaaga wallet-ka wuxuu ka jarmaa kaliya marka maamulka uu ansixiyo.' : 'This request is pending admin approval. Your wallet balance will only be deducted after admin approval.'}</p>
-                        </div>
-
-                        <button
-                            type="button"
-                            onClick={() => setWithdrawPreviewVisible(false)}
-                            className="bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
-                        >
-                            {language === 'so' ? 'Wax Ka Beddel Codsiga' : 'Edit Request'}
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        {!depositAwaitingConfirmation ? (
-                          <>
-                            <div className="mt-4 pt-4 border-t border-white/10">
-                                <a
-                                    href={`tel:${ussdString}`}
-                                    onClick={() => setDepositAwaitingConfirmation(true)}
-                                    className="w-full inline-flex items-center justify-center bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow gap-2"
-                                >
-                                    <Phone className="w-4 h-4" />
-                                    Dir
-                                </a>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => { setUssdString(''); setDepositAwaitingConfirmation(false); setConfirmationRequested(false); }}
-                                className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
-                            >
-                                {language === 'so' ? 'Tafatir macluumaadka' : 'Edit Details'}
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <div className="mt-4 pt-4 border-t border-white/10 space-y-3">
-                                {confirmationRequested ? (
-                                  <div className="bg-green-500/10 border border-green-500/20 text-green-400 p-3 rounded-xl text-xs flex items-center gap-2">
-                                    <CheckCircle className="w-4 h-4 shrink-0" />
-                                    <span>{language === 'so' ? 'Codsigaaga waa la gudbiyay. Maamulka ayaa dib u eegis ku samayn doona.' : 'Your request has been submitted for review.'}</span>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <p className="text-xs text-slate-300 font-semibold">
-                                      {language === 'so'
-                                          ? 'Markaad lacagta dirto, riix Fadlan Xaqiiji si aad xogta ku siiso maamulka.'
-                                          : 'After sending the money, press Please Confirm to notify admin.'}
-                                    </p>
-                                    <button
-                                        onClick={handleRequestConfirmation}
-                                        disabled={confirmationLoading}
-                                        className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-black text-sm py-3 px-4 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                                    >
-                                        {confirmationLoading ? (
-                                          <>
-                                            <RefreshCw className="w-4 h-4 animate-spin" />
-                                            {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
-                                          </>
-                                        ) : (
-                                          language === 'so' ? 'Fadlan Xaqiiji' : 'Please Confirm'
-                                        )}
-                                    </button>
-                                  </>
-                                )}
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => { setUssdString(''); setDepositAwaitingConfirmation(false); setConfirmationRequested(false); onClose(); }}
-                                className="bg-gray-800 text-white font-black text-xs py-3 px-6 rounded-xl active:scale-95 transition-all uppercase tracking-wider shadow"
-                            >
-                                {language === 'so' ? 'Ku Noqo Hoyga' : 'Back to Home'}
-                            </button>
-                          </>
-                        )}
-                      </>
-                    )}
-                </div>
-             ) : (
-              <form className="space-y-4">
+          {activeTab !== 'history' ? (
+              <form className="space-y-4" onSubmit={handleAgentRequest}>
                 <div className="space-y-1.5">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
-                    {language === 'so' ? 'Shirkadda Lacagta' : 'Payment Provider'}
-                  </label>
-                  <div className="grid grid-cols-4 gap-1.5">
-                    {[
-                      { id: 'evc', name: 'EVC Plus', colors: 'from-yellow-500 to-orange-600', desc: 'Hormuud' },
-                      { id: 'edahab', name: 'eDahab', colors: 'from-yellow-400 to-green-600', desc: 'Somtel' },
-                      { id: 'sahal', name: 'Sahal', colors: 'from-blue-600 to-blue-800', desc: 'Golis' },
-                      { id: 'premier', name: 'Premier', colors: 'from-slate-700 to-indigo-950', desc: 'Bank Wallet' }
-                    ].map((prov) => (
-                      <button
-                        key={prov.id}
-                        type="button"
-                        onClick={() => setProvider(prov.id as any)}
-                        className={`p-2 rounded-xl text-center border transition-all flex flex-col items-center justify-center relative cursor-pointer ${
-                          provider === prov.id
-                            ? 'bg-white/10 border-blue-400 scale-[1.03] shadow-lg'
-                            : 'bg-black/30 border-white/5 hover:border-white/10'
-                        }`}
-                      >
-                        <span className={`text-[10px] font-black tracking-tighter uppercase px-1.5 py-0.5 rounded-md bg-gradient-to-r ${prov.colors} text-white`}>
-                          {prov.name}
-                        </span>
-                        <span className="text-[8px] text-slate-400 font-bold uppercase mt-1">
-                          {prov.desc}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-2">
+                        <Building className="w-3 h-3" />
+                        Agent
+                    </label>
+                    <select 
+                        value={selectedAgent}
+                        onChange={(e) => setSelectedAgent(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                    >
+                        {agents.length === 0 && <option>Loading agents...</option>}
+                        {localAgents.length > 0 && (
+                            <optgroup label="Local Agents">
+                                {localAgents.map(agent => (
+                                    <option key={agent.id} value={agent.id}>{agent.username} ({agent.location})</option>
+                                ))}
+                            </optgroup>
+                        )}
+                        {otherAgents.length > 0 && (
+                            <optgroup label="Other Agents">
+                                {otherAgents.map(agent => (
+                                    <option key={agent.id} value={agent.id}>{agent.username} ({agent.location || 'Unknown'})</option>
+                                ))}
+                            </optgroup>
+                        )}
+                    </select>
                 </div>
-
-                {isProviderApiConfigured ? (
-                  <div className="rounded-xl border border-blue-500/30 bg-blue-500/10 p-3 text-sm text-blue-100">
-                    {language === 'so'
-                      ? 'API-ga shirkaddan waa la habeysay. Haddii aad rabto, xaqiiji macluumaadka oo dhagsii badhanka hoose si aad lacagta u qabato adigoon isticmaalin USSD.'
-                      : 'This provider is configured for API payments. Process payment directly through the API instead of using USSD.'}
-                  </div>
-                ) : provider === 'premier' ? (
-                  <div className="rounded-xl border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-100">
-                    {language === 'so'
-                      ? 'Premier Bank wuxuu u baahan yahay API si toos ah. Fadlan u sheeg maamulka inuu ku daro Payment Settings ama dooro bixiye kale.'
-                      : 'Premier Bank requires API integration. Ask the admin to configure it in Payment Settings or choose another provider.'}
-                  </div>
-                ) : null}
 
                 {activeTab === 'withdraw' && (
                   <div className="space-y-1 animate-in fade-in duration-300">
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-2">
+                      <Phone className="w-3 h-3" />
                       {language === 'so' ? 'Lambarka Talefanka Kala Bax' : 'Withdrawal Phone Number'}
                     </label>
                     <input
                       type="tel"
-                      required={activeTab === 'withdraw'}
+                      required
                       placeholder="e.g. 061XXXXXXX"
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
@@ -604,21 +237,20 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                 )}
                  
                 {activeTab === 'deposit' && (
-                    <>
-                        <div className="space-y-1 animate-in fade-in duration-300">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
+                    <div className="space-y-1 animate-in fade-in duration-300">
+                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block flex items-center gap-2">
+                            <Phone className="w-3 h-3" />
                             {language === 'so' ? 'Lambarkaaga Talefanka ee aad lacagta ka soo direyso' : 'Your Phone Number (Sending From)'}
-                            </label>
-                            <input
-                            type="tel"
-                            required={activeTab === 'deposit'}
-                            placeholder="e.g. 061XXXXXXX"
-                            value={senderPhone}
-                            onChange={(e) => setSenderPhone(e.target.value)}
-                            className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
-                            />
-                        </div>
-                    </>
+                        </label>
+                        <input
+                        type="tel"
+                        required
+                        placeholder="e.g. 061XXXXXXX"
+                        value={senderPhone}
+                        onChange={(e) => setSenderPhone(e.target.value)}
+                        className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
+                        />
+                    </div>
                 )}
 
                 <div className="space-y-1">
@@ -653,133 +285,27 @@ const handleGenerateUssd = (e: React.FormEvent) => {
                   ))}
                 </div>
 
-                {apiError && (
-                  <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-200">
-                    {apiError}
-                  </div>
-                )}
-
-                {apiMessage && (
-                  <div className="rounded-xl border border-green-500/20 bg-green-500/10 p-3 text-sm text-green-100">
-                    {apiMessage}
-                  </div>
-                )}
-
-                {isProviderApiConfigured ? (
-                  <button
-                    type="button"
-                    onClick={handleProcessApiPayment}
-                    disabled={apiProcessing}
-                    className="w-full bg-gradient-to-r from-teal-500 to-cyan-600 hover:from-teal-400 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-cyan-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
+                <button
+                    type="submit"
+                    disabled={isRequesting}
+                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-blue-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {apiProcessing ? (
+                    {isRequesting ? (
                       <>
                         <RefreshCw className="w-4 h-4 animate-spin" />
-                        {language === 'so' ? 'Waa la farsameynayaa...' : 'Processing...'}
+                        {language === 'so' ? 'Waa la diraa...' : 'Submitting...'}
                       </>
                     ) : activeTab === 'deposit' ? (
                       <>
-                        <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Dhig Lacag API-ga' : 'Deposit via API'}
+                        <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Dir Codsiga Dhigaalka' : 'Send Deposit Request'}
                       </>
                     ) : (
                       <>
-                        <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Kala-bixi API-ga' : 'Withdraw via API'}
+                        <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Dir Codsiga Kala-bixidda' : 'Send Withdraw Request'}
                       </>
                     )}
                   </button>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleGenerateUssd}
-                    className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm py-3 px-4 rounded-xl shadow-lg shadow-blue-500/10 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer uppercase tracking-wider"
-                  >
-                    {activeTab === 'deposit' ? (
-                      <>
-                        <ArrowUpRight className="w-4 h-4" /> {language === 'so' ? 'Samee Koodhka Dhigaalka' : 'Generate Deposit Code'}
-                      </>
-                    ) : (
-                      <>
-                        <ArrowDownLeft className="w-4 h-4" /> {language === 'so' ? 'Samee Koodhka Kala-bixidda' : 'Generate Withdraw Code'}
-                      </>
-                    )}
-                  </button>
-                )}
               </form>
-            )
-          ) : activeTab === 'agent' ? (
-            <div className="space-y-4">
-                <div>
-                    <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider">Request from Agent</h3>
-                    <form onSubmit={handleAgentRequestSubmit} className="mt-2 space-y-4 p-4 bg-black/30 border border-white/10 rounded-xl">
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Agent</label>
-                            <select 
-                                value={selectedAgent}
-                                onChange={(e) => setSelectedAgent(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-2.5 text-sm text-white placeholder-slate-600 outline-none transition-all"
-                            >
-                                {localAgents.length > 0 && (
-                                    <optgroup label="Local Agents">
-                                        {localAgents.map(agent => (
-                                            <option key={agent.id} value={agent.id}>{agent.username} ({agent.location})</option>
-                                        ))}
-                                    </optgroup>
-                                )}
-                                {otherAgents.length > 0 && (
-                                    <optgroup label="Other Agents">
-                                        {otherAgents.map(agent => (
-                                            <option key={agent.id} value={agent.id}>{agent.username} ({agent.location || 'Unknown'})</option>
-                                        ))}
-                                    </optgroup>
-                                )}
-                            </select>
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Request Type</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button type="button" onClick={() => setRequestType('deposit')} className={`p-2 rounded-lg text-center font-bold text-sm ${requestType === 'deposit' ? 'bg-blue-600' : 'bg-black/30'}`}>Deposit</button>
-                                <button type="button" onClick={() => setRequestType('withdrawal')} className={`p-2 rounded-lg text-center font-bold text-sm ${requestType === 'withdrawal' ? 'bg-blue-600' : 'bg-black/30'}`}>Withdrawal</button>
-                            </div>
-                        </div>
-                         <div className="space-y-1">
-                            <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">Amount ($)</label>
-                            <div className="relative">
-                                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-extrabold text-lg">$</span>
-                                <input type="number" step="0.01" min="0.01" required placeholder="Enter amount" value={amount} onChange={(e) => setAmount(e.target.value)}
-                                className="w-full bg-black/40 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl pl-8 pr-4 py-2.5 text-lg font-black text-white placeholder-slate-600 outline-none transition-all" />
-                            </div>
-                        </div>
-                        <button type="submit" disabled={agentRequesting} className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 text-white font-bold py-3 rounded-lg disabled:opacity-50">
-                            {agentRequesting ? 'Submitting...' : 'Submit Request to Agent'}
-                        </button>
-                    </form>
-                </div>
-                <div>
-                    <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">My Requests to Agents</h3>
-                    <div className="mt-2 space-y-2 max-h-[20vh] overflow-y-auto pr-1">
-                        {playerRequests.length === 0 ? (
-                             <div className="text-center py-4 text-gray-500 text-xs font-medium">No previous requests to agents.</div>
-                        ): (
-                            playerRequests.map(req => (
-                                <div key={req.id} className="bg-black/30 border border-white/5 p-3 rounded-xl flex items-center justify-between text-xs">
-                                    <div className="space-y-1">
-                                        <p className="font-bold text-slate-200">{req.type === 'deposit' ? 'Deposit from' : 'Withdrawal to'} {req.agentUsername}</p>
-                                        <p className="text-[10px] text-slate-500">{new Date(req.createdAt).toLocaleString()}</p>
-                                    </div>
-                                    <div className="text-right">
-                                        <span className={`font-black text-sm font-mono ${req.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{formatCurrency(req.amount)}</span>
-                                        <div className={`mt-1 px-1.5 py-0.5 rounded-full text-[9px] font-bold inline-block ${
-                                            req.status === 'pending' ? 'bg-yellow-400/20 text-yellow-300' :
-                                            req.status === 'approved' ? 'bg-green-400/20 text-green-300' :
-                                            'bg-red-400/20 text-red-300'
-                                        }`}>{req.status}</div>
-                                    </div>
-                                </div>
-                            ))
-                        )}
-                    </div>
-                </div>
-            </div>
           ) : (
             <div className="space-y-2">
               <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
