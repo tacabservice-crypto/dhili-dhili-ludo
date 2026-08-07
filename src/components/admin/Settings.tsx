@@ -25,21 +25,21 @@ const Settings = ({
   const handlePaymentSettingsChange = (provider, key, value) => {
     const updated = JSON.parse(JSON.stringify(editablePaymentSettings || {}));
     if (!updated[provider]) {
-      updated[provider] = { credentials: {} };
+      updated[provider] = { enabled: false, apiKey: '', apiUrl: '', accountNumber: '' };
     }
-    if (key === 'enabled') {
-      updated[provider].enabled = value;
-    } else {
-      if (!updated[provider].credentials) {
-        updated[provider].credentials = {};
-      }
-      updated[provider].credentials[key] = value;
-    }
+    updated[provider][key] = value;
     setEditablePaymentSettings(updated);
   };
   
-  if (!adminSettings || !editablePaymentSettings) {
+  if (!adminSettings) {
     return <p>Loading settings...</p>;
+  }
+
+  // Fallback for payment settings if they are not loaded yet.
+  if (!editablePaymentSettings) {
+      // You can return a loading state or an empty state.
+      // For now, let's just make sure it doesn't crash.
+      return <p>Loading payment settings...</p>;
   }
 
   const { roles, usersByRole } = adminSettings;
@@ -142,18 +142,34 @@ const Settings = ({
                     </label>
                   </div>
                   {config.enabled && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {Object.keys(config.credentials || {}).map(key => (
-                        <div key={key}>
-                          <label className="block text-sm font-medium text-gray-700">{key}</label>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">API Key</label>
                           <input
                             type="text"
-                            value={config.credentials[key] || ''}
-                            onChange={(e) => handlePaymentSettingsChange(provider, key, e.target.value)}
+                            value={config.apiKey || ''}
+                            onChange={(e) => handlePaymentSettingsChange(provider, 'apiKey', e.target.value)}
                             className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
                           />
                         </div>
-                      ))}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">API URL</label>
+                          <input
+                            type="text"
+                            value={config.apiUrl || ''}
+                            onChange={(e) => handlePaymentSettingsChange(provider, 'apiUrl', e.target.value)}
+                            className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+                          />
+                        </div>
+                        <div className="col-span-1 md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-700">Account Number / Merchant ID</label>
+                          <input
+                            type="text"
+                            value={config.accountNumber || ''}
+                            onChange={(e) => handlePaymentSettingsChange(provider, 'accountNumber', e.target.value)}
+                            className="mt-1 block w-full px-3 py-2 bg-white border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-purple-500 focus:border-purple-500 sm:text-sm"
+                          />
+                        </div>
                     </div>
                   )}
                 </div>

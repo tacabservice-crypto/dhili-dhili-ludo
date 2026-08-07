@@ -3405,34 +3405,53 @@ app.get('/api/admin/settings', isAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/settings', isAdmin, async (req, res) => {
-    const { currentPassword, newPassword, confirmPassword } = req.body;
-    const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password';
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
 
-    if (typeof newPassword === 'string' && newPassword.trim()) {
-        if (typeof currentPassword === 'string' && currentPassword.trim() && currentPassword !== adminPassword) {
+    const { currentPassword, newPassword, confirmPassword } = req.body;
+    const adminId = req.query.userId as string;
+
+    if (!adminId) {
+        return res.status(400).json({ error: 'Admin ID is required.' });
+    }
+
+    // Only allow changing password for now, not username
+    if (typeof newPassword !== 'string' || !newPassword.trim()) {
+        return res.status(400).json({ error: 'New password is required.' });
+    }
+    
+    if (newPassword !== confirmPassword) {
+        return res.status(400).json({ error: 'New password and confirmation must match.' });
+    }
+    if (newPassword.length < 6) {
+        return res.status(400).json({ error: 'Password must be at least 6 characters long.' });
+    }
+    
+    try {
+        const adminRef = db.collection('adminUsers').doc(adminId);
+        const adminDoc = await adminRef.get();
+
+        if (!adminDoc.exists) {
+            return res.status(404).json({ error: 'Admin user not found.' });
+        }
+
+        const adminUser = adminDoc.data() as AdminUser;
+
+        // IMPORTANT: Passwords are in plain text as per existing system.
+        if (adminUser.password !== currentPassword) {
             return res.status(400).json({ error: 'Current password is incorrect.' });
         }
-        if (newPassword !== confirmPassword) {
-            return res.status(400).json({ error: 'New password and confirmation must match.' });
-        }
-        if (newPassword.length < 4) {
-            return res.status(400).json({ error: 'Password should be at least 4 characters.' });
-        }
-        store.adminSettings.password = newPassword;
-    }
 
-    if (typeof req.body.username === 'string' && req.body.username.trim()) {
-        store.adminSettings.username = req.body.username.trim();
-    }
+        // Update the password in Firestore
+        await adminRef.update({
+            password: newPassword
+        });
 
-    await saveStoreAndWait();
-    res.json({
-        success: true,
-        settings: {
-            username: store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
-            passwordConfigured: Boolean(store.adminSettings?.password),
-        },
-    });
+        res.json({ success: true, message: 'Password updated successfully.' });
+
+    } catch (error) {
+        console.error(`Failed to update password for admin ${adminId}:`, error);
+        res.status(500).json({ error: 'An error occurred while updating the password.' });
+    }
 });
 
 app.post('/api/admin/roles/create', hasPermission('all'), async (req, res) => {
