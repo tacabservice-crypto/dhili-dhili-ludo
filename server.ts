@@ -4085,11 +4085,15 @@ app.get('/api/agent/transactions', isAgent, async (req, res) => {
     if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const agent = (req as any).agent;
     try {
+        // Query without ordering to prevent missing-index errors.
         const snapshot = await db.collection('agentTransactions')
             .where('agentId', '==', agent.id)
-            .orderBy('timestamp', 'desc')
             .get();
+        
+        // Sort the results in memory.
         const transactions = snapshot.docs.map(doc => doc.data());
+        transactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
         res.json(transactions);
     } catch (error) {
         console.error(`Failed to get transactions for agent ${agent.id}:`, error);
