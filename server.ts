@@ -2192,9 +2192,12 @@ app.post('/api/request-to-agent', authMiddleware, async (req, res) => {
 
         res.status(201).json({ success: true, message: 'Your request has been sent to the agent.', request: newRequest });
 
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Player ${player.id} failed to create request to agent ${agentId}:`, error);
-        res.status(500).json({ error: 'An internal server error occurred while submitting your request.' });
+        res.status(500).json({ 
+            error: 'An internal server error occurred while submitting your request.',
+            details: error.message || 'No specific error message available.'
+        });
     }
 });
 
