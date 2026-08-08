@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Agent } from '../types/game';
 
 interface CreditAgentModalProps {
@@ -12,6 +12,22 @@ const CreditAgentModal: React.FC<CreditAgentModalProps> = ({ agent, onClose, onS
     const [discount, setDiscount] = useState('0');
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
+    const [commission, setCommission] = useState(0);
+    const [totalPayable, setTotalPayable] = useState(0);
+
+    useEffect(() => {
+        const creditAmount = parseFloat(amount);
+        if (!isNaN(creditAmount) && creditAmount > 0) {
+            const calculatedCommission = creditAmount * (agent.commissionRate / 100);
+            setCommission(calculatedCommission);
+            setDiscount(calculatedCommission.toFixed(2));
+            setTotalPayable(creditAmount + calculatedCommission);
+        } else {
+            setCommission(0);
+            setDiscount('0');
+            setTotalPayable(0);
+        }
+    }, [amount, agent.commissionRate]);
 
     const handleSave = async () => {
         setError(null);
@@ -53,7 +69,7 @@ const CreditAgentModal: React.FC<CreditAgentModalProps> = ({ agent, onClose, onS
                         />
                     </div>
                      <div>
-                        <label className="block text-sm font-medium text-gray-400">Discount Given (optional)</label>
+                        <label className="block text-sm font-medium text-gray-400">Commission (auto-calculated)</label>
                         <input 
                             type="number" 
                             value={discount} 
@@ -61,6 +77,20 @@ const CreditAgentModal: React.FC<CreditAgentModalProps> = ({ agent, onClose, onS
                             placeholder="e.g., 5"
                             className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" 
                         />
+                    </div>
+                    <div className="bg-gray-700 p-3 rounded-lg space-y-2">
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Commission Rate:</span>
+                            <span className="text-white font-mono">{agent.commissionRate.toFixed(2)}%</span>
+                        </div>
+                        <div className="flex justify-between text-sm">
+                            <span className="text-gray-400">Commission on this amount:</span>
+                            <span className="text-white font-mono">${commission.toFixed(2)}</span>
+                        </div>
+                        <div className="flex justify-between text-lg font-bold">
+                            <span className="text-purple-400">Total to be paid by agent:</span>
+                            <span className="text-purple-400 font-mono">${totalPayable.toFixed(2)}</span>
+                        </div>
                     </div>
                 </div>
                 {error && <p className="text-red-500 text-sm mt-4">{error}</p>}
