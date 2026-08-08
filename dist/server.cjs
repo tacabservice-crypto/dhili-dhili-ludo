@@ -164,6 +164,7 @@ var store = {
   houseRevenue: 0,
   pendingManualTransactions: [],
   paymentProviders: { ...DEFAULT_PAYMENT_PROVIDERS },
+  agentFloatInstructions: "",
   adminSettings: { ...DEFAULT_ADMIN_SETTINGS },
   agents: {},
   agentTransactions: [],
@@ -191,6 +192,7 @@ function loadStore() {
         ...DEFAULT_PAYMENT_PROVIDERS,
         ...parsed.paymentProviders || {}
       };
+      store.agentFloatInstructions = parsed.agentFloatInstructions || "";
       store.tournaments = parsed.tournaments || {};
       const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
       store.adminSettings = {
@@ -238,6 +240,7 @@ async function loadStoreFromFirestore() {
           ...DEFAULT_PAYMENT_PROVIDERS,
           ...parsed.paymentProviders || {}
         };
+        store.agentFloatInstructions = parsed.agentFloatInstructions || "";
         const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
         store.adminSettings = {
           username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
@@ -872,6 +875,18 @@ setInterval(() => {
     }
   });
 }, 2e3);
+var authMiddleware = async (req, res, next) => {
+  const userId = req.headers["x-user-id"];
+  if (!userId) {
+    return res.status(401).json({ error: "Unauthorized: User ID is required." });
+  }
+  const user = store.users[userId];
+  if (!user) {
+    return res.status(401).json({ error: "Unauthorized: User not found." });
+  }
+  req.user = user;
+  next();
+};
 var verifyFirebaseToken = async (req, res, next) => {
   if (!auth) {
     return res.status(500).json({ error: "Firebase Admin not configured on server." });
@@ -1004,7 +1019,7 @@ data: ${JSON.stringify(seekingData)}
   });
 });
 app.post("/api/auth/login", verifyFirebaseToken, checkVipStatus, async (req, res) => {
-  const { username, email, avatar } = req.body;
+  const { username, email, avatar, promoCode } = req.body;
   const firebaseUid = req.user.uid;
   let foundUser = Object.values(store.users).find((u) => u.firebaseUid === firebaseUid);
   if (foundUser) {
@@ -1022,6 +1037,16 @@ app.post("/api/auth/login", verifyFirebaseToken, checkVipStatus, async (req, res
     return res.status(400).json({ error: "Username is required for new registration" });
   }
   const cleanUsername = username.trim().substring(0, 20);
+  let linkedAgentId = void 0;
+  if (promoCode && typeof promoCode === "string" && promoCode.trim() !== "") {
+    const agentsRef = db.collection("agents");
+    const agentSnapshot = await agentsRef.where("promoCode", "==", promoCode.trim()).limit(1).get();
+    if (agentSnapshot.empty) {
+      return res.status(400).json({ error: "Invalid or expired promo code." });
+    }
+    const agent = agentSnapshot.docs[0].data();
+    linkedAgentId = agent.id;
+  }
   const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
   const newUser = {
     id: userId,
@@ -1031,7 +1056,9 @@ app.post("/api/auth/login", verifyFirebaseToken, checkVipStatus, async (req, res
     avatar: avatar || "\u{1F338}",
     balance: 10,
     winCount: 0,
-    lossCount: 0
+    lossCount: 0,
+    linkedAgentId
+    // Add the linked agent ID
   };
   store.users[userId] = newUser;
   addTransaction(userId, "deposit", 10, void 0, "Welcome signup bonus.");
@@ -1105,13 +1132,16 @@ app.post("/api/wallet/withdraw", (req, res) => {
   res.json({ success: true, balance: user.balance });
 });
 app.post("/api/wallet/request-manual-confirmation", async (req, res) => {
-  const { userId, amount, phone, senderPhone, provider, transactionType } = req.body;
-  if (!userId || !amount || !provider || !transactionType) {
-    return res.status(400).json({ error: "Missing required fields for manual confirmation." });
+  const { userId, agentId, amount, phone, senderPhone, provider, transactionType } = req.body;
+  if (!userId || !agentId || !amount || !provider || !transactionType) {
+    return res.status(400).json({ error: "Missing required fields. `userId`, `agentId`, `amount`, `provider`, and `transactionType` are all required." });
   }
   const user = store.users[userId];
   if (!user) {
     return res.status(404).json({ error: "User not found." });
+  }
+  if (user.linkedAgentId && user.linkedAgentId !== agentId) {
+    return res.status(400).json({ error: "This account is locked to a specific agent. You can only transact with your assigned agent." });
   }
   if (transactionType === "withdraw" && !phone) {
     return res.status(400).json({ error: "Phone number is required for withdrawal requests." });
@@ -1119,15 +1149,27 @@ app.post("/api/wallet/request-manual-confirmation", async (req, res) => {
   if (transactionType === "deposit" && !senderPhone) {
     return res.status(400).json({ error: "Sender phone number is required for deposit requests." });
   }
+  if (db) {
+    try {
+      const agentDoc = await db.collection("agents").doc(agentId).get();
+      if (!agentDoc.exists) {
+        return res.status(404).json({ error: "The selected agent does not exist." });
+      }
+    } catch (err) {
+      console.error("Failed to verify agent for manual transaction request:", err);
+      return res.status(500).json({ error: "Could not verify the selected agent." });
+    }
+  }
   const newRequest = {
     id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     userId,
     username: user.username,
+    agentId,
     amount: parseFloat(amount),
     phone,
-    // This will be the destination for withdrawals, or the company number for deposits
+    // This will be the destination for withdrawals
     senderPhone,
-    // This is the new field for the source number for deposits
+    // This is the source number for deposits
     provider,
     transactionType,
     status: "pending",
@@ -1525,6 +1567,67 @@ app.get("/api/rooms/:roomId", (req, res) => {
     return res.status(404).json({ error: "Room not found." });
   }
   res.json(room);
+});
+app.get("/api/agents", async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const playerLocation = req.query.location;
+  try {
+    const agentsSnapshot = await db.collection("agents").where("status", "==", "Active").get();
+    const activeAgents = agentsSnapshot.docs.map((doc) => {
+      const { password, ...agentData } = doc.data();
+      return agentData;
+    });
+    if (playerLocation) {
+      const localAgents = activeAgents.filter((agent) => agent.location && agent.location.toLowerCase() === playerLocation.toLowerCase());
+      const otherAgents = activeAgents.filter((agent) => !agent.location || agent.location.toLowerCase() !== playerLocation.toLowerCase());
+      res.json([...localAgents, ...otherAgents]);
+    } else {
+      res.json(activeAgents);
+    }
+  } catch (error) {
+    console.error("Failed to get active agents:", error);
+    res.status(500).json({ error: "Failed to retrieve active agents." });
+  }
+});
+app.post("/api/request-to-agent", authMiddleware, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const player = req.user;
+  const { agentId, amount, type, playerPhone, provider } = req.body;
+  const requestAmount = parseFloat(amount);
+  if (player.linkedAgentId && player.linkedAgentId !== agentId) {
+    return res.status(400).json({ error: "This account is locked to a specific agent. You can only transact with your assigned agent." });
+  }
+  if (!agentId || !requestAmount || requestAmount <= 0 || !["deposit", "withdrawal"].includes(type) || !playerPhone || !provider) {
+    return res.status(400).json({ error: "Missing or invalid parameters. Requires agentId, amount, type, playerPhone, and provider." });
+  }
+  if (type === "withdrawal" && player.balance < requestAmount) {
+    return res.status(400).json({ error: "Insufficient balance for this withdrawal request." });
+  }
+  try {
+    const agentDoc = await db.collection("agents").doc(agentId).get();
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: "The selected agent does not exist." });
+    }
+    const requestRef = db.collection("playerAgentRequests").doc();
+    const newRequest = {
+      id: requestRef.id,
+      playerId: player.id,
+      playerUsername: player.username,
+      playerAvatar: player.avatar,
+      agentId,
+      playerPhone,
+      provider,
+      type,
+      amount: requestAmount,
+      status: "pending",
+      createdAt: Date.now()
+    };
+    await requestRef.set(newRequest);
+    res.status(201).json({ success: true, message: "Your request has been sent to the agent.", request: newRequest });
+  } catch (error) {
+    console.error(`Player ${player.id} failed to create request to agent ${agentId}:`, error);
+    res.status(500).json({ error: "An internal server error occurred while submitting your request." });
+  }
 });
 function startMatchedRoom(matchedUsers, bet, cap, mode) {
   const roomId = `MATCH_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
@@ -2562,31 +2665,39 @@ app.get("/api/admin/settings", isAdmin, async (req, res) => {
   }
 });
 app.post("/api/admin/settings", isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { currentPassword, newPassword, confirmPassword } = req.body;
-  const adminPassword = store.adminSettings?.password || process.env.ADMIN_PASSWORD || "password";
-  if (typeof newPassword === "string" && newPassword.trim()) {
-    if (typeof currentPassword === "string" && currentPassword.trim() && currentPassword !== adminPassword) {
+  const adminId = req.query.userId;
+  if (!adminId) {
+    return res.status(400).json({ error: "Admin ID is required." });
+  }
+  if (typeof newPassword !== "string" || !newPassword.trim()) {
+    return res.status(400).json({ error: "New password is required." });
+  }
+  if (newPassword !== confirmPassword) {
+    return res.status(400).json({ error: "New password and confirmation must match." });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters long." });
+  }
+  try {
+    const adminRef = db.collection("adminUsers").doc(adminId);
+    const adminDoc = await adminRef.get();
+    if (!adminDoc.exists) {
+      return res.status(404).json({ error: "Admin user not found." });
+    }
+    const adminUser = adminDoc.data();
+    if (adminUser.password !== currentPassword) {
       return res.status(400).json({ error: "Current password is incorrect." });
     }
-    if (newPassword !== confirmPassword) {
-      return res.status(400).json({ error: "New password and confirmation must match." });
-    }
-    if (newPassword.length < 4) {
-      return res.status(400).json({ error: "Password should be at least 4 characters." });
-    }
-    store.adminSettings.password = newPassword;
+    await adminRef.update({
+      password: newPassword
+    });
+    res.json({ success: true, message: "Password updated successfully." });
+  } catch (error) {
+    console.error(`Failed to update password for admin ${adminId}:`, error);
+    res.status(500).json({ error: "An error occurred while updating the password." });
   }
-  if (typeof req.body.username === "string" && req.body.username.trim()) {
-    store.adminSettings.username = req.body.username.trim();
-  }
-  await saveStoreAndWait();
-  res.json({
-    success: true,
-    settings: {
-      username: store.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
-      passwordConfigured: Boolean(store.adminSettings?.password)
-    }
-  });
 });
 app.post("/api/admin/roles/create", hasPermission("all"), async (req, res) => {
   if (!db) return res.status(500).json({ error: "Database not initialized" });
@@ -2695,16 +2806,22 @@ app.get("/api/admin/payment-settings", isAdmin, (req, res) => {
   res.json(store.paymentProviders);
 });
 app.post("/api/admin/payment-settings", isAdmin, async (req, res) => {
-  const paymentProviders = req.body.paymentProviders;
-  if (!paymentProviders || typeof paymentProviders !== "object") {
-    return res.status(400).json({ error: "Invalid payment settings payload." });
+  const { paymentProviders, agentFloatInstructions } = req.body;
+  if (paymentProviders && typeof paymentProviders === "object") {
+    store.paymentProviders = {
+      ...DEFAULT_PAYMENT_PROVIDERS,
+      ...paymentProviders
+    };
   }
-  store.paymentProviders = {
-    ...DEFAULT_PAYMENT_PROVIDERS,
-    ...paymentProviders
-  };
+  if (typeof agentFloatInstructions === "string") {
+    store.agentFloatInstructions = agentFloatInstructions;
+  }
   await saveStoreAndWait();
-  res.json({ success: true, paymentProviders: store.paymentProviders });
+  res.json({
+    success: true,
+    paymentProviders: store.paymentProviders,
+    agentFloatInstructions: store.agentFloatInstructions
+  });
 });
 app.post("/api/admin/manual-transactions/:transactionId/approve", isAdmin, async (req, res) => {
   const { transactionId } = req.params;
@@ -2806,9 +2923,9 @@ app.get("/api/admin/agents", isAdmin, async (req, res) => {
 });
 app.post("/api/admin/agents/create", isAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { username, password, commissionRate } = req.body;
-  if (!username || !password || !commissionRate) {
-    return res.status(400).json({ error: "Username, password, and commission rate are required." });
+  const { username, password, commissionRate, location, phone, promoCode } = req.body;
+  if (!username || !password || !commissionRate || !phone) {
+    return res.status(400).json({ error: "Username, password, commission rate, and phone are required." });
   }
   if (typeof username !== "string" || username.length < 3) {
     return res.status(400).json({ error: "Username must be a string of at least 3 characters." });
@@ -2826,13 +2943,22 @@ app.post("/api/admin/agents/create", isAdmin, async (req, res) => {
     if (!existingAgentSnapshot.empty) {
       return res.status(409).json({ error: "Agent with this username already exists." });
     }
+    if (promoCode && typeof promoCode === "string" && promoCode.trim() !== "") {
+      const promoCodeQuery = await agentsRef.where("promoCode", "==", promoCode.trim()).get();
+      if (!promoCodeQuery.empty) {
+        return res.status(400).json({ error: "Promo code is already in use." });
+      }
+    }
     const agentId = `agent_${Date.now()}`;
     const newAgent = {
       id: agentId,
       username,
       password,
       // In a real app, this should be hashed and salted
+      phone,
+      location: location || "",
       commissionRate: rate,
+      promoCode: promoCode && typeof promoCode === "string" ? promoCode.trim() : "",
       balance: 0,
       floatBalance: 0,
       status: "Active",
@@ -2848,12 +2974,23 @@ app.post("/api/admin/agents/create", isAdmin, async (req, res) => {
 app.post("/api/admin/agents/:agentId/update", isAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { agentId } = req.params;
-  const { username, password, commissionRate, status } = req.body;
+  const { username, password, commissionRate, status, location, phone, promoCode } = req.body;
   try {
     const agentRef = db.collection("agents").doc(agentId);
     const agentDoc = await agentRef.get();
     if (!agentDoc.exists) {
       return res.status(404).json({ error: "Agent not found." });
+    }
+    const agentData = agentDoc.data();
+    if (promoCode && typeof promoCode === "string" && promoCode.trim() !== "" && promoCode.trim() !== agentData.promoCode) {
+      const agentsRef = db.collection("agents");
+      const promoCodeQuery = await agentsRef.where("promoCode", "==", promoCode.trim()).get();
+      if (!promoCodeQuery.empty) {
+        const isSameAgent = promoCodeQuery.docs.some((doc) => doc.id === agentId);
+        if (!isSameAgent) {
+          return res.status(400).json({ error: "Promo code is already in use by another agent." });
+        }
+      }
     }
     const updateData = {};
     if (username && typeof username === "string" && username.length >= 3) {
@@ -2862,12 +2999,21 @@ app.post("/api/admin/agents/:agentId/update", isAdmin, async (req, res) => {
     if (password && typeof password === "string" && password.length >= 6) {
       updateData.password = password;
     }
+    if (phone && typeof phone === "string") {
+      updateData.phone = phone;
+    }
     const newCommissionRate = parseFloat(commissionRate);
     if (commissionRate !== void 0 && !isNaN(newCommissionRate) && newCommissionRate >= 0 && newCommissionRate <= 1) {
       updateData.commissionRate = newCommissionRate;
     }
     if (status && ["Active", "Suspended"].includes(status)) {
       updateData.status = status;
+    }
+    if (location !== void 0) {
+      updateData.location = location;
+    }
+    if (promoCode !== void 0) {
+      updateData.promoCode = promoCode.trim();
     }
     if (Object.keys(updateData).length === 0) {
       return res.status(400).json({ error: "No valid fields to update." });
@@ -2878,22 +3024,6 @@ app.post("/api/admin/agents/:agentId/update", isAdmin, async (req, res) => {
   } catch (error) {
     console.error(`Failed to update agent ${agentId}:`, error);
     res.status(500).json({ error: "Failed to update agent in database." });
-  }
-});
-app.delete("/api/admin/agents/:agentId/delete", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { agentId } = req.params;
-  try {
-    const agentRef = db.collection("agents").doc(agentId);
-    const agentDoc = await agentRef.get();
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: "Agent not found." });
-    }
-    await agentRef.delete();
-    res.json({ success: true, message: "Agent deleted successfully." });
-  } catch (error) {
-    console.error(`Failed to delete agent ${agentId}:`, error);
-    res.status(500).json({ error: "Failed to delete agent from database." });
   }
 });
 app.post("/api/admin/agents/:agentId/credit", isAdmin, async (req, res) => {
@@ -2937,6 +3067,94 @@ app.post("/api/admin/agents/:agentId/credit", isAdmin, async (req, res) => {
     res.status(500).json({ error: "Failed to credit agent float in database." });
   }
 });
+app.get("/api/admin/agent-requests", isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  try {
+    const requestsSnapshot = await db.collection("agentRequests").orderBy("createdAt", "desc").get();
+    const requests = requestsSnapshot.docs.map((doc) => doc.data());
+    res.json(requests);
+  } catch (error) {
+    console.error("Failed to get agent requests:", error);
+    res.status(500).json({ error: "Failed to retrieve agent requests." });
+  }
+});
+app.post("/api/admin/agent-requests/:requestId/approve", isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const { requestId } = req.params;
+  const adminId = req.query.userId;
+  try {
+    const requestRef = db.collection("agentRequests").doc(requestId);
+    await db.runTransaction(async (t) => {
+      const requestDoc = await t.get(requestRef);
+      if (!requestDoc.exists) {
+        throw new Error("Request not found.");
+      }
+      const request = requestDoc.data();
+      if (request.status !== "pending") {
+        throw new Error("This request has already been processed.");
+      }
+      const agentRef = db.collection("agents").doc(request.agentId);
+      const agentDoc = await t.get(agentRef);
+      if (!agentDoc.exists) {
+        throw new Error("Agent associated with the request not found.");
+      }
+      const currentFloat = agentDoc.data()?.floatBalance || 0;
+      const newFloatBalance = currentFloat + request.amount;
+      const adminUserDoc = await db.collection("adminUsers").doc(adminId).get();
+      const resolverUsername = adminUserDoc.exists ? adminUserDoc.data()?.username : "Unknown Admin";
+      t.update(agentRef, { floatBalance: newFloatBalance });
+      t.update(requestRef, {
+        status: "approved",
+        resolvedAt: Date.now(),
+        resolvedBy: adminId,
+        resolverUsername
+      });
+      const transactionRef = db.collection("agentTransactions").doc();
+      const transactionData = {
+        id: transactionRef.id,
+        agentId: request.agentId,
+        type: "FloatPurchase",
+        amount: request.amount,
+        timestamp: Date.now(),
+        description: `Float request for ${request.amount} approved by admin. Request ID: ${request.id}`
+      };
+      t.set(transactionRef, transactionData);
+    });
+    res.json({ success: true, message: "Agent float request approved." });
+  } catch (error) {
+    console.error(`Failed to approve agent request ${requestId}:`, error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+    res.status(500).json({ error: errorMessage });
+  }
+});
+app.post("/api/admin/agent-requests/:requestId/reject", isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const { requestId } = req.params;
+  const adminId = req.query.userId;
+  try {
+    const requestRef = db.collection("agentRequests").doc(requestId);
+    const requestDoc = await requestRef.get();
+    if (!requestDoc.exists) {
+      return res.status(404).json({ error: "Request not found." });
+    }
+    const request = requestDoc.data();
+    if (request.status !== "pending") {
+      return res.status(400).json({ error: "This request has already been processed." });
+    }
+    const adminUserDoc = await db.collection("adminUsers").doc(adminId).get();
+    const resolverUsername = adminUserDoc.exists ? adminUserDoc.data()?.username : "Unknown Admin";
+    await requestRef.update({
+      status: "rejected",
+      resolvedAt: Date.now(),
+      resolvedBy: adminId,
+      resolverUsername
+    });
+    res.json({ success: true, message: "Agent float request rejected." });
+  } catch (error) {
+    console.error(`Failed to reject agent request ${requestId}:`, error);
+    res.status(500).json({ error: "An internal server error occurred." });
+  }
+});
 app.delete("/api/admin/users/:userId/delete", isAdmin, (req, res) => {
   const { userId } = req.params;
   if (store.users[userId]) {
@@ -2945,6 +3163,102 @@ app.delete("/api/admin/users/:userId/delete", isAdmin, (req, res) => {
     res.json({ success: true, message: `User ${userId} has been deleted.` });
   } else {
     res.status(404).json({ error: "User not found" });
+  }
+});
+app.post("/api/admin/agents", isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const { username, password, commissionRate, location } = req.body;
+  if (!username || !password || !commissionRate) {
+    return res.status(400).json({ error: "Username, password, and commission rate are required." });
+  }
+  try {
+    const agentRef = db.collection("agents").doc();
+    const newAgent = {
+      id: agentRef.id,
+      username,
+      password,
+      // In a real app, this should be securely hashed.
+      commissionRate: parseFloat(commissionRate),
+      location: location || "",
+      balance: 0,
+      floatBalance: 0,
+      status: "Active",
+      createdAt: Date.now()
+    };
+    await agentRef.set(newAgent);
+    res.status(201).json({ success: true, agent: newAgent });
+  } catch (error) {
+    console.error("Failed to create agent:", error);
+    res.status(500).json({ error: "Failed to create agent." });
+  }
+});
+app.put("/api/admin/agents/:agentId", isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const { agentId } = req.params;
+  const { commissionRate, status, location } = req.body;
+  try {
+    const agentRef = db.collection("agents").doc(agentId);
+    const agentDoc = await agentRef.get();
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: "Agent not found." });
+    }
+    const updates = {};
+    if (commissionRate) updates.commissionRate = parseFloat(commissionRate);
+    if (status) updates.status = status;
+    if (location !== void 0) updates.location = location;
+    await agentRef.update(updates);
+    res.json({ success: true, message: "Agent updated." });
+  } catch (error) {
+    console.error(`Failed to update agent ${agentId}:`, error);
+    res.status(500).json({ error: "Failed to update agent." });
+  }
+});
+app.post("/api/admin/agents", isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const { username, password, commissionRate, location } = req.body;
+  if (!username || !password || !commissionRate) {
+    return res.status(400).json({ error: "Username, password, and commission rate are required." });
+  }
+  try {
+    const agentRef = db.collection("agents").doc();
+    const newAgent = {
+      id: agentRef.id,
+      username,
+      password,
+      // In a real app, this should be securely hashed.
+      commissionRate: parseFloat(commissionRate),
+      location: location || "",
+      balance: 0,
+      floatBalance: 0,
+      status: "Active",
+      createdAt: Date.now()
+    };
+    await agentRef.set(newAgent);
+    res.status(201).json({ success: true, agent: newAgent });
+  } catch (error) {
+    console.error("Failed to create agent:", error);
+    res.status(500).json({ error: "Failed to create agent." });
+  }
+});
+app.put("/api/admin/agents/:agentId", isAdmin, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const { agentId } = req.params;
+  const { commissionRate, status, location } = req.body;
+  try {
+    const agentRef = db.collection("agents").doc(agentId);
+    const agentDoc = await agentRef.get();
+    if (!agentDoc.exists) {
+      return res.status(404).json({ error: "Agent not found." });
+    }
+    const updates = {};
+    if (commissionRate) updates.commissionRate = parseFloat(commissionRate);
+    if (status) updates.status = status;
+    if (location !== void 0) updates.location = location;
+    await agentRef.update(updates);
+    res.json({ success: true, message: "Agent updated." });
+  } catch (error) {
+    console.error(`Failed to update agent ${agentId}:`, error);
+    res.status(500).json({ error: "Failed to update agent." });
   }
 });
 app.post("/api/admin/rooms/:roomId/cancel", isAdmin, (req, res) => {
@@ -3132,6 +3446,175 @@ app.post("/api/agent/deposit", isAgent, async (req, res) => {
     }
     res.status(500).json({ error: `Failed to process deposit: ${errorMessage}` });
   }
+});
+app.post("/api/agent/request-float", isAgent, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const agent = req.agent;
+  const { amount } = req.body;
+  const requestAmount = parseFloat(amount);
+  if (!requestAmount || requestAmount <= 0) {
+    return res.status(400).json({ error: "A positive amount is required." });
+  }
+  try {
+    const requestRef = db.collection("agentRequests").doc();
+    const newRequest = {
+      id: requestRef.id,
+      agentId: agent.id,
+      agentUsername: agent.username,
+      amount: requestAmount,
+      status: "pending",
+      createdAt: Date.now()
+    };
+    await requestRef.set(newRequest);
+    res.status(201).json({ success: true, message: "Your float request has been submitted for review.", request: newRequest });
+  } catch (error) {
+    console.error(`Agent ${agent.id} failed to request float:`, error);
+    res.status(500).json({ error: "An internal server error occurred while submitting your request." });
+  }
+});
+app.get("/api/agent/requests", isAgent, async (req, res) => {
+  if (!db) return res.status(500).json({ error: "Database not initialized" });
+  const agent = req.agent;
+  try {
+    const requestsSnapshot = await db.collection("agentRequests").where("agentId", "==", agent.id).get();
+    const requests = requestsSnapshot.docs.map((doc) => doc.data());
+    requests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    res.json(requests);
+  } catch (error) {
+    console.error(`Failed to get float requests for agent ${agent.id}:`, error);
+    res.status(500).json({ error: "Failed to retrieve float requests." });
+  }
+});
+app.get("/api/agent/player-requests", isAgent, (req, res) => {
+  const agent = req.agent;
+  const agentSpecificTxs = store.pendingManualTransactions.filter((tx) => tx.status === "pending" && tx.agentId === agent.id);
+  const responsePayload = agentSpecificTxs.map((tx) => {
+    const user = store.users[tx.userId];
+    return {
+      id: tx.id,
+      playerId: tx.userId,
+      playerUsername: user ? user.username : "Unknown Player",
+      playerAvatar: user ? user.avatar : "\u2753",
+      agentId: agent.id,
+      // Agent ID is from the authenticated agent
+      playerPhone: tx.phone,
+      // For withdrawals
+      senderPhone: tx.senderPhone,
+      // For deposits
+      provider: tx.provider,
+      type: tx.transactionType,
+      amount: tx.amount,
+      status: tx.status,
+      createdAt: tx.createdAt
+    };
+  });
+  responsePayload.sort((a, b) => b.createdAt - a.createdAt);
+  res.json(responsePayload);
+});
+app.post("/api/agent/player-requests/:requestId/approve", isAgent, async (req, res) => {
+  const { requestId } = req.params;
+  const agent = req.agent;
+  const tx = store.pendingManualTransactions.find((t) => t.id === requestId);
+  if (!tx || tx.status !== "pending") {
+    return res.status(404).json({ error: "Pending transaction not found or already processed." });
+  }
+  const user = store.users[tx.userId];
+  if (!user) {
+    return res.status(404).json({ error: "User associated with transaction not found." });
+  }
+  let newAgentFloat;
+  try {
+    if (!db) {
+      throw new Error("Database not initialized");
+    }
+    await db.runTransaction(async (t) => {
+      const agentRef = db.collection("agents").doc(agent.id);
+      const agentDoc = await t.get(agentRef);
+      if (!agentDoc.exists) {
+        throw new Error("Agent not found in database");
+      }
+      const agentData = agentDoc.data();
+      const currentFloat = agentData.floatBalance || 0;
+      let newAgentFloat2;
+      if (tx.transactionType === "deposit") {
+        if (currentFloat < tx.amount) {
+          throw new Error("Insufficient float balance to approve this deposit.");
+        }
+        newAgentFloat2 = currentFloat - tx.amount;
+        user.balance += tx.amount;
+        addTransaction(user.id, "deposit", tx.amount, void 0, `Manual deposit approved by agent ${agent.username}. Request ID: ${tx.id}`);
+      } else {
+        if (user.balance < tx.amount) {
+          throw new Error("Player has insufficient balance for this withdrawal.");
+        }
+        newAgentFloat2 = currentFloat + tx.amount;
+        user.balance -= tx.amount;
+        addTransaction(user.id, "withdrawal", tx.amount, void 0, `Manual withdrawal approved by agent ${agent.username}. Request ID: ${tx.id}`);
+      }
+      const agentTxRef = db.collection("agentTransactions").doc();
+      const agentTx = {
+        id: agentTxRef.id,
+        agentId: agent.id,
+        type: tx.transactionType === "deposit" ? "PlayerDeposit" : "PlayerWithdrawal",
+        amount: tx.amount,
+        playerId: user.id,
+        playerName: user.username,
+        timestamp: Date.now(),
+        description: `Approved ${tx.transactionType} of $${tx.amount} for player ${user.username}.`
+      };
+      t.set(agentTxRef, agentTx);
+      t.update(agentRef, { floatBalance: newAgentFloat2 });
+    });
+    tx.status = "approved";
+    tx.resolvedBy = agent.id;
+    tx.resolverUsername = agent.username;
+    await saveStoreAndWait();
+    broadcastUserUpdate(user.id);
+    res.json({ success: true, transaction: tx });
+  } catch (error) {
+    console.error("Error processing agent transaction approval:", error);
+    const message = error instanceof Error ? error.message : "An unknown error occurred.";
+    if (message.includes("Insufficient")) {
+      return res.status(400).json({ error: message });
+    }
+    return res.status(500).json({ error: `Failed to process approval: ${message}` });
+  }
+});
+app.post("/api/agent/player-requests/:requestId/reject", isAgent, async (req, res) => {
+  const { requestId } = req.params;
+  const agent = req.agent;
+  const tx = store.pendingManualTransactions.find((t) => t.id === requestId);
+  if (!tx || tx.status !== "pending") {
+    return res.status(404).json({ error: "Pending transaction not found or already processed." });
+  }
+  const user = store.users[tx.userId];
+  if (!user) {
+    tx.status = "rejected";
+    await saveStoreAndWait();
+    return res.status(404).json({ error: "User associated with transaction not found. Transaction rejected." });
+  }
+  tx.status = "rejected";
+  tx.resolvedBy = agent.id;
+  tx.resolverUsername = agent.username;
+  await saveStoreAndWait();
+  sendEventToUser(user.id, "user_notification", {
+    type: "info",
+    message: `Your ${tx.transactionType} request for $${tx.amount} was rejected by agent ${agent.username}.`
+  });
+  res.json({ success: true, transaction: tx });
+});
+app.get("/api/agent/payment-instructions", isAgent, (req, res) => {
+  const instructions = store.agentFloatInstructions || "";
+  res.json({ instructions });
+});
+app.get("/api/agent/my-players", isAgent, (req, res) => {
+  const agent = req.agent;
+  const linkedPlayers = Object.values(store.users).filter((user) => user.linkedAgentId === agent.id);
+  const sanitizedPlayers = linkedPlayers.map((p) => {
+    const { password, ...playerData } = p;
+    return playerData;
+  });
+  res.json(sanitizedPlayers);
 });
 async function startServer() {
   await loadStoreFromFirestore();

@@ -614,3 +614,5 @@ const AgentDashboard = () => {
         </div>
       );
 };
+
+export default AgentDashboard;
