@@ -1366,15 +1366,35 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
         const userDoc = emailQuery.docs[0];
         await userDoc.ref.update({ firebaseUid: firebaseUid });
         const updatedUser = (await userDoc.ref.get()).data();
+        console.log(`Linked existing user with email ${email} to firebaseUid ${firebaseUid}.`);
         return res.json(updatedUser);
       }
     }
 
-    // If we're here, it's a new registration.
-    if (!username) {
+    // If we're here, it's a new user to our Firestore DB.
+    // Let's get their details from Firebase Auth to see if we can get a username.
+    if (!auth) {
+      return res.status(500).json({ error: 'Firebase Admin not configured on server.' });
+    }
+    const firebaseUser = await auth.getUser(firebaseUid);
+
+    // If a username was passed from the client, use it.
+    // Otherwise, try to use the displayName from Firebase Auth.
+    // As a last resort, generate one from the email.
+    let finalUsername = username;
+    if (!finalUsername && firebaseUser.displayName) {
+      finalUsername = firebaseUser.displayName;
+    }
+    if (!finalUsername && firebaseUser.email) {
+      finalUsername = firebaseUser.email.split('@')[0];
+    }
+    
+    // If we still don't have a username, then we must ask the user.
+    if (!finalUsername) {
       return res.status(400).json({ error: 'Username is required for new registration' });
     }
-    const cleanUsername = username.trim().substring(0, 20);
+
+    const cleanUsername = finalUsername.trim().substring(0, 20);
 
     let linkedAgentId: string | undefined = undefined;
 
@@ -1395,7 +1415,7 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
       id: newUserRef.id,
       firebaseUid: firebaseUid,
       username: cleanUsername,
-      email: email || undefined,
+      email: email || firebaseUser.email || undefined,
       avatar: avatar || '🌸',
       balance: 10.0,
       winCount: 0,
