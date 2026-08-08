@@ -435,12 +435,14 @@ const AgentDashboard = () => {
                   </button>
                 </div>
               </form>
-                {paymentInstructions && (
-                    <div className="mt-4 p-4 bg-slate-700 rounded-lg">
+                <div className="mt-4 p-4 bg-slate-700 rounded-lg">
                         <h3 className="text-lg font-semibold text-purple-400">Payment Instructions</h3>
-                        <p className="text-slate-300 whitespace-pre-wrap">{paymentInstructions}</p>
+                        {paymentInstructions ? (
+                            <p className="text-slate-300 whitespace-pre-wrap">{paymentInstructions}</p>
+                        ) : (
+                            <p className="text-slate-400 italic">No payment instructions available. Please contact an admin to have them set up.</p>
+                        )}
                     </div>
-                )}
                 <div className="mt-4 bg-gray-700 p-3 rounded-lg space-y-2">
                     <div className="flex justify-between text-sm">
                         <span className="text-gray-400">Your Commission Rate:</span>
