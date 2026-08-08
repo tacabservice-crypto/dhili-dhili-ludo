@@ -6,29 +6,52 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import { Agent, AgentTransaction, AgentRequest, PlayerAgentRequest } from './types/game';
+import { Agent, AgentTransaction, AgentRequest, PlayerAgentRequest, UserProfile } from './types/game';
 import toast, { Toaster } from 'react-hot-toast';
+import { Briefcase, Users, History, HelpCircle, LogOut, ChevronsRight, ChevronsLeft, ArrowDown, ArrowUp, Send, UserCheck, UserX, Clock, TrendingUp, TrendingDown, Wallet, UserPlus } from 'lucide-react';
 
 // Transaction Detail Modal Component
 const TransactionDetailModal: React.FC<{ transaction: AgentTransaction; onClose: () => void }> = ({ transaction, onClose }) => {
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 p-6 rounded-lg shadow-xl w-full max-w-md relative border border-slate-700">
+        <div className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 p-6 rounded-2xl shadow-xl w-full max-w-md relative border border-slate-700 animate-fade-in-up">
                 <button
                     onClick={onClose}
-                    className="absolute top-3 right-3 text-gray-400 hover:text-gray-200 text-2xl"
+                    className="absolute top-4 right-4 text-gray-400 hover:text-white transition-colors"
                 >
-                    &times;
+                    <UserX size={20} />
                 </button>
-                <h3 className="text-2xl font-bold text-purple-400 mb-4">Transaction Details</h3>
-                <div className="space-y-3 text-slate-300">
-                    <p><strong>ID:</strong> <span className="font-mono text-sm">{transaction.id}</span></p>
-                    <p><strong>Type:</strong> <span className={`font-semibold ${transaction.type === 'PlayerDeposit' || transaction.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{transaction.type}</span></p>
-                    <p><strong>Amount:</strong> <span className="font-mono">${transaction.amount.toFixed(2)}</span></p>
-                    {transaction.discountAmount && <p><strong>Discount:</strong> <span className="font-mono">${transaction.discountAmount.toFixed(2)}</span></p>}
-                    <p><strong>Date:</strong> {new Date(transaction.timestamp).toLocaleString()}</p>
-                    {transaction.description && <p><strong>Description:</strong> {transaction.description}</p>}
-                    {transaction.playerId && <p><strong>Player ID:</strong> <span className="font-mono text-sm">{transaction.playerId}</span></p>}
+                <h3 className="text-2xl font-bold text-purple-400 mb-6">Transaction Details</h3>
+                <div className="space-y-4 text-slate-300">
+                    <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-400">Transaction ID:</span>
+                        <span className="font-mono text-sm bg-slate-700 px-2 py-1 rounded">{transaction.id}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-400">Type:</span>
+                        <span className={`font-bold text-lg ${transaction.type === 'PlayerDeposit' || transaction.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>{transaction.type}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-400">Amount:</span>
+                        <span className="font-mono text-lg">${transaction.amount.toFixed(2)}</span>
+                    </div>
+                    {transaction.discountAmount && (
+                        <div className="flex justify-between items-center">
+                            <span className="font-semibold text-slate-400">Discount:</span>
+                            <span className="font-mono text-lg">${transaction.discountAmount.toFixed(2)}</span>
+                        </div>
+                    )}
+                    <div className="flex justify-between items-center">
+                        <span className="font-semibold text-slate-400">Date:</span>
+                        <span>{new Date(transaction.timestamp).toLocaleString()}</span>
+                    </div>
+                    {transaction.description && (
+                        <div>
+                            <span className="font-semibold text-slate-400">Description:</span>
+                            <p className="mt-1 text-slate-400 p-2 bg-slate-700/50 rounded">{transaction.description}</p>
+                        </div>
+                    )}
+                     {transaction.playerId && <p><strong>Player ID:</strong> <span className="font-mono text-sm">{transaction.playerId}</span></p>}
                     {transaction.playerName && <p><strong>Player Name:</strong> {transaction.playerName}</p>}
                     {transaction.agentId && <p><strong>Agent ID:</strong> <span className="font-mono text-sm">{transaction.agentId}</span></p>}
                 </div>
@@ -37,6 +60,39 @@ const TransactionDetailModal: React.FC<{ transaction: AgentTransaction; onClose:
     );
 };
 
+// Sidebar Component
+const Sidebar: React.FC<{ agent: Agent | null; handleLogout: () => void; isSidebarOpen: boolean; toggleSidebar: () => void }> = ({ agent, handleLogout, isSidebarOpen, toggleSidebar }) => {
+    return (
+        <div className={`fixed inset-y-0 left-0 bg-slate-900/80 backdrop-blur-lg text-white w-64 p-5 space-y-6 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-50 flex flex-col shadow-2xl shadow-black`}>
+            <div className="flex justify-between items-center">
+                <h2 className="text-2xl font-bold text-purple-400">Agent Panel</h2>
+                <button onClick={toggleSidebar} className="text-gray-400 focus:outline-none md:hidden hover:text-white transition-colors">
+                    <ChevronsLeft className="h-6 w-6" />
+                </button>
+            </div>
+            
+            <nav className="flex-grow space-y-2">
+                <a href="#" className="flex items-center py-3 px-4 rounded-lg transition duration-200 bg-slate-700/50 text-purple-300">
+                    <Briefcase className="inline-block mr-3" size={20} /> Dashboard
+                </a>
+            </nav>
+
+            <div className="mt-auto border-t border-slate-700 pt-4 space-y-4">
+                <div className="text-center bg-slate-800/50 p-3 rounded-lg">
+                    <p className="text-md font-semibold">{agent?.username}</p>
+                    {agent?.promoCode && (
+                        <p className="text-xs text-purple-400 font-mono bg-slate-700 px-2 py-1 rounded-full mt-2 inline-block">
+                            CODE: {agent.promoCode}
+                        </p>
+                    )}
+                </div>
+                <button onClick={handleLogout} className="w-full flex items-center justify-center p-3 bg-red-500/20 hover:bg-red-500/30 rounded-lg transition-colors text-red-300">
+                    <LogOut className="h-5 w-5 mr-2" /> Logout
+                </button>
+            </div>
+        </div>
+    );
+};
 
 // A simple API client
 const AgentDashboard = () => {
@@ -56,6 +112,11 @@ const AgentDashboard = () => {
     const [paymentInstructions, setPaymentInstructions] = useState('');
     const [cashToSend, setCashToSend] = useState(0);
     const [linkedPlayers, setLinkedPlayers] = useState<UserProfile[]>([]);
+    const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+
+    const toggleSidebar = () => {
+        setIsSidebarOpen(!isSidebarOpen);
+    };
 
     const fetchLinkedPlayers = async (agentId: string) => {
         try {
@@ -123,7 +184,6 @@ const AgentDashboard = () => {
             
             const currentPendingRequestIds = new Set(data.filter(req => req.status === 'pending').map(req => req.id));
             
-            // Check for new requests only if lastFetchedRequestIds has been initialized
             if (lastFetchedRequestIds.size > 0) {
                 const newRequestIds = [...currentPendingRequestIds].filter(id => !lastFetchedRequestIds.has(id));
                 if (newRequestIds.length > 0) {
@@ -134,7 +194,6 @@ const AgentDashboard = () => {
             setLastFetchedRequestIds(currentPendingRequestIds);
             setPlayerRequests(data);
         } catch (err: any) {
-            // Avoid spamming errors on polling failures
             console.error(err.message);
         }
     };
@@ -150,7 +209,7 @@ const AgentDashboard = () => {
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to approve request');
             await fetchPlayerRequests(agentId);
-            await fetchProfile(agentId); // Re-fetch agent profile to update float balance
+            await fetchProfile(agentId); 
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -196,11 +255,12 @@ const AgentDashboard = () => {
             const result = await response.json();
             if (!response.ok) throw new Error(result.error || 'Float request failed');
             
-            alert(`Success! Your request for $${requestAmount} has been submitted.`);
-            await fetchAgentRequests(agentId); // Refresh requests
+            toast.success(`Success! Your request for $${requestAmount} has been submitted.`);
+            await fetchAgentRequests(agentId); 
             setRequestAmount('');
         } catch (err: any) {
           setError(err.message);
+          toast.error(err.message || "An error occurred.");
         } finally {
           setLoading(false);
         }
@@ -267,7 +327,6 @@ const AgentDashboard = () => {
             await fetchAgentRequests(data.id);
             await fetchPaymentInstructions();
             await fetchLinkedPlayers(data.id);
-            // No longer fetching player requests here, the polling useEffect will handle it
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -284,32 +343,30 @@ const AgentDashboard = () => {
         }
     }, []);
 
-    // Effect for polling player requests
     useEffect(() => {
         const agentId = agent?.id;
         if (isLoggedIn && agentId) {
-            // Initial fetch to populate the list and IDs
             fetchPlayerRequests(agentId);
 
             const intervalId = setInterval(() => {
                 fetchPlayerRequests(agentId);
-            }, 5000); // Poll every 5 seconds
+            }, 5000); 
 
-            return () => clearInterval(intervalId); // Cleanup on unmount or when agent logs out
+            return () => clearInterval(intervalId);
         }
     }, [isLoggedIn, agent?.id]);
 
     if (loading && !isLoggedIn) {
-        return <div className="h-screen bg-gray-900 text-white flex items-center justify-center"><div>Loading...</div></div>;
+        return <div className="h-screen bg-slate-900 text-white flex items-center justify-center"><div>Loading...</div></div>;
     }
 
     if (!isLoggedIn || !agent) {
         return (
-            <div className="min-h-screen bg-slate-900 flex items-center justify-center">
-                <div className="w-full max-w-sm p-6 bg-slate-800 border border-slate-700 rounded-xl">
-                    <h1 className="text-2xl font-bold text-center text-purple-400">Agent Login</h1>
-                    <form onSubmit={handleLogin} className="mt-4">
-                        <div className="mb-4">
+            <div className="min-h-screen bg-slate-900 flex items-center justify-center p-4">
+                <div className="w-full max-w-md p-8 bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl shadow-purple-500/10">
+                    <h1 className="text-3xl font-bold text-center text-purple-400 mb-6">Agent Login</h1>
+                    <form onSubmit={handleLogin} className="space-y-6">
+                        <div>
                             <label className="block text-gray-400 mb-2" htmlFor="username">Username</label>
                             <input
                                 id="username"
@@ -317,11 +374,11 @@ const AgentDashboard = () => {
                                 value={username}
                                 onChange={(e) => setUsername(e.target.value)}
                                 placeholder="Enter Username"
-                                className="w-full bg-slate-700 p-2 rounded-lg border border-slate-600"
+                                className="w-full bg-slate-700 p-3 rounded-lg border border-slate-600 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
                                 required
                             />
                         </div>
-                        <div className="mb-6">
+                        <div>
                             <label className="block text-gray-400 mb-2" htmlFor="password">Password</label>
                             <input
                                 id="password"
@@ -329,15 +386,15 @@ const AgentDashboard = () => {
                                 value={password}
                                 onChange={(e) => setPassword(e.target.value)}
                                 placeholder="Enter Password"
-                                className="w-full bg-slate-700 p-2 rounded-lg border border-slate-600"
+                                className="w-full bg-slate-700 p-3 rounded-lg border border-slate-600 focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition"
                                 required
                             />
                         </div>
-                        {error && <p className="mt-4 text-center text-red-400">{error}</p>}
+                        {error && <p className="text-center text-red-400">{error}</p>}
                         <button 
                             type="submit"
                             disabled={loading}
-                            className="w-full bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg font-bold disabled:bg-slate-500"
+                            className="w-full bg-purple-600 hover:bg-purple-700 px-4 py-3 rounded-lg font-bold disabled:bg-slate-500 transition-transform transform hover:scale-105"
                         >
                             {loading ? 'Logging in...' : 'Login'}
                         </button>
@@ -348,255 +405,260 @@ const AgentDashboard = () => {
     }
 
     return (
-        <div className="bg-slate-900 text-white min-h-screen p-4 md:p-8">
-            <Toaster />
-          <div className="max-w-4xl mx-auto">
-            <div className="flex justify-between items-center">
-              <h1 className="text-3xl font-bold text-purple-400">Agent Dashboard</h1>
-              <button onClick={handleLogout} className="text-sm text-red-400 hover:underline">Logout</button>
-            </div>
+        <div className="bg-slate-900 text-white min-h-screen flex">
+            <Toaster position="top-center" toastOptions={{
+                className: 'bg-slate-700 text-white',
+                duration: 4000,
+            }} />
+
+            <Sidebar agent={agent} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
             
-            <div className="mt-4 text-lg">
-              Welcome, <span className="font-bold">{agent?.username}</span>!
-            </div>
-            {agent?.promoCode && (
-                <div className="mt-2 text-sm text-slate-400">
-                    Your Promo Code: <span className="font-bold text-purple-400 p-1 bg-slate-700 rounded-md">{agent.promoCode}</span>
-                </div>
-            )}
-            <div className="mt-2 p-4 bg-green-800/50 border border-green-500 rounded-xl">
-              Float Balance: <span className="font-mono text-2xl font-bold">${agent?.floatBalance.toFixed(2)}</span>
-            </div>
-    
-            {error && <div className="mt-4 p-3 bg-red-800/50 border border-red-500 rounded-xl text-white">{error}</div>}
-            
-            <div className="mt-8 p-6 bg-slate-800 border border-slate-700 rounded-xl">
-              <h2 className="text-2xl font-semibold">Player Transaction Requests</h2>
-              <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm text-left">
-                    <thead className="bg-slate-700 text-xs text-slate-300 uppercase">
-                        <tr>
-                            <th className="px-4 py-3">Date</th>
-                            <th className="px-4 py-3">Player</th>
-                            <th className="px-4 py-3">Phone</th>
-                            <th className="px-4 py-3">Type</th>
-                            <th className="px-4 py-3 text-right">Amount</th>
-                            <th className="px-4 py-3 text-center">Status</th>
-                            <th className="px-4 py-3 text-center">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {playerRequests.map(req => (
-                            <tr key={req.id} className="border-b border-slate-700 last:border-b-0">
-                                <td className="px-4 py-3 text-slate-400">{new Date(req.createdAt).toLocaleString()}</td>
-                                <td className="px-4 py-3 font-medium flex items-center gap-2">
-                                    <span className="text-xl">{req.playerAvatar}</span>
-                                    {req.playerUsername}
-                                </td>
-                                <td className="px-4 py-3 font-mono">
-                                    {req.type === 'deposit' ? req.senderPhone : req.playerPhone}
-                                </td>
-                                <td className="px-4 py-3">
-                                    <span className={`font-semibold ${req.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
-                                        {req.type.toUpperCase()}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3 font-mono text-right">${req.amount.toFixed(2)}</td>
-                                <td className="px-4 py-3 text-center">
-                                    <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                        req.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                                        req.status === 'approved' ? 'bg-green-900 text-green-200' :
-                                        'bg-red-900 text-red-200'
-                                    }`}>
-                                        {req.status}
-                                    </span>
-                                </td>
-                                <td className="px-4 py-3 text-center">
-                                    {req.status === 'pending' && (
-                                        <div className="flex gap-2 justify-center">
-                                            <button 
-                                                onClick={() => handleApprove(req.id)} 
-                                                disabled={loading}
-                                                className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded font-bold text-xs disabled:bg-slate-500">
-                                                Approve
-                                            </button>
-                                            <button 
-                                                onClick={() => handleReject(req.id)} 
-                                                disabled={loading}
-                                                className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded font-bold text-xs disabled:bg-slate-500">
-                                                Reject
-                                            </button>
+            <div className="flex-1 flex flex-col">
+                 <header className="bg-slate-800/50 backdrop-blur-lg border-b border-slate-700 p-4 flex justify-between items-center sticky top-0 z-40">
+                    <div className="flex items-center gap-3">
+                        <button onClick={toggleSidebar} className="text-gray-400 focus:outline-none md:hidden">
+                            <ChevronsRight className="h-6 w-6" />
+                        </button>
+                        <h1 className="text-xl font-bold text-white">Agent Dashboard</h1>
+                    </div>
+                </header>
+                
+                <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
+                    {error && <div className="p-4 mb-6 bg-red-800/50 border border-red-500 rounded-xl text-white">{error}</div>}
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+                        <div className="bg-gradient-to-br from-purple-600 to-indigo-700 p-6 rounded-2xl shadow-lg shadow-purple-500/20 flex flex-col justify-between">
+                            <div>
+                                <p className="text-sm text-purple-200 flex items-center gap-2"><Wallet size={16} />Float Balance</p>
+                                <p className="text-4xl font-bold tracking-tighter">${agent?.floatBalance.toFixed(2)}</p>
+                            </div>
+                            <div className="text-xs text-purple-300 mt-2">Your current working capital.</div>
+                        </div>
+                        <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl flex flex-col justify-between">
+                             <div>
+                                <p className="text-sm text-slate-400 flex items-center gap-2"><UserPlus size={16} /> Linked Players</p>
+                                <p className="text-4xl font-bold">{linkedPlayers.length}</p>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-2">Total players under your network.</div>
+                        </div>
+                        <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl flex flex-col justify-between">
+                             <div>
+                                <p className="text-sm text-slate-400 flex items-center gap-2"><TrendingUp size={16} />Total Commission</p>
+                                <p className="text-4xl font-bold text-green-400">$0.00</p>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-2">Lifetime earnings. (Coming Soon)</div>
+                        </div>
+                         <div className="bg-slate-800 border border-slate-700 p-6 rounded-2xl flex flex-col justify-between">
+                             <div>
+                                <p className="text-sm text-slate-400 flex items-center gap-2"><TrendingDown size={16} />Pending Requests</p>
+                                <p className="text-4xl font-bold text-yellow-400">{playerRequests.filter(r => r.status === 'pending').length}</p>
+                            </div>
+                            <div className="text-xs text-slate-500 mt-2">Player requests needing your action.</div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                        <div className="xl:col-span-2 space-y-8">
+                             <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-lg">
+                                <div className="p-4 border-b border-slate-700">
+                                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                                        <Clock className="text-purple-400" size={20} />
+                                        Player Transaction Requests
+                                    </h2>
+                                </div>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="bg-slate-700/50 text-xs text-slate-300 uppercase tracking-wider">
+                                            <tr>
+                                                <th className="px-4 py-3">Player</th>
+                                                <th className="px-4 py-3">Contact</th>
+                                                <th className="px-4 py-3">Type</th>
+                                                <th className="px-4 py-3 text-right">Amount</th>
+                                                <th className="px-4 py-3 text-center">Status</th>
+                                                <th className="px-4 py-3 text-center">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            {playerRequests.length > 0 ? playerRequests.map(req => (
+                                                <tr key={req.id} className="border-b border-slate-700/50 hover:bg-slate-700/20 transition-colors">
+                                                    <td className="px-4 py-3 font-medium flex items-center gap-3">
+                                                        <span className="text-2xl">{req.playerAvatar}</span>
+                                                        <div>
+                                                            <div>{req.playerUsername}</div>
+                                                            <div className="text-xs text-slate-400 font-mono">{new Date(req.createdAt).toLocaleString()}</div>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono">
+                                                        {req.type === 'deposit' ? req.senderPhone : req.playerPhone}
+                                                    </td>
+                                                    <td className="px-4 py-3">
+                                                        <span className={`font-semibold ${req.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
+                                                            {req.type.toUpperCase()}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 font-mono text-right">${req.amount.toFixed(2)}</td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                                            req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-400/30' :
+                                                            req.status === 'approved' ? 'bg-green-500/10 text-green-400 border border-green-400/30' :
+                                                            'bg-red-500/10 text-red-400 border border-red-400/30'
+                                                        }`}>
+                                                            {req.status}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {req.status === 'pending' && (
+                                                            <div className="flex gap-2 justify-center">
+                                                                <button 
+                                                                    onClick={() => handleApprove(req.id)} 
+                                                                    disabled={loading}
+                                                                    className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded-lg font-bold text-xs disabled:bg-slate-500 flex items-center gap-1 transition-transform transform hover:scale-105">
+                                                                    <UserCheck size={14} /> Approve
+                                                                </button>
+                                                                <button 
+                                                                    onClick={() => handleReject(req.id)} 
+                                                                    disabled={loading}
+                                                                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg font-bold text-xs disabled:bg-slate-500 flex items-center gap-1 transition-transform transform hover:scale-105">
+                                                                    <UserX size={14} /> Reject
+                                                                </button>
+                                                            </div>
+                                                        )}
+                                                    </td>
+                                                </tr>
+                                            )) : (
+                                                <tr>
+                                                    <td colSpan={6} className="text-center py-8 text-slate-500">No pending player requests.</td>
+                                                </tr>
+                                            )}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                <div className="p-6 bg-slate-800 border border-slate-700 rounded-2xl">
+                                    <h2 className="text-xl font-semibold mb-4">Transaction History</h2>
+                                    <div className="overflow-auto max-h-96">
+                                        <table className="w-full text-sm text-left">
+                                            <tbody>
+                                                {currentTransactions.map(tx => (
+                                                    <tr key={tx.id} 
+                                                        className="border-b border-slate-700/50 last:border-b-0 cursor-pointer hover:bg-slate-700/40"
+                                                        onClick={() => setSelectedTransaction(tx)}
+                                                    >
+                                                        <td className="py-3 px-2">
+                                                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${tx.type === 'PlayerDeposit' ? 'bg-red-500/20 text-red-400' : 'bg-green-500/20 text-green-400'}`}>
+                                                                {tx.type === 'PlayerDeposit' ? <ArrowUp size={16} /> : <ArrowDown size={16} />}
+                                                            </div>
+                                                        </td>
+                                                        <td className="py-3 px-2">
+                                                            <p className="font-semibold">{tx.type}</p>
+                                                            <p className="text-xs text-slate-400">{new Date(tx.timestamp).toLocaleDateString()}</p>
+                                                        </td>
+                                                        <td className={`py-3 px-2 font-mono text-right text-lg ${tx.type === 'PlayerDeposit' ? 'text-red-400' : 'text-green-400'}`}>
+                                                            {tx.type === 'PlayerDeposit' ? '-' : '+'}${tx.amount.toFixed(2)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {totalPages > 1 && (
+                                        <div className="mt-4 flex justify-center items-center gap-2">
+                                            <button onClick={() => setCurrentPage(p => Math.max(p - 1, 1))} disabled={currentPage === 1} className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50">&laquo;</button>
+                                            <span className="text-sm">Page {currentPage} of {totalPages}</span>
+                                            <button onClick={() => setCurrentPage(p => Math.min(p + 1, totalPages))} disabled={currentPage === totalPages} className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50">&raquo;</button>
                                         </div>
                                     )}
-                                </td>
-                            </tr>
-                        ))}
-                    </tbody>
-                </table>
-              </div>
-            </div>
+                                </div>
+                                
+                                <div className="p-6 bg-slate-800 border border-slate-700 rounded-2xl">
+                                    <h2 className="text-xl font-semibold mb-4">My Float Requests</h2>
+                                    <div className="overflow-auto max-h-96">
+                                        <table className="w-full text-sm text-left">
+                                            <tbody>
+                                                {agentRequests.map(req => (
+                                                    <tr key={req.id} className="border-b border-slate-700/50 last:border-b-0">
+                                                         <td className="py-3 px-2">
+                                                            <p className="font-semibold font-mono">${req.amount.toFixed(2)}</p>
+                                                            <p className="text-xs text-slate-400">{new Date(req.createdAt).toLocaleDateString()}</p>
+                                                        </td>
+                                                        <td className="py-3 px-2 text-right">
+                                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                                                req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400' :
+                                                                req.status === 'approved' ? 'bg-green-500/10 text-green-400' :
+                                                                'bg-red-500/10 text-red-400'
+                                                            }`}>{req.status}</span>
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-            <div className="mt-8 p-6 bg-slate-800 border border-slate-700 rounded-xl">
-              <h2 className="text-2xl font-semibold">Request Float</h2>
-              <form onSubmit={handleRequestFloat} className="mt-4">
-                <div className="flex gap-2">
-                  <input
-                    type="number"
-                    value={requestAmount}
-                    onChange={(e) => setRequestAmount(e.target.value)}
-                    placeholder="Enter amount to request"
-                    className="flex-grow bg-slate-700 p-2 rounded-lg border border-slate-600"
-                    required
-                  />
-                  <button type="submit" disabled={loading} className="bg-purple-600 hover:bg-purple-700 px-5 py-2 rounded-lg font-bold disabled:bg-slate-500">
-                    {loading ? 'Submitting...' : 'Submit Request'}
-                  </button>
-                </div>
-              </form>
-                <div className="mt-4 p-4 bg-slate-700 rounded-lg">
-                        <h3 className="text-lg font-semibold text-purple-400">Payment Instructions</h3>
-                        {paymentInstructions ? (
-                            <p className="text-slate-300 whitespace-pre-wrap">{paymentInstructions}</p>
-                        ) : (
-                            <p className="text-slate-400 italic">No payment instructions available. Please contact an admin to have them set up.</p>
-                        )}
+                        <div className="space-y-8">
+                             <div className="p-6 bg-slate-800 border border-slate-700 rounded-2xl">
+                                <h2 className="text-xl font-semibold mb-4">Request Float</h2>
+                                <form onSubmit={handleRequestFloat} className="space-y-4">
+                                    <div>
+                                        <label className="text-sm text-slate-400 mb-1 block">Amount to Request</label>
+                                        <input
+                                            type="number"
+                                            value={requestAmount}
+                                            onChange={(e) => setRequestAmount(e.target.value)}
+                                            placeholder="$0.00"
+                                            className="w-full bg-slate-700 p-3 rounded-lg border border-slate-600 focus:ring-2 focus:ring-purple-500 transition"
+                                            required
+                                        />
+                                    </div>
+                                    <div className="p-3 bg-slate-700/50 rounded-lg space-y-2">
+                                        <div className="flex justify-between text-sm">
+                                            <span className="text-gray-400">Commission Rate:</span>
+                                            <span className="text-white font-mono">{(agent.commissionRate * 100).toFixed(2)}%</span>
+                                        </div>
+                                        <div className="flex justify-between text-lg font-bold">
+                                            <span className="text-purple-300">Cash to Send Admin:</span>
+                                            <span className="text-purple-300 font-mono">${cashToSend.toFixed(2)}</span>
+                                        </div>
+                                    </div>
+                                    <button type="submit" disabled={loading} className="w-full bg-purple-600 hover:bg-purple-700 px-4 py-3 rounded-lg font-bold disabled:bg-slate-500 flex items-center justify-center gap-2 transition-transform transform hover:scale-105">
+                                        <Send size={16} /> {loading ? 'Submitting...' : 'Submit Request'}
+                                    </button>
+                                </form>
+                                <div className="mt-6 p-4 bg-slate-700/50 rounded-lg">
+                                    <h3 className="text-lg font-semibold text-purple-400 mb-2">Payment Instructions</h3>
+                                    {paymentInstructions ? (
+                                        <p className="text-slate-300 whitespace-pre-wrap text-sm">{paymentInstructions}</p>
+                                    ) : (
+                                        <p className="text-slate-400 italic text-sm">No payment instructions available. Contact an admin.</p>
+                                    )}
+                                </div>
+                            </div>
+                             <div className="p-6 bg-slate-800 border border-slate-700 rounded-2xl">
+                                <h2 className="text-xl font-semibold mb-4">My Linked Players</h2>
+                                <div className="overflow-auto max-h-96">
+                                     <table className="w-full text-sm text-left">
+                                        <tbody>
+                                            {linkedPlayers.map(player => (
+                                                <tr key={player.id} className="border-b border-slate-700/50 last:border-b-0">
+                                                    <td className="py-3 px-2 flex items-center gap-3">
+                                                        <span className="text-2xl">{player.avatar}</span>
+                                                        <span className="font-semibold">{player.username}</span>
+                                                    </td>
+                                                    <td className="py-3 px-2 font-mono text-right text-lg">${player.balance.toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                <div className="mt-4 bg-gray-700 p-3 rounded-lg space-y-2">
-                    <div className="flex justify-between text-sm">
-                        <span className="text-gray-400">Your Commission Rate:</span>
-                        <span className="text-white font-mono">{(agent.commissionRate * 100).toFixed(2)}%</span>
-                    </div>
-                    <div className="flex justify-between text-lg font-bold">
-                        <span className="text-purple-400">Cash You Send to Admin:</span>
-                        <span className="text-purple-400 font-mono">${cashToSend.toFixed(2)}</span>
-                    </div>
-                </div>
+                </main>
             </div>
-    
-            <div className="mt-8">
-                <h2 className="text-2xl font-semibold">My Linked Players</h2>
-                <div className="mt-4 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-700 text-xs text-slate-300 uppercase">
-                            <tr>
-                                <th className="px-4 py-3">Player</th>
-                                <th className="px-4 py-3 text-right">Balance</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {linkedPlayers.map(player => (
-                                <tr key={player.id} className="border-b border-slate-700 last:border-b-0">
-                                    <td className="px-4 py-3 font-medium flex items-center gap-2">
-                                        <span className="text-xl">{player.avatar}</span>
-                                        {player.username}
-                                    </td>
-                                    <td className="px-4 py-3 font-mono text-right">${player.balance.toFixed(2)}</td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <div className="mt-8">
-                <h2 className="text-2xl font-semibold">Transaction History</h2>
-                <div className="mt-4 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-700 text-xs text-slate-300 uppercase">
-                            <tr>
-                                <th className="px-4 py-3">Date</th>
-                                <th className="px-4 py-3">Type</th>
-                                <th className="px-4 py-3">Description</th>
-                                <th className="px-4 py-3 text-right">Amount</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {currentTransactions.map(tx => (
-                                <tr key={tx.id} 
-                                    className="border-b border-slate-700 last:border-b-0 cursor-pointer hover:bg-slate-700"
-                                    onClick={() => setSelectedTransaction(tx)}
-                                >
-                                    <td className="px-4 py-3 text-slate-400">{new Date(tx.timestamp).toLocaleString()}</td>
-                                    <td className="px-4 py-3">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                            tx.type === 'PlayerDeposit' || tx.type === 'FloatPurchase' ? 'bg-blue-900 text-blue-200' : 
-                                            tx.type === 'PlayerWithdrawal' ? 'bg-yellow-900 text-yellow-200' : 
-                                            'bg-green-900 text-green-200'
-                                        }`}>
-                                            {tx.type}
-                                        </span>
-                                    </td>
-                                    <td className="px-4 py-3">{tx.description}</td>
-                                    <td className={`px-4 py-3 font-mono text-right ${tx.type === 'PlayerDeposit' ? 'text-red-400' : 'text-green-400'}`}>
-                                        {tx.type === 'PlayerDeposit' ? '-' : '+'}${tx.amount.toFixed(2)}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-                {totalPages > 1 && (
-                    <div className="mt-4 flex justify-center items-center gap-2">
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                            disabled={currentPage === 1}
-                            className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50"
-                        >
-                            &laquo;
-                        </button>
-                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                            <button
-                                key={page}
-                                onClick={() => setCurrentPage(page)}
-                                className={`px-3 py-1 rounded ${currentPage === page ? 'bg-purple-600' : 'bg-slate-700'}`}
-                            >
-                                {page}
-                            </button>
-                        ))}
-                        <button
-                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-                            disabled={currentPage === totalPages}
-                            className="px-3 py-1 bg-slate-700 rounded disabled:opacity-50"
-                        >
-                            &raquo;
-                        </button>
-                    </div>
-                )}
-            </div>
-
-            <div className="mt-8">
-                <h2 className="text-2xl font-semibold">My Float Requests</h2>
-                <div className="mt-4 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
-                    <table className="w-full text-sm text-left">
-                        <thead className="bg-slate-700 text-xs text-slate-300 uppercase">
-                            <tr>
-                                <th className="px-4 py-3">Date</th>
-                                <th className="px-4 py-3">Amount</th>
-                                <th className="px-4 py-3">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {agentRequests.map(req => (
-                                <tr key={req.id} className="border-b border-slate-700 last:border-b-0">
-                                    <td className="px-4 py-3 text-slate-400">{new Date(req.createdAt).toLocaleString()}</td>
-                                    <td className="px-4 py-3 font-mono">${req.amount.toFixed(2)}</td>
-                                    <td className="px-4 py-3">
-                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                            req.status === 'pending' ? 'bg-yellow-900 text-yellow-200' :
-                                            req.status === 'approved' ? 'bg-green-900 text-green-200' :
-                                            'bg-red-900 text-red-200'
-                                        }`}>
-                                            {req.status}
-                                        </span>
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-    
-          </div>
           {selectedTransaction && (
                 <TransactionDetailModal
                     transaction={selectedTransaction}
