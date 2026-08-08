@@ -4718,9 +4718,12 @@ app.get('/api/agent/player-requests', isAgent, async (req, res) => {
         const requests = requestsSnapshot.docs.map(doc => doc.data() as PlayerAgentRequest);
         res.json(requests);
 
-    } catch (error) {
+    } catch (error: any) {
         console.error(`Failed to get player requests for agent ${agent.id}:`, error);
-        res.status(500).json({ error: 'Failed to retrieve player transaction requests.' });
+        res.status(500).json({ 
+            error: 'Failed to retrieve player transaction requests.',
+            details: error.message || 'No specific error message available.'
+        });
     }
 });
 

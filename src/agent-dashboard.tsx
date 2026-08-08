@@ -172,9 +172,9 @@ const AgentDashboard = () => {
         }
     }, [requestAmount, agent]);
 
-    const fetchPaymentInstructions = async () => {
+    const fetchPaymentInstructions = async (agentId: string) => {
         try {
-            const response = await fetch('/api/agent/payment-instructions');
+            const response = await fetch(`/api/agent/payment-instructions?agentId=${agentId}`);
             if (!response.ok) {
                 console.error('Could not fetch payment instructions');
                 return;
@@ -354,7 +354,7 @@ const AgentDashboard = () => {
             setIsLoggedIn(true);
             await fetchTransactions(data.id);
             await fetchAgentRequests(data.id);
-            await fetchPaymentInstructions();
+            await fetchPaymentInstructions(data.id);
             await fetchLinkedPlayers(data.id);
         } catch (err: any) {
             setError(err.message);
