@@ -1344,63 +1344,85 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
   const { username, email, avatar, promoCode } = req.body;
   const firebaseUid = req.user.uid;
 
-  // First, try to find an existing user by their Firebase UID.
-  let foundUser = Object.values(store.users).find(u => u.firebaseUid === firebaseUid);
-
-  if (foundUser) {
-    // If user exists, just return their profile. No need for username.
-    return res.json(foundUser);
+  if (!db) {
+    return res.status(500).json({ error: 'Database not initialized' });
   }
 
-  // If not found by UID, maybe it's an old account we can link.
-  if (email) {
-    const userByEmail = Object.values(store.users).find(u => u.email === email && !u.firebaseUid);
-    if (userByEmail) {
-      userByEmail.firebaseUid = firebaseUid; // Link account
-      await saveStoreAndWait();
-      return res.json(userByEmail);
-    }
-  }
+  const usersRef = db.collection('users');
 
-  // If we're here, it's a new registration. NOW we require a username.
-  if (!username) {
-    return res.status(400).json({ error: 'Username is required for new registration' });
-  }
-  const cleanUsername = username.trim().substring(0, 20);
-
-  let linkedAgentId: string | undefined = undefined;
-
-  // If a promo code is provided, validate it and find the agent.
-  if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '') {
-    const agentsRef = db.collection('agents');
-    const agentSnapshot = await agentsRef.where('promoCode', '==', promoCode.trim()).limit(1).get();
-
-    if (agentSnapshot.empty) {
-        return res.status(400).json({ error: 'Invalid or expired promo code.' });
+  try {
+    // First, try to find an existing user by their Firebase UID.
+    const userQuery = await usersRef.where('firebaseUid', '==', firebaseUid).limit(1).get();
+    
+    if (!userQuery.empty) {
+      const foundUser = userQuery.docs[0].data() as UserProfile;
+      return res.json(foundUser);
     }
 
-    const agent = agentSnapshot.docs[0].data() as Agent;
-    linkedAgentId = agent.id;
+    // If not found by UID, maybe it's an old account we can link by email.
+    if (email) {
+      const emailQuery = await usersRef.where('email', '==', email).limit(1).get();
+      if (!emailQuery.empty) {
+        const userDoc = emailQuery.docs[0];
+        await userDoc.ref.update({ firebaseUid: firebaseUid });
+        const updatedUser = (await userDoc.ref.get()).data();
+        return res.json(updatedUser);
+      }
+    }
+
+    // If we're here, it's a new registration.
+    if (!username) {
+      return res.status(400).json({ error: 'Username is required for new registration' });
+    }
+    const cleanUsername = username.trim().substring(0, 20);
+
+    let linkedAgentId: string | undefined = undefined;
+
+    if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '') {
+      const agentsRef = db.collection('agents');
+      const agentSnapshot = await agentsRef.where('promoCode', '==', promoCode.trim()).limit(1).get();
+
+      if (agentSnapshot.empty) {
+          return res.status(400).json({ error: 'Invalid or expired promo code.' });
+      }
+
+      const agent = agentSnapshot.docs[0].data() as Agent;
+      linkedAgentId = agent.id;
+    }
+
+    const newUserRef = usersRef.doc(); // Let Firestore generate the ID
+    const newUser: UserProfile = {
+      id: newUserRef.id,
+      firebaseUid: firebaseUid,
+      username: cleanUsername,
+      email: email || undefined,
+      avatar: avatar || '🌸',
+      balance: 10.0,
+      winCount: 0,
+      lossCount: 0,
+      linkedAgentId: linkedAgentId,
+    };
+
+    await newUserRef.set(newUser);
+    
+    // Also create a welcome transaction in the 'transactions' collection
+    const txRef = db.collection('transactions').doc();
+    const welcomeTx: WalletTransaction = {
+      id: txRef.id,
+      userId: newUser.id,
+      type: 'deposit',
+      amount: 10.0,
+      timestamp: Date.now(),
+      description: 'Welcome signup bonus.'
+    };
+    await txRef.set(welcomeTx);
+
+    res.json(newUser);
+
+  } catch (error) {
+    console.error('Error during user login/registration:', error);
+    res.status(500).json({ error: 'An internal server error occurred.' });
   }
-
-  const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-  const newUser: UserProfile = {
-    id: userId,
-    firebaseUid: firebaseUid,
-    username: cleanUsername,
-    email: email || undefined,
-    avatar: avatar || '🌸',
-    balance: 10.0,
-    winCount: 0,
-    lossCount: 0,
-    linkedAgentId: linkedAgentId, // Add the linked agent ID
-  };
-
-  store.users[userId] = newUser;
-  addTransaction(userId, 'deposit', 10.0, undefined, 'Welcome signup bonus.');
-  await saveStoreAndWait();
-
-  res.json(newUser);
 });
 
 // Retrieve single profile
@@ -4638,112 +4660,115 @@ app.get('/api/agent/requests', isAgent, async (req, res) => {
 });
 
 // Agent gets list of manual player requests for transactions
-app.get('/api/agent/player-requests', isAgent, (req, res) => {
+app.get('/api/agent/player-requests', isAgent, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const agent: Agent = (req as any).agent;
 
-    const agentSpecificTxs = store.pendingManualTransactions.filter(tx => tx.status === 'pending' && tx.agentId === agent.id);
+    try {
+        const requestsSnapshot = await db.collection('playerAgentRequests')
+            .where('agentId', '==', agent.id)
+            .where('status', '==', 'pending')
+            .orderBy('createdAt', 'desc')
+            .get();
 
-    const responsePayload: PlayerAgentRequest[] = agentSpecificTxs.map(tx => {
-        const user = store.users[tx.userId];
-        return {
-            id: tx.id,
-            playerId: tx.userId,
-            playerUsername: user ? user.username : 'Unknown Player',
-            playerAvatar: user ? user.avatar : '❓',
-            agentId: agent.id, // Agent ID is from the authenticated agent
-            playerPhone: tx.phone, // For withdrawals
-            senderPhone: tx.senderPhone, // For deposits
-            provider: tx.provider,
-            type: tx.transactionType,
-            amount: tx.amount,
-            status: tx.status,
-            createdAt: tx.createdAt,
-        };
-    });
-    
-    responsePayload.sort((a, b) => b.createdAt - a.createdAt);
+        const requests = requestsSnapshot.docs.map(doc => doc.data() as PlayerAgentRequest);
+        res.json(requests);
 
-    res.json(responsePayload);
+    } catch (error) {
+        console.error(`Failed to get player requests for agent ${agent.id}:`, error);
+        res.status(500).json({ error: 'Failed to retrieve player transaction requests.' });
+    }
 });
 
 // Agent approves a manual player request for a transaction
 app.post('/api/agent/player-requests/:requestId/approve', isAgent, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { requestId } = req.params;
     const agent: Agent = (req as any).agent;
-    const tx = store.pendingManualTransactions.find(t => t.id === requestId);
-
-    if (!tx || tx.status !== 'pending') {
-        return res.status(404).json({ error: 'Pending transaction not found or already processed.' });
-    }
-
-    const user = store.users[tx.userId];
-    if (!user) {
-        return res.status(404).json({ error: 'User associated with transaction not found.' });
-    }
-
-    let newAgentFloat: number;
 
     try {
-        if (!db) {
-            throw new Error("Database not initialized");
-        }
-
         await db.runTransaction(async (t) => {
+            const requestRef = db.collection('playerAgentRequests').doc(requestId);
+            const requestDoc = await t.get(requestRef);
+
+            if (!requestDoc.exists) throw new Error('Request not found.');
+            const request = requestDoc.data() as PlayerAgentRequest;
+
+            if (request.status !== 'pending') throw new Error('Request has already been processed.');
+            if (request.agentId !== agent.id) throw new Error('This request does not belong to you.');
+
+            const playerRef = db.collection('users').doc(request.playerId);
+            const playerDoc = await t.get(playerRef);
+            if (!playerDoc.exists) throw new Error('Player not found.');
+            const player = playerDoc.data() as UserProfile;
+
             const agentRef = db.collection('agents').doc(agent.id);
-            const agentDoc = await t.get(agentRef);
-
-            if (!agentDoc.exists) {
-                throw new Error("Agent not found in database");
-            }
-            const agentData = agentDoc.data() as Agent;
-            const currentFloat = agentData.floatBalance || 0;
+            // We don't need to get the agent again, as we have it from `isAgent` middleware
+            
             let newAgentFloat: number;
-
-            if (tx.transactionType === 'deposit') {
-                // Agent gives money to player, agent float decreases.
-                if (currentFloat < tx.amount) {
-                    throw new Error("Insufficient float balance to approve this deposit.");
+            
+            if (request.type === 'deposit') {
+                if (agent.floatBalance < request.amount) {
+                    throw new Error('Insufficient float balance to approve this deposit.');
                 }
-                newAgentFloat = currentFloat - tx.amount;
-                user.balance += tx.amount;
-                addTransaction(user.id, 'deposit', tx.amount, undefined, `Manual deposit approved by agent ${agent.username}. Request ID: ${tx.id}`);
+                newAgentFloat = agent.floatBalance - request.amount;
+                
+                t.update(playerRef, { balance: player.balance + request.amount });
+                
+                const playerTxRef = db.collection('transactions').doc();
+                t.set(playerTxRef, {
+                    id: playerTxRef.id,
+                    userId: player.id,
+                    type: 'deposit',
+                    amount: request.amount,
+                    timestamp: Date.now(),
+                    description: `Deposit approved by agent ${agent.username}. Request ID: ${request.id}`
+                });
+
             } else { // withdrawal
-                // Agent receives money from player, agent float increases.
-                if (user.balance < tx.amount) {
-                    // This transaction should just fail, not be rejected. Rejection is an explicit agent action.
+                if (player.balance < request.amount) {
                     throw new Error('Player has insufficient balance for this withdrawal.');
                 }
-                newAgentFloat = currentFloat + tx.amount;
-                user.balance -= tx.amount;
-                addTransaction(user.id, 'withdrawal', tx.amount, undefined, `Manual withdrawal approved by agent ${agent.username}. Request ID: ${tx.id}`);
+                newAgentFloat = agent.floatBalance + request.amount;
+                
+                t.update(playerRef, { balance: player.balance - request.amount });
+                
+                const playerTxRef = db.collection('transactions').doc();
+                t.set(playerTxRef, {
+                    id: playerTxRef.id,
+                    userId: player.id,
+                    type: 'withdrawal',
+                    amount: request.amount,
+                    timestamp: Date.now(),
+                    description: `Withdrawal approved by agent ${agent.username}. Request ID: ${request.id}`
+                });
             }
 
-            // Create the agent transaction record
             const agentTxRef = db.collection('agentTransactions').doc();
-            const agentTx: AgentTransaction = {
+            t.set(agentTxRef, {
                 id: agentTxRef.id,
                 agentId: agent.id,
-                type: tx.transactionType === 'deposit' ? 'PlayerDeposit' : 'PlayerWithdrawal',
-                amount: tx.amount,
-                playerId: user.id,
-                playerName: user.username,
+                type: request.type === 'deposit' ? 'PlayerDeposit' : 'PlayerWithdrawal',
+                amount: request.amount,
+                playerId: player.id,
+                playerName: player.username,
                 timestamp: Date.now(),
-                description: `Approved ${tx.transactionType} of $${tx.amount} for player ${user.username}.`
-            };
-            t.set(agentTxRef, agentTx);
-
-            // Update the agent's float balance
+                description: `Approved ${request.type} of $${request.amount} for player ${player.username}.`
+            });
+            
             t.update(agentRef, { floatBalance: newAgentFloat });
+            t.update(requestRef, { 
+                status: 'approved',
+                resolvedAt: Date.now(),
+                resolvedBy: agent.id,
+                resolverUsername: agent.username,
+            });
         });
 
-        // If transaction is successful, update in-memory store
-        tx.status = 'approved';
-        (tx as any).resolvedBy = agent.id;
-        (tx as any).resolverUsername = agent.username;
-        await saveStoreAndWait();
-
-        broadcastUserUpdate(user.id);
-        res.json({ success: true, transaction: tx });
+        // After the transaction completes successfully
+        // We might want to send an SSE event to the user here.
+        // For now, just return success.
+        res.json({ success: true, message: 'Request approved successfully.' });
 
     } catch (error) {
         console.error("Error processing agent transaction approval:", error);
@@ -4758,32 +4783,46 @@ app.post('/api/agent/player-requests/:requestId/approve', isAgent, async (req, r
 
 // Agent rejects a manual player request for a transaction
 app.post('/api/agent/player-requests/:requestId/reject', isAgent, async (req, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { requestId } = req.params;
     const agent: Agent = (req as any).agent;
-    const tx = store.pendingManualTransactions.find(t => t.id === requestId);
 
-    if (!tx || tx.status !== 'pending') {
-        return res.status(404).json({ error: 'Pending transaction not found or already processed.' });
-    }
+    try {
+        const requestRef = db.collection('playerAgentRequests').doc(requestId);
+        const requestDoc = await requestRef.get();
 
-    const user = store.users[tx.userId];
-    if (!user) {
-        tx.status = 'rejected';
-        await saveStoreAndWait();
-        return res.status(404).json({ error: 'User associated with transaction not found. Transaction rejected.' });
+        if (!requestDoc.exists) {
+            return res.status(404).json({ error: 'Request not found.' });
+        }
+        
+        const request = requestDoc.data() as PlayerAgentRequest;
+
+        if (request.status !== 'pending') {
+            return res.status(400).json({ error: 'This request has already been processed.' });
+        }
+        if (request.agentId !== agent.id) {
+            return res.status(403).json({ error: 'This request does not belong to you.' });
+        }
+
+        await requestRef.update({
+            status: 'rejected',
+            resolvedAt: Date.now(),
+            resolvedBy: agent.id,
+            resolverUsername: agent.username,
+        });
+
+        // Notify the user their request was rejected
+        sendEventToUser(request.playerId, 'user_notification', {
+            type: 'info',
+            message: `Your ${request.type} request for $${request.amount} was rejected by agent ${agent.username}.`
+        });
+
+        res.json({ success: true, message: 'Request rejected successfully.' });
+
+    } catch (error) {
+        console.error(`Failed to reject player request ${requestId}:`, error);
+        res.status(500).json({ error: 'An internal server error occurred.' });
     }
-    
-    tx.status = 'rejected';
-    (tx as any).resolvedBy = agent.id;
-    (tx as any).resolverUsername = agent.username;
-    await saveStoreAndWait();
-    
-    sendEventToUser(user.id, 'user_notification', {
-        type: 'info',
-        message: `Your ${tx.transactionType} request for $${tx.amount} was rejected by agent ${agent.username}.`
-    });
-    
-    res.json({ success: true, transaction: tx });
 });
 
 // Get agent float payment instructions
