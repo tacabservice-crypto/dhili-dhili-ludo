@@ -6,6 +6,7 @@ import './index.css';
 import { LanguageProvider } from './context/LanguageContext.tsx';
 import ErrorPage from "./pages/ErrorPage";
 import AdminDashboard from './pages/AdminDashboard';
+import AgentDashboard from './agent-dashboard';
 import BecomeVip from './pages/BecomeVip';
 import Tournaments from './pages/Tournaments';
 
@@ -22,6 +23,10 @@ const router = createBrowserRouter([
   {
     path: "/admin",
     element: <AdminDashboard />,
+  },
+  {
+    path: "/agent",
+    element: <AgentDashboard />,
   },
   {
     path: "/vip",
