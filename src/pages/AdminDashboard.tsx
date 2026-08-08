@@ -388,7 +388,7 @@ const AdminDashboard: React.FC = () => {
         }
     };
 
-    const handleCreateAgent = async (agentData: { username: string, password: string, commissionRate: string, location?: string }) => {
+    const handleCreateAgent = async (agentData: { username: string, password: string, commissionRate: string, location?: string, phone: string, promoCode?: string }) => {
         if (!adminId) return;
         setError(null);
         try {

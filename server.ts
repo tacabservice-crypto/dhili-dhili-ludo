@@ -1341,7 +1341,7 @@ data: ${JSON.stringify(seekingData)}
 
 // Authentication / Session
 app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any, res) => {
-  const { username, email, avatar } = req.body;
+  const { username, email, avatar, promoCode } = req.body;
   const firebaseUid = req.user.uid;
 
   // First, try to find an existing user by their Firebase UID.
@@ -1367,7 +1367,22 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
     return res.status(400).json({ error: 'Username is required for new registration' });
   }
   const cleanUsername = username.trim().substring(0, 20);
-  
+
+  let linkedAgentId: string | undefined = undefined;
+
+  // If a promo code is provided, validate it and find the agent.
+  if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '') {
+    const agentsRef = db.collection('agents');
+    const agentSnapshot = await agentsRef.where('promoCode', '==', promoCode.trim()).limit(1).get();
+
+    if (agentSnapshot.empty) {
+        return res.status(400).json({ error: 'Invalid or expired promo code.' });
+    }
+
+    const agent = agentSnapshot.docs[0].data() as Agent;
+    linkedAgentId = agent.id;
+  }
+
   const userId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
   const newUser: UserProfile = {
     id: userId,
@@ -1377,7 +1392,8 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
     avatar: avatar || '🌸',
     balance: 10.0,
     winCount: 0,
-    lossCount: 0
+    lossCount: 0,
+    linkedAgentId: linkedAgentId, // Add the linked agent ID
   };
 
   store.users[userId] = newUser;
@@ -1485,6 +1501,12 @@ app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
   if (!user) {
     return res.status(404).json({ error: 'User not found.' });
   }
+
+  // ==> START PROMO CODE AGENT LOCK VALIDATION
+  if (user.linkedAgentId && user.linkedAgentId !== agentId) {
+    return res.status(400).json({ error: 'This account is locked to a specific agent. You can only transact with your assigned agent.' });
+  }
+  // <== END PROMO CODE AGENT LOCK VALIDATION
   
   if (transactionType === 'withdraw' && !phone) {
     return res.status(400).json({ error: 'Phone number is required for withdrawal requests.' });
@@ -2071,6 +2093,10 @@ app.post('/api/request-to-agent', authMiddleware, async (req, res) => {
     const player: UserProfile = (req as any).user;
     const { agentId, amount, type, playerPhone, provider } = req.body;
     const requestAmount = parseFloat(amount);
+
+    if (player.linkedAgentId && player.linkedAgentId !== agentId) {
+      return res.status(400).json({ error: 'This account is locked to a specific agent. You can only transact with your assigned agent.' });
+    }
 
     if (!agentId || !requestAmount || requestAmount <= 0 || !['deposit', 'withdrawal'].includes(type) || !playerPhone || !provider) {
         return res.status(400).json({ error: 'Missing or invalid parameters. Requires agentId, amount, type, playerPhone, and provider.' });
@@ -3875,7 +3901,7 @@ app.get('/api/admin/agents', isAdmin, async (req, res) => {
 // Create a new agent
 app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
   if (!db) return res.status(500).json({ error: 'Database not initialized' });
-  const { username, password, commissionRate, location, phone } = req.body;
+  const { username, password, commissionRate, location, phone, promoCode } = req.body;
 
   if (!username || !password || !commissionRate || !phone) {
     return res.status(400).json({ error: 'Username, password, commission rate, and phone are required.' });
@@ -3894,11 +3920,20 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
   }
 
   try {
-    // Check if username already exists in Firestore
     const agentsRef = db.collection('agents');
+    
+    // Check if username already exists in Firestore
     const existingAgentSnapshot = await agentsRef.where('username', '==', username).get();
     if (!existingAgentSnapshot.empty) {
       return res.status(409).json({ error: 'Agent with this username already exists.' });
+    }
+
+    // Check for promo code uniqueness
+    if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '') {
+        const promoCodeQuery = await agentsRef.where('promoCode', '==', promoCode.trim()).get();
+        if (!promoCodeQuery.empty) {
+            return res.status(400).json({ error: 'Promo code is already in use.' });
+        }
     }
 
     const agentId = `agent_${Date.now()}`;
@@ -3909,6 +3944,7 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
       phone,
       location: location || '',
       commissionRate: rate,
+      promoCode: (promoCode && typeof promoCode === 'string') ? promoCode.trim() : '',
       balance: 0,
       floatBalance: 0,
       status: 'Active',
@@ -3928,14 +3964,29 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
 app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
     if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { agentId } = req.params;
-    const { username, password, commissionRate, status, location, phone } = req.body;
-    
+    const { username, password, commissionRate, status, location, phone, promoCode } = req.body;
+
     try {
         const agentRef = db.collection('agents').doc(agentId);
         const agentDoc = await agentRef.get();
 
         if (!agentDoc.exists) {
             return res.status(404).json({ error: 'Agent not found.' });
+        }
+
+        const agentData = agentDoc.data() as Agent;
+
+        // Check for promo code uniqueness if it's being changed
+        if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '' && promoCode.trim() !== agentData.promoCode) {
+            const agentsRef = db.collection('agents');
+            const promoCodeQuery = await agentsRef.where('promoCode', '==', promoCode.trim()).get();
+            if (!promoCodeQuery.empty) {
+                // Ensure the found agent is not the same one we are editing
+                const isSameAgent = promoCodeQuery.docs.some(doc => doc.id === agentId);
+                if (!isSameAgent) {
+                   return res.status(400).json({ error: 'Promo code is already in use by another agent.' });
+                }
+            }
         }
 
         const updateData: Partial<Agent> = {};
@@ -3949,7 +4000,7 @@ app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
         if (phone && typeof phone === 'string') {
             updateData.phone = phone;
         }
-        
+
         const newCommissionRate = parseFloat(commissionRate);
         if (commissionRate !== undefined && !isNaN(newCommissionRate) && newCommissionRate >= 0 && newCommissionRate <= 1) {
             updateData.commissionRate = newCommissionRate;
@@ -3958,9 +4009,13 @@ app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
         if (status && ['Active', 'Suspended'].includes(status)) {
             updateData.status = status;
         }
-        
+
         if (location !== undefined) {
             updateData.location = location;
+        }
+
+        if (promoCode !== undefined) {
+            updateData.promoCode = promoCode.trim();
         }
 
         if (Object.keys(updateData).length === 0) {
@@ -3968,7 +4023,7 @@ app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
         }
 
         await agentRef.update(updateData);
-        
+
         const updatedAgentDoc = await agentRef.get();
         res.json({ success: true, agent: updatedAgentDoc.data() });
     } catch (error) {
@@ -4731,10 +4786,27 @@ app.post('/api/agent/player-requests/:requestId/reject', isAgent, async (req, re
     res.json({ success: true, transaction: tx });
 });
 
+// Get agent float payment instructions
+app.get('/api/agent/payment-instructions', isAgent, (req, res) => {
+    // The instructions are stored globally in the in-memory store.
+    const instructions = store.agentFloatInstructions || '';
+    res.json({ instructions: instructions });
+});
 
+// Agent gets a list of their linked players
+app.get('/api/agent/my-players', isAgent, (req, res) => {
+    const agent: Agent = (req as any).agent;
 
+    const linkedPlayers = Object.values(store.users).filter(user => user.linkedAgentId === agent.id);
 
+    // Return a sanitized version of the user profiles
+    const sanitizedPlayers = linkedPlayers.map(p => {
+        const { password, ...playerData } = p;
+        return playerData;
+    });
 
+    res.json(sanitizedPlayers);
+});
 
 
 // ==========================================

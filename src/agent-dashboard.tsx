@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
-import { Agent, AgentTransaction, AgentRequest, PlayerAgentRequest } from './types/game';
+import { Agent, AgentTransaction, AgentRequest, PlayerAgentRequest, UserProfile } from './types/game';
 import toast, { Toaster } from 'react-hot-toast';
 
 // Transaction Detail Modal Component
@@ -55,6 +55,7 @@ const AgentDashboard = () => {
     const [selectedTransaction, setSelectedTransaction] = useState<AgentTransaction | null>(null); // New state
     const [paymentInstructions, setPaymentInstructions] = useState('');
     const [cashToSend, setCashToSend] = useState(0);
+    const [linkedPlayers, setLinkedPlayers] = useState<UserProfile[]>([]);
 
     useEffect(() => {
         if (agent && requestAmount) {
@@ -84,7 +85,16 @@ const AgentDashboard = () => {
         }
     };
 
-
+    const fetchLinkedPlayers = async (agentId: string) => {
+        try {
+            const response = await fetch(`/api/agent/my-players?agentId=${agentId}`);
+            if (!response.ok) throw new Error('Failed to fetch linked players');
+            const data = await response.json();
+            setLinkedPlayers(data);
+        } catch (err: any) {
+            console.error(err.message);
+        }
+    };
 
     const ITEMS_PER_PAGE = 10;
     const indexOfLastItem = currentPage * ITEMS_PER_PAGE;
@@ -213,6 +223,7 @@ const AgentDashboard = () => {
             setIsLoggedIn(true);
             await fetchTransactions(data.agent.id);
             await fetchAgentRequests(data.agent.id);
+            await fetchLinkedPlayers(data.agent.id);
         } catch (err: any) {
             setError(err.message);
         } finally {
@@ -254,6 +265,7 @@ const AgentDashboard = () => {
             await fetchTransactions(data.id);
             await fetchAgentRequests(data.id);
             await fetchPaymentInstructions();
+            await fetchLinkedPlayers(data.id);
             // No longer fetching player requests here, the polling useEffect will handle it
         } catch (err: any) {
             setError(err.message);
@@ -346,11 +358,50 @@ const AgentDashboard = () => {
             <div className="mt-4 text-lg">
               Welcome, <span className="font-bold">{agent?.username}</span>!
             </div>
-            <div className="mt-2 p-4 bg-green-800/50 border border-green-500 rounded-xl">
-              Float Balance: <span className="font-mono text-2xl font-bold">${agent?.floatBalance.toFixed(2)}</span>
+
+            <div className="grid md:grid-cols-2 gap-4 mt-2">
+                <div className="p-4 bg-green-800/50 border border-green-500 rounded-xl">
+                  Float Balance: <span className="font-mono text-2xl font-bold">${agent?.floatBalance.toFixed(2)}</span>
+                </div>
+                {agent.promoCode && (
+                    <div className="p-4 bg-indigo-800/50 border border-indigo-500 rounded-xl flex flex-col justify-center items-center">
+                        <span className="text-sm uppercase tracking-widest text-indigo-300">Your Promo Code</span>
+                        <span className="font-mono text-2xl font-bold tracking-wider">{agent.promoCode}</span>
+                    </div>
+                )}
             </div>
     
             {error && <div className="mt-4 p-3 bg-red-800/50 border border-red-500 rounded-xl text-white">{error}</div>}
+
+            <div className="mt-8 p-6 bg-slate-800 border border-slate-700 rounded-xl">
+              <h2 className="text-2xl font-semibold">My Linked Players ({linkedPlayers.length})</h2>
+              <div className="mt-4 overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="bg-slate-700 text-xs text-slate-300 uppercase">
+                        <tr>
+                            <th className="px-4 py-3">Player</th>
+                            <th className="px-4 py-3 text-right">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {linkedPlayers.map(player => (
+                            <tr key={player.id} className="border-b border-slate-700 last:border-b-0">
+                                <td className="px-4 py-3 font-medium flex items-center gap-2">
+                                    <span className="text-xl">{player.avatar}</span>
+                                    {player.username}
+                                </td>
+                                <td className="px-4 py-3 font-mono text-right">${player.balance.toFixed(2)}</td>
+                            </tr>
+                        ))}
+                         {linkedPlayers.length === 0 && (
+                            <tr>
+                                <td colSpan={2} className="px-4 py-6 text-center text-slate-400 italic">No players have signed up with your promo code yet.</td>
+                            </tr>
+                        )}
+                    </tbody>
+                </table>
+              </div>
+            </div>
             
             <div className="mt-8 p-6 bg-slate-800 border border-slate-700 rounded-xl">
               <h2 className="text-2xl font-semibold">Player Transaction Requests</h2>
@@ -563,10 +614,3 @@ const AgentDashboard = () => {
         </div>
       );
 };
-
-
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <AgentDashboard />
-  </React.StrictMode>
-);

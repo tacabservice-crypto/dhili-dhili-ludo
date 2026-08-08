@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 interface CreateAgentModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onCreateAgent: (agentData: { username: string, password: string, commissionRate: string, location?: string, phone: string }) => Promise<void>;
+    onCreateAgent: (agentData: { username: string, password: string, commissionRate: string, location?: string, phone: string, promoCode?: string }) => Promise<void>;
 }
 
 const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, onCreateAgent }) => {
@@ -12,6 +12,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, on
     const [commissionRate, setCommissionRate] = useState('0.1');
     const [location, setLocation] = useState('');
     const [phone, setPhone] = useState('');
+    const [promoCode, setPromoCode] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -25,7 +26,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, on
         }
         setIsSubmitting(true);
         try {
-            await onCreateAgent({ username, password, commissionRate, location, phone });
+            await onCreateAgent({ username, password, commissionRate, location, phone, promoCode });
             onClose();
         } catch (err: any) {
             setError(err.message);
@@ -61,6 +62,14 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, on
                         value={phone}
                         onChange={(e) => setPhone(e.target.value)}
                         placeholder="Phone Number"
+                        className="bg-gray-700 text-white w-full px-4 py-2 rounded"
+                        disabled={isSubmitting}
+                    />
+                    <input
+                        type="text"
+                        value={promoCode}
+                        onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                        placeholder="Promo Code (optional)"
                         className="bg-gray-700 text-white w-full px-4 py-2 rounded"
                         disabled={isSubmitting}
                     />

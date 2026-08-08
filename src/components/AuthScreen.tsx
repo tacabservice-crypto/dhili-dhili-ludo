@@ -4,7 +4,7 @@
  */
 
 import React, { useState } from 'react';
-import { Sparkles, Mail, Lock, LogIn, UserPlus } from 'lucide-react';
+import { Sparkles, Mail, Lock, LogIn, UserPlus, Ticket } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import LanguageToggle from './LanguageToggle';
 import { UserProfile } from '../types/game';
@@ -37,6 +37,7 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [promoCode, setPromoCode] = useState('');
   const [avatar, setAvatar] = useState('🎮');
   const [isLogin, setIsLogin] = useState(true);
   const [loading, setLoading] = useState(false);
@@ -53,15 +54,15 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        // For registration, send username and avatar. The backend will handle the rest.
         body: JSON.stringify({
           username: isLogin ? undefined : username,
           email: firebaseUser.email,
           avatar: isLogin ? undefined : avatar,
+          promoCode: isLogin ? undefined : promoCode,
         }),
       });
 
-      const profileData: UserProfile = await response.json();
+      const profileData = await response.json();
 
       if (!response.ok) {
         throw new Error(profileData.error || 'Failed to sync with server.');
@@ -71,6 +72,10 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
 
     } catch (err: any) {
       setError(`Login to backend failed: ${err.message}`);
+      // If backend login fails, we should probably sign the user out of Firebase Auth too
+      // to avoid a disjointed state.
+      await auth.signOut();
+      throw err; // re-throw to be caught by the main handleSubmit
     }
   };
 
@@ -232,6 +237,21 @@ export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenP
                 className="w-full bg-black/30 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-all"
               />
             </div>
+          
+          {!isLogin && (
+            <div className="space-y-1">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1">
+                <Ticket className="w-3 h-3 text-slate-500" /> Promo Code (Optional)
+              </label>
+              <input
+                type="text"
+                placeholder="AGENTPROMO123"
+                value={promoCode}
+                onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                className="w-full bg-black/30 border border-white/10 focus:border-blue-400 focus:ring-1 focus:ring-blue-400 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 outline-none transition-all"
+              />
+            </div>
+          )}
 
           <button
             type="submit"

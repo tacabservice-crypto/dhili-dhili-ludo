@@ -13,6 +13,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
     const [commissionRate, setCommissionRate] = useState('');
     const [location, setLocation] = useState('');
     const [phone, setPhone] = useState('');
+    const [promoCode, setPromoCode] = useState('');
     const [error, setError] = useState<string | null>(null);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -22,6 +23,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
             setCommissionRate(String(agent.commissionRate));
             setLocation(agent.location || '');
             setPhone(agent.phone || '');
+            setPromoCode(agent.promoCode || '');
             setPassword(''); // Don't pre-fill password
         }
     }, [agent]);
@@ -49,6 +51,7 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
                 commissionRate: rate,
                 location,
                 phone,
+                promoCode,
             };
             if (password) {
                 dataToSave.password = password;
@@ -78,6 +81,10 @@ const EditAgentModal: React.FC<EditAgentModalProps> = ({ agent, onClose, onSave 
                     <div>
                         <label className="block text-sm font-medium text-gray-400">Phone Number</label>
                         <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" />
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-gray-400">Promo Code</label>
+                        <input type="text" value={promoCode} onChange={(e) => setPromoCode(e.target.value.toUpperCase())} className="bg-gray-700 text-white w-full px-3 py-2 rounded mt-1" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-400">Commission Rate (e.g., 0.05 for 5%)</label>

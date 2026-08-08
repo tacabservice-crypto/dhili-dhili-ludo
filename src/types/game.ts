@@ -17,6 +17,8 @@ export interface UserProfile {
   vip?: { tier: string; expires: number; };
   role?: string;
   password?: string; // In a real app, this should be securely hashed.
+  linkedAgentId?: string;
+  firebaseUid?: string;
 }
 
 export interface WalletTransaction {
@@ -123,6 +125,7 @@ export interface Agent {
   username: string;
   phone: string;
   password?: string; // Should be hashed
+  promoCode?: string;
   location?: string;
   commissionRate: number;
   balance: number;
