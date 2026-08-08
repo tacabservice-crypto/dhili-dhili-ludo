@@ -61,7 +61,21 @@ const TransactionDetailModal: React.FC<{ transaction: AgentTransaction; onClose:
 };
 
 // Sidebar Component
-const Sidebar: React.FC<{ agent: Agent | null; handleLogout: () => void; isSidebarOpen: boolean; toggleSidebar: () => void }> = ({ agent, handleLogout, isSidebarOpen, toggleSidebar }) => {
+const Sidebar: React.FC<{
+    agent: Agent | null;
+    handleLogout: () => void;
+    isSidebarOpen: boolean;
+    toggleSidebar: () => void;
+    activeTab: string;
+    setActiveTab: (tab: string) => void;
+}> = ({ agent, handleLogout, isSidebarOpen, toggleSidebar, activeTab, setActiveTab }) => {
+    const navItems = [
+        { id: 'dashboard', label: 'Dashboard', icon: Briefcase },
+        { id: 'transactions', label: 'Transactions', icon: History },
+        { id: 'requests', label: 'Float Requests', icon: Send },
+        { id: 'players', label: 'Players', icon: Users },
+    ];
+
     return (
         <div className={`fixed inset-y-0 left-0 bg-slate-900/80 backdrop-blur-lg text-white w-64 p-5 space-y-6 transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:relative md:translate-x-0 transition-transform duration-300 ease-in-out z-50 flex flex-col shadow-2xl shadow-black`}>
             <div className="flex justify-between items-center">
@@ -72,9 +86,23 @@ const Sidebar: React.FC<{ agent: Agent | null; handleLogout: () => void; isSideb
             </div>
             
             <nav className="flex-grow space-y-2">
-                <a href="#" className="flex items-center py-3 px-4 rounded-lg transition duration-200 bg-slate-700/50 text-purple-300">
-                    <Briefcase className="inline-block mr-3" size={20} /> Dashboard
-                </a>
+                {navItems.map(item => (
+                    <a
+                        key={item.id}
+                        href="#"
+                        onClick={(e) => {
+                            e.preventDefault();
+                            setActiveTab(item.id);
+                        }}
+                        className={`flex items-center py-3 px-4 rounded-lg transition duration-200 ${
+                            activeTab === item.id
+                                ? 'bg-slate-700/50 text-purple-300'
+                                : 'hover:bg-slate-700/30 hover:text-white'
+                        }`}
+                    >
+                        <item.icon className="inline-block mr-3" size={20} /> {item.label}
+                    </a>
+                ))}
             </nav>
 
             <div className="mt-auto border-t border-slate-700 pt-4 space-y-4">
@@ -113,6 +141,7 @@ const AgentDashboard = () => {
     const [cashToSend, setCashToSend] = useState(0);
     const [linkedPlayers, setLinkedPlayers] = useState<UserProfile[]>([]);
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+    const [activeTab, setActiveTab] = useState('dashboard');
 
     const toggleSidebar = () => {
         setIsSidebarOpen(!isSidebarOpen);
@@ -411,7 +440,7 @@ const AgentDashboard = () => {
                 duration: 4000,
             }} />
 
-            <Sidebar agent={agent} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
+            <Sidebar agent={agent} handleLogout={handleLogout} isSidebarOpen={isSidebarOpen} toggleSidebar={toggleSidebar} activeTab={activeTab} setActiveTab={setActiveTab} />
             
             <div className="flex-1 flex flex-col">
                  <header className="bg-slate-800/50 backdrop-blur-lg border-b border-slate-700 p-4 flex justify-between items-center sticky top-0 z-40">
@@ -459,83 +488,85 @@ const AgentDashboard = () => {
 
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
                         <div className="xl:col-span-2 space-y-8">
-                             <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-lg">
-                                <div className="p-4 border-b border-slate-700">
-                                    <h2 className="text-lg font-semibold text-white flex items-center gap-2">
-                                        <Clock className="text-purple-400" size={20} />
-                                        Player Transaction Requests
-                                    </h2>
-                                </div>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="bg-slate-700/50 text-xs text-slate-300 uppercase tracking-wider">
-                                            <tr>
-                                                <th className="px-4 py-3">Player</th>
-                                                <th className="px-4 py-3">Contact</th>
-                                                <th className="px-4 py-3">Type</th>
-                                                <th className="px-4 py-3 text-right">Amount</th>
-                                                <th className="px-4 py-3 text-center">Status</th>
-                                                <th className="px-4 py-3 text-center">Actions</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {playerRequests.length > 0 ? playerRequests.map(req => (
-                                                <tr key={req.id} className="border-b border-slate-700/50 hover:bg-slate-700/20 transition-colors">
-                                                    <td className="px-4 py-3 font-medium flex items-center gap-3">
-                                                        <span className="text-2xl">{req.playerAvatar}</span>
-                                                        <div>
-                                                            <div>{req.playerUsername}</div>
-                                                            <div className="text-xs text-slate-400 font-mono">{new Date(req.createdAt).toLocaleString()}</div>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-4 py-3 font-mono">
-                                                        {req.type === 'deposit' ? req.senderPhone : req.playerPhone}
-                                                    </td>
-                                                    <td className="px-4 py-3">
-                                                        <span className={`font-semibold ${req.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
-                                                            {req.type.toUpperCase()}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3 font-mono text-right">${req.amount.toFixed(2)}</td>
-                                                    <td className="px-4 py-3 text-center">
-                                                        <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                                            req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-400/30' :
-                                                            req.status === 'approved' ? 'bg-green-500/10 text-green-400 border border-green-400/30' :
-                                                            'bg-red-500/10 text-red-400 border border-red-400/30'
-                                                        }`}>
-                                                            {req.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-4 py-3 text-center">
-                                                        {req.status === 'pending' && (
-                                                            <div className="flex gap-2 justify-center">
-                                                                <button 
-                                                                    onClick={() => handleApprove(req.id)} 
-                                                                    disabled={loading}
-                                                                    className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded-lg font-bold text-xs disabled:bg-slate-500 flex items-center gap-1 transition-transform transform hover:scale-105">
-                                                                    <UserCheck size={14} /> Approve
-                                                                </button>
-                                                                <button 
-                                                                    onClick={() => handleReject(req.id)} 
-                                                                    disabled={loading}
-                                                                    className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg font-bold text-xs disabled:bg-slate-500 flex items-center gap-1 transition-transform transform hover:scale-105">
-                                                                    <UserX size={14} /> Reject
-                                                                </button>
-                                                            </div>
-                                                        )}
-                                                    </td>
-                                                </tr>
-                                            )) : (
+                            {activeTab === 'dashboard' && (
+                                <div className="bg-slate-800 border border-slate-700 rounded-2xl shadow-lg">
+                                    <div className="p-4 border-b border-slate-700">
+                                        <h2 className="text-lg font-semibold text-white flex items-center gap-2">
+                                            <Clock className="text-purple-400" size={20} />
+                                            Player Transaction Requests
+                                        </h2>
+                                    </div>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="bg-slate-700/50 text-xs text-slate-300 uppercase tracking-wider">
                                                 <tr>
-                                                    <td colSpan={6} className="text-center py-8 text-slate-500">No pending player requests.</td>
+                                                    <th className="px-4 py-3">Player</th>
+                                                    <th className="px-4 py-3">Contact</th>
+                                                    <th className="px-4 py-3">Type</th>
+                                                    <th className="px-4 py-3 text-right">Amount</th>
+                                                    <th className="px-4 py-3 text-center">Status</th>
+                                                    <th className="px-4 py-3 text-center">Actions</th>
                                                 </tr>
-                                            )}
-                                        </tbody>
-                                    </table>
+                                            </thead>
+                                            <tbody>
+                                                {playerRequests.length > 0 ? playerRequests.map(req => (
+                                                    <tr key={req.id} className="border-b border-slate-700/50 hover:bg-slate-700/20 transition-colors">
+                                                        <td className="px-4 py-3 font-medium flex items-center gap-3">
+                                                            <span className="text-2xl">{req.playerAvatar}</span>
+                                                            <div>
+                                                                <div>{req.playerUsername}</div>
+                                                                <div className="text-xs text-slate-400 font-mono">{new Date(req.createdAt).toLocaleString()}</div>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-4 py-3 font-mono">
+                                                            {req.type === 'deposit' ? req.senderPhone : req.playerPhone}
+                                                        </td>
+                                                        <td className="px-4 py-3">
+                                                            <span className={`font-semibold ${req.type === 'deposit' ? 'text-green-400' : 'text-red-400'}`}>
+                                                                {req.type.toUpperCase()}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 font-mono text-right">${req.amount.toFixed(2)}</td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            <span className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                                                                req.status === 'pending' ? 'bg-yellow-500/10 text-yellow-400 border border-yellow-400/30' :
+                                                                req.status === 'approved' ? 'bg-green-500/10 text-green-400 border border-green-400/30' :
+                                                                'bg-red-500/10 text-red-400 border border-red-400/30'
+                                                            }`}>
+                                                                {req.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-4 py-3 text-center">
+                                                            {req.status === 'pending' && (
+                                                                <div className="flex gap-2 justify-center">
+                                                                    <button 
+                                                                        onClick={() => handleApprove(req.id)} 
+                                                                        disabled={loading}
+                                                                        className="bg-green-600 hover:bg-green-700 px-3 py-1 rounded-lg font-bold text-xs disabled:bg-slate-500 flex items-center gap-1 transition-transform transform hover:scale-105">
+                                                                        <UserCheck size={14} /> Approve
+                                                                    </button>
+                                                                    <button 
+                                                                        onClick={() => handleReject(req.id)} 
+                                                                        disabled={loading}
+                                                                        className="bg-red-600 hover:bg-red-700 px-3 py-1 rounded-lg font-bold text-xs disabled:bg-slate-500 flex items-center gap-1 transition-transform transform hover:scale-105">
+                                                                        <UserX size={14} /> Reject
+                                                                    </button>
+                                                                </div>
+                                                            )}
+                                                        </td>
+                                                    </tr>
+                                                )) : (
+                                                    <tr>
+                                                        <td colSpan={6} className="text-center py-8 text-slate-500">No pending player requests.</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
-                            </div>
+                            )}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                            {activeTab === 'transactions' && (
                                 <div className="p-6 bg-slate-800 border border-slate-700 rounded-2xl">
                                     <h2 className="text-xl font-semibold mb-4">Transaction History</h2>
                                     <div className="overflow-auto max-h-96">
@@ -571,7 +602,9 @@ const AgentDashboard = () => {
                                         </div>
                                     )}
                                 </div>
-                                
+                            )}
+
+                            {activeTab === 'requests' && (
                                 <div className="p-6 bg-slate-800 border border-slate-700 rounded-2xl">
                                     <h2 className="text-xl font-semibold mb-4">My Float Requests</h2>
                                     <div className="overflow-auto max-h-96">
@@ -596,7 +629,28 @@ const AgentDashboard = () => {
                                         </table>
                                     </div>
                                 </div>
+                            )}
+
+                            {activeTab === 'players' && (
+                                <div className="p-6 bg-slate-800 border border-slate-700 rounded-2xl">
+                                <h2 className="text-xl font-semibold mb-4">My Linked Players</h2>
+                                <div className="overflow-auto max-h-96">
+                                     <table className="w-full text-sm text-left">
+                                        <tbody>
+                                            {linkedPlayers.map(player => (
+                                                <tr key={player.id} className="border-b border-slate-700/50 last:border-b-0">
+                                                    <td className="py-3 px-2 flex items-center gap-3">
+                                                        <span className="text-2xl">{player.avatar}</span>
+                                                        <span className="font-semibold">{player.username}</span>
+                                                    </td>
+                                                    <td className="py-3 px-2 font-mono text-right text-lg">${player.balance.toFixed(2)}</td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
                             </div>
+                            )}
                         </div>
 
                         <div className="space-y-8">
@@ -635,24 +689,6 @@ const AgentDashboard = () => {
                                     ) : (
                                         <p className="text-slate-400 italic text-sm">No payment instructions available. Contact an admin.</p>
                                     )}
-                                </div>
-                            </div>
-                             <div className="p-6 bg-slate-800 border border-slate-700 rounded-2xl">
-                                <h2 className="text-xl font-semibold mb-4">My Linked Players</h2>
-                                <div className="overflow-auto max-h-96">
-                                     <table className="w-full text-sm text-left">
-                                        <tbody>
-                                            {linkedPlayers.map(player => (
-                                                <tr key={player.id} className="border-b border-slate-700/50 last:border-b-0">
-                                                    <td className="py-3 px-2 flex items-center gap-3">
-                                                        <span className="text-2xl">{player.avatar}</span>
-                                                        <span className="font-semibold">{player.username}</span>
-                                                    </td>
-                                                    <td className="py-3 px-2 font-mono text-right text-lg">${player.balance.toFixed(2)}</td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
                                 </div>
                             </div>
                         </div>
