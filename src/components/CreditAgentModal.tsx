@@ -17,7 +17,7 @@ const CreditAgentModal: React.FC<CreditAgentModalProps> = ({ agent, onClose, onS
     useEffect(() => {
         const creditAmount = parseFloat(amount);
         if (!isNaN(creditAmount) && creditAmount > 0) {
-            const calculatedCommission = creditAmount * (agent.commissionRate / 100);
+            const calculatedCommission = creditAmount * agent.commissionRate;
             setCommission(calculatedCommission);
             setCashAgentSends(creditAmount - calculatedCommission);
         } else {
@@ -70,7 +70,7 @@ const CreditAgentModal: React.FC<CreditAgentModalProps> = ({ agent, onClose, onS
                     <div className="bg-gray-700 p-3 rounded-lg space-y-2">
                         <div className="flex justify-between text-sm">
                             <span className="text-gray-400">Agent's Commission Rate:</span>
-                            <span className="text-white font-mono">{agent.commissionRate.toFixed(2)}%</span>
+                            <span className="text-white font-mono">{(agent.commissionRate * 100).toFixed(2)}%</span>
                         </div>
                         <div className="flex justify-between text-sm">
                             <span className="text-gray-400">Agent's Commission on this transaction:</span>
