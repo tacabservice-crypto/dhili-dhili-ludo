@@ -3,7 +3,6 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import ErrorBoundary from './components/ErrorBoundary';
 import React, { useState, useEffect } from 'react';
 import ReactDOM from 'react-dom/client';
 import './index.css';
@@ -56,6 +55,18 @@ const AgentDashboard = () => {
     const [selectedTransaction, setSelectedTransaction] = useState<AgentTransaction | null>(null); // New state
     const [paymentInstructions, setPaymentInstructions] = useState('');
     const [cashToSend, setCashToSend] = useState(0);
+    const [linkedPlayers, setLinkedPlayers] = useState<UserProfile[]>([]);
+
+    const fetchLinkedPlayers = async (agentId: string) => {
+        try {
+            const response = await fetch(`/api/agent/my-players?agentId=${agentId}`);
+            if (!response.ok) throw new Error('Failed to fetch linked players');
+            const data = await response.json();
+            setLinkedPlayers(data);
+        } catch (err: any) {
+            setError(err.message);
+        }
+    };
 
     useEffect(() => {
         if (agent && requestAmount) {
@@ -100,7 +111,6 @@ const AgentDashboard = () => {
             const data = await response.json();
             setAgentRequests(data);
         } catch (err: any) {
-            console.error('Error in fetchAgentRequests:', err);
             setError(err.message);
         }
     };
@@ -142,7 +152,6 @@ const AgentDashboard = () => {
             await fetchPlayerRequests(agentId);
             await fetchProfile(agentId); // Re-fetch agent profile to update float balance
         } catch (err: any) {
-            console.error('Error in fetchAgentRequests:', err);
             setError(err.message);
         } finally {
             setLoading(false);
@@ -161,7 +170,6 @@ const AgentDashboard = () => {
             if (!response.ok) throw new Error(data.error || 'Failed to reject request');
             await fetchPlayerRequests(agentId);
         } catch (err: any) {
-            console.error('Error in fetchAgentRequests:', err);
             setError(err.message);
         } finally {
             setLoading(false);
@@ -218,7 +226,6 @@ const AgentDashboard = () => {
             await fetchTransactions(data.agent.id);
             await fetchAgentRequests(data.agent.id);
         } catch (err: any) {
-            console.error('Error in fetchAgentRequests:', err);
             setError(err.message);
         } finally {
             setLoading(false);
@@ -241,7 +248,6 @@ const AgentDashboard = () => {
             const data = await response.json();
             setTransactions(data);
         } catch (err: any) {
-            console.error('Error in fetchAgentRequests:', err);
             setError(err.message);
         }
     };
@@ -260,9 +266,9 @@ const AgentDashboard = () => {
             await fetchTransactions(data.id);
             await fetchAgentRequests(data.id);
             await fetchPaymentInstructions();
+            await fetchLinkedPlayers(data.id);
             // No longer fetching player requests here, the polling useEffect will handle it
         } catch (err: any) {
-            console.error('Error in fetchAgentRequests:', err);
             setError(err.message);
         } finally {
             setLoading(false);
@@ -353,6 +359,11 @@ const AgentDashboard = () => {
             <div className="mt-4 text-lg">
               Welcome, <span className="font-bold">{agent?.username}</span>!
             </div>
+            {agent?.promoCode && (
+                <div className="mt-2 text-sm text-slate-400">
+                    Your Promo Code: <span className="font-bold text-purple-400 p-1 bg-slate-700 rounded-md">{agent.promoCode}</span>
+                </div>
+            )}
             <div className="mt-2 p-4 bg-green-800/50 border border-green-500 rounded-xl">
               Float Balance: <span className="font-mono text-2xl font-bold">${agent?.floatBalance.toFixed(2)}</span>
             </div>
@@ -462,6 +473,31 @@ const AgentDashboard = () => {
                 </div>
             </div>
     
+            <div className="mt-8">
+                <h2 className="text-2xl font-semibold">My Linked Players</h2>
+                <div className="mt-4 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
+                    <table className="w-full text-sm text-left">
+                        <thead className="bg-slate-700 text-xs text-slate-300 uppercase">
+                            <tr>
+                                <th className="px-4 py-3">Player</th>
+                                <th className="px-4 py-3 text-right">Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {linkedPlayers.map(player => (
+                                <tr key={player.id} className="border-b border-slate-700 last:border-b-0">
+                                    <td className="px-4 py-3 font-medium flex items-center gap-2">
+                                        <span className="text-xl">{player.avatar}</span>
+                                        {player.username}
+                                    </td>
+                                    <td className="px-4 py-3 font-mono text-right">${player.balance.toFixed(2)}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <div className="mt-8">
                 <h2 className="text-2xl font-semibold">Transaction History</h2>
                 <div className="mt-4 bg-slate-800 border border-slate-700 rounded-xl overflow-hidden">
@@ -574,8 +610,6 @@ const AgentDashboard = () => {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <ErrorBoundary>
-      <AgentDashboard />
-    </ErrorBoundary>
+    <AgentDashboard />
   </React.StrictMode>
 );
