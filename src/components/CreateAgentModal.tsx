@@ -9,7 +9,7 @@ interface CreateAgentModalProps {
 const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, onCreateAgent }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [commissionRate, setCommissionRate] = useState('0.1');
+    const [commissionRate, setCommissionRate] = useState('10');
     const [location, setLocation] = useState('');
     const [phone, setPhone] = useState('');
     const [error, setError] = useState<string | null>(null);
@@ -68,10 +68,8 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ isOpen, onClose, on
                         type="number"
                         value={commissionRate}
                         onChange={(e) => setCommissionRate(e.target.value)}
-                        placeholder="Commission Rate (e.g., 0.1 for 10%)"
-                        step="0.01"
+                        placeholder="Commission Rate % (e.g., 10)"
                         min="0"
-                        max="1"
                         className="bg-gray-700 text-white w-full px-4 py-2 rounded"
                         disabled={isSubmitting}
                     />
