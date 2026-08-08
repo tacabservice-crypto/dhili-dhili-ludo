@@ -338,7 +338,34 @@ async function syncToFirestore() {
 
   try {
     const storeRef = db.collection('ludo_store').doc('main');
-    const serialized = JSON.stringify(store);
+    
+    // Create a copy of the store to avoid modifying the in-memory store
+    const storeToSync = JSON.parse(JSON.stringify(store));
+
+    // Trim transactions to the most recent 5000
+    if (storeToSync.transactions && storeToSync.transactions.length > 5000) {
+      console.log(`Trimming transactions from ${storeToSync.transactions.length} to 5000 for Firestore sync.`);
+      storeToSync.transactions = storeToSync.transactions.slice(-5000); // Keep the last 5000
+    }
+
+    const serialized = JSON.stringify(storeToSync);
+
+    if (serialized.length > 1048487) {
+      console.error(`Firestore document still too large after trimming transactions. Size: ${serialized.length}`);
+      // As a fallback, try trimming even more aggressively
+      if (storeToSync.transactions && storeToSync.transactions.length > 1000) {
+        storeToSync.transactions = storeToSync.transactions.slice(-1000);
+        const serialized2 = JSON.stringify(storeToSync);
+        if (serialized2.length < 1048487) {
+          await storeRef.set({ data: serialized2, updatedAt: Date.now() });
+          console.log('Successfully synchronized store to Firebase Firestore with aggressive trimming.');
+        } else {
+          console.error('Data store is too large to sync to Firestore, even with aggressive trimming.');
+        }
+      }
+      return;
+    }
+
     await storeRef.set({ data: serialized, updatedAt: Date.now() });
     console.log('Successfully synchronized store to Firebase Firestore.');
   } catch (err) {
