@@ -1378,36 +1378,31 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
   const usersRef = db.collection('users');
 
   try {
-    // First, try to find an existing user by their Firebase UID.
-    const userQuery = await usersRef.where('firebaseUid', '==', firebaseUid).limit(1).get();
+    const allUsers = Object.values(store.users);
     
-    if (!userQuery.empty) {
-      const foundUser = userQuery.docs[0].data() as UserProfile;
-      return res.json(foundUser);
+    // 1. Find existing user by Firebase UID
+    const existingUser = allUsers.find(u => u.firebaseUid === firebaseUid);
+    if (existingUser) {
+      return res.json(existingUser);
     }
 
-    // If not found by UID, maybe it's an old account we can link by email.
+    // 2. If not found, try to link an old account by email
     if (email) {
-      const emailQuery = await usersRef.where('email', '==', email).limit(1).get();
-      if (!emailQuery.empty) {
-        const userDoc = emailQuery.docs[0];
-        await userDoc.ref.update({ firebaseUid: firebaseUid });
-        const updatedUser = (await userDoc.ref.get()).data();
+      const userToLink = allUsers.find(u => u.email === email && !u.firebaseUid);
+      if (userToLink) {
+        userToLink.firebaseUid = firebaseUid;
+        await saveStoreAndWait();
         console.log(`Linked existing user with email ${email} to firebaseUid ${firebaseUid}.`);
-        return res.json(updatedUser);
+        return res.json(userToLink);
       }
     }
 
-    // If we're here, it's a new user to our Firestore DB.
-    // Let's get their details from Firebase Auth to see if we can get a username.
+    // 3. If still no user, this is a new registration.
     if (!auth) {
-      return res.status(500).json({ error: 'Firebase Admin not configured on server.' });
+      return res.status(500).json({ error: 'Firebase Admin not configured on server for new user registration.' });
     }
     const firebaseUser = await auth.getUser(firebaseUid);
 
-    // If a username was passed from the client, use it.
-    // Otherwise, try to use the displayName from Firebase Auth.
-    // As a last resort, generate one from the email.
     let finalUsername = username;
     if (!finalUsername && firebaseUser.displayName) {
       finalUsername = firebaseUser.displayName;
@@ -1416,7 +1411,6 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
       finalUsername = firebaseUser.email.split('@')[0];
     }
     
-    // If we still don't have a username, then we must ask the user.
     if (!finalUsername) {
       return res.status(400).json({ error: 'Username is required for new registration' });
     }
@@ -1424,22 +1418,19 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
     const cleanUsername = finalUsername.trim().substring(0, 20);
 
     let linkedAgentId: string | undefined = undefined;
-
-    if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '') {
+    if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '' && db) {
       const agentsRef = db.collection('agents');
       const agentSnapshot = await agentsRef.where('promoCode', '==', promoCode.trim()).limit(1).get();
-
       if (agentSnapshot.empty) {
-          return res.status(400).json({ error: 'Invalid or expired promo code.' });
+        return res.status(400).json({ error: 'Invalid or expired promo code.' });
       }
-
       const agent = agentSnapshot.docs[0].data() as Agent;
       linkedAgentId = agent.id;
     }
 
-    const newUserRef = usersRef.doc(); // Let Firestore generate the ID
+    const newId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     const newUser: UserProfile = {
-      id: newUserRef.id,
+      id: newId,
       firebaseUid: firebaseUid,
       username: cleanUsername,
       email: email || firebaseUser.email || undefined,
@@ -1450,21 +1441,12 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
       linkedAgentId: linkedAgentId,
     };
 
-    await newUserRef.set(newUser);
-    
-    // Also create a welcome transaction in the 'transactions' collection
-    const txRef = db.collection('transactions').doc();
-    const welcomeTx: WalletTransaction = {
-      id: txRef.id,
-      userId: newUser.id,
-      type: 'deposit',
-      amount: 10.0,
-      timestamp: Date.now(),
-      description: 'Welcome signup bonus.'
-    };
-    await txRef.set(welcomeTx);
+    store.users[newId] = newUser;
+    addTransaction(newId, 'deposit', 10.0, undefined, 'Welcome signup bonus.'); // This calls saveStore()
 
-    res.json(newUser);
+    await saveStoreAndWait(); // Ensure sync is complete before responding
+    
+    res.status(201).json(newUser);
 
   } catch (error) {
     console.error('Error during user login/registration:', error);
