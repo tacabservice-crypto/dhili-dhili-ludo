@@ -49,10 +49,41 @@ const AgentDashboard = () => {
     const [loading, setLoading] = useState(true);
     const [requestAmount, setRequestAmount] = useState('');
     const [agentRequests, setAgentRequests] = useState<AgentRequest[]>([]);
-    const [playerRequests, setPlayerRequests] = useState<PlayerAgentRequest[]>([]);
+    const [playerRequests, setPlayerRequests] =useState<PlayerAgentRequest[]>([]);
     const [currentPage, setCurrentPage] = useState(1);
     const [lastFetchedRequestIds, setLastFetchedRequestIds] = useState<Set<string>>(new Set());
     const [selectedTransaction, setSelectedTransaction] = useState<AgentTransaction | null>(null); // New state
+    const [paymentInstructions, setPaymentInstructions] = useState('');
+    const [cashToSend, setCashToSend] = useState(0);
+
+    useEffect(() => {
+        if (agent && requestAmount) {
+            const amount = parseFloat(requestAmount);
+            if (!isNaN(amount) && amount > 0) {
+                const cash = amount * (1 - agent.commissionRate);
+                setCashToSend(cash);
+            } else {
+                setCashToSend(0);
+            }
+        } else {
+            setCashToSend(0);
+        }
+    }, [requestAmount, agent]);
+
+    const fetchPaymentInstructions = async () => {
+        try {
+            const response = await fetch('/api/agent/payment-instructions');
+            if (!response.ok) {
+                console.error('Could not fetch payment instructions');
+                return;
+            }
+            const data = await response.json();
+            setPaymentInstructions(data.instructions);
+        } catch (err) {
+            console.error('Error fetching payment instructions:', err);
+        }
+    };
+
 
 
     const ITEMS_PER_PAGE = 10;
@@ -222,6 +253,7 @@ const AgentDashboard = () => {
             setIsLoggedIn(true);
             await fetchTransactions(data.id);
             await fetchAgentRequests(data.id);
+            await fetchPaymentInstructions();
             // No longer fetching player requests here, the polling useEffect will handle it
         } catch (err: any) {
             setError(err.message);
@@ -403,6 +435,22 @@ const AgentDashboard = () => {
                   </button>
                 </div>
               </form>
+                {paymentInstructions && (
+                    <div className="mt-4 p-4 bg-slate-700 rounded-lg">
+                        <h3 className="text-lg font-semibold text-purple-400">Payment Instructions</h3>
+                        <p className="text-slate-300 whitespace-pre-wrap">{paymentInstructions}</p>
+                    </div>
+                )}
+                <div className="mt-4 bg-gray-700 p-3 rounded-lg space-y-2">
+                    <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Your Commission Rate:</span>
+                        <span className="text-white font-mono">{(agent.commissionRate * 100).toFixed(2)}%</span>
+                    </div>
+                    <div className="flex justify-between text-lg font-bold">
+                        <span className="text-purple-400">Cash You Send to Admin:</span>
+                        <span className="text-purple-400 font-mono">${cashToSend.toFixed(2)}</span>
+                    </div>
+                </div>
             </div>
     
             <div className="mt-8">

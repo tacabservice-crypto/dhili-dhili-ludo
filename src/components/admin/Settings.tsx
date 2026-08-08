@@ -24,10 +24,14 @@ const Settings = ({
 
   const handlePaymentSettingsChange = (provider, key, value) => {
     const updated = JSON.parse(JSON.stringify(editablePaymentSettings || {}));
-    if (!updated[provider]) {
-      updated[provider] = { enabled: false, apiKey: '', apiUrl: '', accountNumber: '' };
+    if (provider === 'agentFloatInstructions') {
+      updated.agentFloatInstructions = value;
+    } else {
+      if (!updated[provider]) {
+        updated[provider] = { enabled: false, apiKey: '', apiUrl: '', accountNumber: '' };
+      }
+      updated[provider][key] = value;
     }
-    updated[provider][key] = value;
     setEditablePaymentSettings(updated);
   };
   
@@ -116,12 +120,24 @@ const Settings = ({
           <div>
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-bold">Payment Providers</h3>
-              <button onClick={() => { onSavePaymentSettings(editablePaymentSettings); showNotification('success', 'Payment settings saved!'); }} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors">
+              <button onClick={() => { onSavePaymentSettings({ providers: editablePaymentSettings, instructions: editablePaymentSettings.agentFloatInstructions }); showNotification('success', 'Payment settings saved!'); }} className="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-md transition-colors">
                 Save Settings
               </button>
             </div>
-            <div className="space-y-6">
-              {Object.entries(editablePaymentSettings || {}).map(([provider, config]: [string, any]) => (
+
+            <div className="mt-6 bg-gray-50 p-4 rounded-lg shadow-sm">
+                <h4 className="text-lg font-semibold capitalize mb-4">Agent Float Payment Instructions</h4>
+                <textarea
+                    rows={4}
+                    className="w-full p-2 border border-gray-300 rounded-md"
+                    placeholder="E.g., Bank Name: XYZ, Account Number: 12345, Mobile Money: 555-5555"
+                    value={editablePaymentSettings.agentFloatInstructions || ''}
+                    onChange={(e) => handlePaymentSettingsChange('agentFloatInstructions', 'value', e.target.value)}
+                />
+            </div>
+
+            <div className="space-y-6 mt-6">
+              {Object.entries(editablePaymentSettings || {}).filter(([key]) => key !== 'agentFloatInstructions').map(([provider, config]: [string, any]) => (
                 <div key={provider} className="bg-gray-50 p-4 rounded-lg shadow-sm">
                   <div className="flex items-center justify-between mb-4">
                     <h4 className="text-lg font-semibold capitalize">{provider}</h4>

@@ -498,13 +498,16 @@ const AdminDashboard: React.FC = () => {
         await handleUpdateRole(role.id, { status: newStatus });
     };
 
-    const handleSavePaymentSettings = async (updatedSettings: any) => {
+    const handleSavePaymentSettings = async (settings: { providers: any, instructions: string }) => {
         if(!adminId) return;
         try {
             const response = await fetch(`/api/admin/payment-settings?userId=${adminId}`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ paymentProviders: updatedSettings }),
+                body: JSON.stringify({ 
+                    paymentProviders: settings.providers,
+                    agentFloatInstructions: settings.instructions
+                }),
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Failed to save payment settings');

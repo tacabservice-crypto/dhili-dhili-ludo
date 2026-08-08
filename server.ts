@@ -203,6 +203,7 @@ interface DBStore {
   houseRevenue: number;
   pendingManualTransactions: ManualTransactionRequest[];
   paymentProviders: Record<PaymentProviderKey, PaymentProviderConfig>;
+  agentFloatInstructions: string;
   adminSettings: AdminSettings;
   agents: Record<string, Agent>;
   agentTransactions: AgentTransaction[];
@@ -235,6 +236,7 @@ let store: DBStore = {
   houseRevenue: 0,
   pendingManualTransactions: [],
   paymentProviders: { ...DEFAULT_PAYMENT_PROVIDERS },
+  agentFloatInstructions: '',
   adminSettings: { ...DEFAULT_ADMIN_SETTINGS },
   agents: {},
   agentTransactions: [],
@@ -260,6 +262,7 @@ function loadStore() {
         ...DEFAULT_PAYMENT_PROVIDERS,
         ...(parsed.paymentProviders || {})
       };
+      store.agentFloatInstructions = parsed.agentFloatInstructions || '';
       store.tournaments = parsed.tournaments || {};
       const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
       store.adminSettings = {
@@ -304,6 +307,7 @@ async function loadStoreFromFirestore() {
           ...DEFAULT_PAYMENT_PROVIDERS,
           ...(parsed.paymentProviders || {})
         };
+        store.agentFloatInstructions = parsed.agentFloatInstructions || '';
         const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
         store.adminSettings = {
           username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
@@ -3709,18 +3713,25 @@ app.get('/api/admin/payment-settings', isAdmin, (req, res) => {
 });
 
 app.post('/api/admin/payment-settings', isAdmin, async (req, res) => {
-    const paymentProviders = req.body.paymentProviders;
-    if (!paymentProviders || typeof paymentProviders !== 'object') {
-        return res.status(400).json({ error: 'Invalid payment settings payload.' });
+    const { paymentProviders, agentFloatInstructions } = req.body;
+
+    if (paymentProviders && typeof paymentProviders === 'object') {
+        store.paymentProviders = {
+            ...DEFAULT_PAYMENT_PROVIDERS,
+            ...paymentProviders
+        };
     }
 
-    store.paymentProviders = {
-        ...DEFAULT_PAYMENT_PROVIDERS,
-        ...paymentProviders
-    };
+    if (typeof agentFloatInstructions === 'string') {
+        store.agentFloatInstructions = agentFloatInstructions;
+    }
 
     await saveStoreAndWait();
-    res.json({ success: true, paymentProviders: store.paymentProviders });
+    res.json({ 
+        success: true, 
+        paymentProviders: store.paymentProviders,
+        agentFloatInstructions: store.agentFloatInstructions
+    });
 });
 
 // Approve a manual transaction
