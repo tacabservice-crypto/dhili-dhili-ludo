@@ -333,8 +333,12 @@ async function loadStoreFromFirestore() {
   }
 }
 
-async function syncToFirestore() {
-  if (!db) return;
+async function syncToFirestore(): Promise<{ success: boolean; error?: string }> {
+  if (!db) {
+    const errorMsg = "Firestore not initialized. Cannot sync.";
+    console.error(errorMsg);
+    return { success: false, error: errorMsg };
+  }
 
   try {
     const storeRef = db.collection('ludo_store').doc('main');
@@ -351,25 +355,30 @@ async function syncToFirestore() {
     const serialized = JSON.stringify(storeToSync);
 
     if (serialized.length > 1048487) {
-      console.error(`Firestore document still too large after trimming transactions. Size: ${serialized.length}`);
-      // As a fallback, try trimming even more aggressively
+      const errorMsg = `Data store is too large to sync to Firestore, even after trimming. Size: ${serialized.length}`;
+      console.error(errorMsg);
+       // As a fallback, try trimming even more aggressively
       if (storeToSync.transactions && storeToSync.transactions.length > 1000) {
         storeToSync.transactions = storeToSync.transactions.slice(-1000);
         const serialized2 = JSON.stringify(storeToSync);
         if (serialized2.length < 1048487) {
           await storeRef.set({ data: serialized2, updatedAt: Date.now() });
           console.log('Successfully synchronized store to Firebase Firestore with aggressive trimming.');
+          return { success: true };
         } else {
-          console.error('Data store is too large to sync to Firestore, even with aggressive trimming.');
+           console.error('Data store is too large to sync to Firestore, even with aggressive trimming.');
+           return { success: false, error: 'Data store is too large to sync to Firestore, even with aggressive trimming.' };
         }
       }
-      return;
+      return { success: false, error: errorMsg };
     }
 
     await storeRef.set({ data: serialized, updatedAt: Date.now() });
     console.log('Successfully synchronized store to Firebase Firestore.');
-  } catch (err) {
+    return { success: true };
+  } catch (err: any) {
     console.error('Failed to sync store to Firestore:', err);
+    return { success: false, error: err.message || 'An unknown error occurred during Firestore sync.' };
   }
 }
 
@@ -384,14 +393,15 @@ function saveStore() {
 }
 
 // Slower, awaited version for critical updates
-async function saveStoreAndWait() {
+async function saveStoreAndWait(): Promise<{ success: boolean; error?: string }> {
     try {
       fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-      await syncToFirestore();
-    } catch (error) {
+      return await syncToFirestore();
+    } catch (error: any) {
       console.error('Failed to write database to disk.', error);
+      return { success: false, error: error.message };
     }
-  }
+}
 
 loadStoreFromFirestore();
 
@@ -3803,11 +3813,13 @@ app.post('/api/admin/payment-settings', isAdmin, async (req, res) => {
         store.agentFloatInstructions = agentFloatInstructions;
     }
 
-    await saveStoreAndWait();
+    const syncResult = await saveStoreAndWait();
+    
     res.json({ 
         success: true, 
         paymentProviders: store.paymentProviders,
-        agentFloatInstructions: store.agentFloatInstructions
+        agentFloatInstructions: store.agentFloatInstructions,
+        syncStatus: syncResult
     });
 });
 
