@@ -8,6 +8,7 @@ import GameRoomView from './components/GameRoom';
 import WalletModal from './components/WalletModal';
 import RejoinPrompt from './components/RejoinPrompt';
 import AdminDashboard from './pages/AdminDashboard';
+import AgentDashboard from './agent-dashboard';
 import BecomeVip from './pages/BecomeVip';
 import Tournaments from './pages/Tournaments';
 import InstallPwaPrompt from './components/InstallPwaPrompt';
@@ -834,6 +835,10 @@ export default function App() {
 
   if (window.location.pathname === '/admin') {
     return <AdminDashboard />;
+  }
+
+  if (window.location.pathname === '/agent') {
+    return <AgentDashboard />;
   }
 
   if (window.location.pathname === '/vip') {
