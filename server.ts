@@ -1379,27 +1379,6 @@ app.get('/api/debug/firebase', async (req, res) => {
   }
 });
 
-// Environment variable debugging endpoint
-app.get('/api/debug/env', (req, res) => {
-  res.json({
-    message: "Debugging environment variables. The server sees the following:",
-    has_firebase_project_id: !!process.env.FIREBASE_PROJECT_ID,
-    firebase_project_id: process.env.FIREBASE_PROJECT_ID || "Not Set",
-    
-    has_firebase_client_email: !!process.env.FIREBASE_CLIENT_EMAIL,
-    firebase_client_email: process.env.FIREBASE_CLIENT_EMAIL || "Not Set",
-    
-    has_firebase_private_key: !!process.env.FIREBASE_PRIVATE_KEY,
-    firebase_private_key_length: process.env.FIREBASE_PRIVATE_KEY?.length || 0,
-    
-    initialization_branch_check: {
-      is_functions_env: !!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR),
-      is_hostinger_like_env: !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY),
-      service_account_from_env: !!process.env.FIREBASE_SERVICE_ACCOUNT,
-    }
-  });
-});
-
 // SSE Connection Endpoint
 app.get('/api/updates', (req, res) => {
   const userId = req.query.userId as string;
