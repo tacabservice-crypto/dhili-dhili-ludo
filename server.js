@@ -49,13 +49,7 @@ var allowedOrigins = Array.from(/* @__PURE__ */ new Set([
   ...configuredAllowedOrigins
 ]));
 app.use(cors({
-  origin: function(origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error("Not allowed by CORS"));
-    }
-  },
+  origin: "*",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true
@@ -70,10 +64,7 @@ function getFirebaseServiceAccount() {
   const envValue = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
   if (envValue) {
     try {
-      let normalizedEnvValue = envValue.trim();
-      if (normalizedEnvValue.startsWith("\\{")) {
-        normalizedEnvValue = normalizedEnvValue.slice(1);
-      }
+      let normalizedEnvValue = envValue.trim().replace(/\n/g, "\\n");
       const parsed = JSON.parse(normalizedEnvValue);
       if (parsed && parsed.project_id && parsed.private_key) {
         return parsed;
@@ -3808,7 +3799,7 @@ var api = onRequest({
 }, app);
 if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
   const PORT2 = process.env.PORT || 3002;
-  app.listen(PORT2, () => {
+  app.listen(PORT2, "0.0.0.0", () => {
     console.log(`Server is listening on port ${PORT2}`);
   });
 }
