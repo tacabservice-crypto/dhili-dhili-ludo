@@ -22,14 +22,11 @@ export default function App() {
   const API_BASE_URL = (() => {
     if (typeof window === 'undefined') return 'http://localhost:3002';
     const host = window.location.hostname;
-    let configured = import.meta.env.VITE_APP_URL || '';
-    if (configured === 'MY_APP_URL') { // Check for the placeholder
-      configured = '';
-    }
     if (host === 'localhost' || host === '127.0.0.1') {
       return ''; // Use relative paths for local dev to use proxy
     }
-    return configured || window.location.origin;
+    // For any other host, use the hardcoded production URL
+    return 'https://ludosom.com';
   })();
   const [user, setUser] = useState<UserProfile | null>(null);
   const [authLoading, setAuthLoading] = useState(true); // Add a loading state for auth
