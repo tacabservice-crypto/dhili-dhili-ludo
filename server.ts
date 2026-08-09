@@ -111,33 +111,51 @@ let db: Firestore | null = null;
 let auth: Auth | null = null;
 
 function getFirebaseServiceAccount() {
-  const envValue = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
+  const envValue =
+    process.env.FIREBASE_SERVICE_ACCOUNT ||
+    process.env.FIREBASE_ADMIN_CREDENTIALS;
 
   if (envValue) {
     try {
-      const parsed = JSON.parse(envValue);
+      let normalizedEnvValue = envValue.trim();
+
+      if (normalizedEnvValue.startsWith("\\{")) {
+        normalizedEnvValue = normalizedEnvValue.slice(1);
+      }
+
+      const parsed = JSON.parse(normalizedEnvValue);
+
       if (parsed && parsed.project_id && parsed.private_key) {
         return parsed;
       }
-      console.warn('FIREBASE_SERVICE_ACCOUNT was set but did not contain project_id/private_key.');
+
+      console.warn(
+        "FIREBASE_SERVICE_ACCOUNT was set but did not contain project_id/private_key."
+      );
     } catch (error) {
-      console.error('Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON:', error);
+      console.error(
+        "Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON:",
+        error
+      );
     }
   }
 
   const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
     ? process.env.FIREBASE_SERVICE_ACCOUNT_PATH
-    : path.join(process.cwd(), 'firebase-admin-key.json');
+    : path.join(process.cwd(), "firebase-admin-key.json");
 
   if (!fs.existsSync(serviceAccountPath)) {
     return null;
   }
 
   try {
-    const serviceAccountFile = fs.readFileSync(serviceAccountPath, 'utf8');
+    const serviceAccountFile = fs.readFileSync(serviceAccountPath, "utf8");
     return JSON.parse(serviceAccountFile);
   } catch (error) {
-    console.error('Failed to read Firebase service account JSON file:', error);
+    console.error(
+      "Failed to read Firebase service account JSON file:",
+      error
+    );
     return null;
   }
 }
