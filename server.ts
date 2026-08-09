@@ -142,27 +142,43 @@ function getFirebaseServiceAccount() {
   }
 }
 
-const serviceAccount = getFirebaseServiceAccount();
-if (serviceAccount) {
+// On Firebase, the SDK automatically picks up credentials. For local dev, it falls back to the service account.
+if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
+  // We are in the Firebase Functions environment, use default credentials
   try {
-    serviceAccount.private_key = (serviceAccount.private_key || '').replace(/\\n/g, '\n');
-
-    try {
-      getApp();
-    } catch (error) {
-      initializeApp({
-        credential: cert(serviceAccount),
-        databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
-      });
-    }
+    initializeApp();
     db = getFirestore();
     auth = getAuth();
-    console.log('Firebase Firestore and Auth initialized successfully with Admin SDK.');
+    console.log('Firebase Admin SDK initialized in Cloud Function environment.');
   } catch (err) {
-    console.error('Failed to initialize Firebase Admin SDK:', err);
+    console.error('Critical: Failed to initialize Firebase Admin SDK in function environment:', err);
   }
 } else {
-  console.log('No Firebase Admin credentials configured. Set FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json for login/auth to work.');
+  // We are in a local development environment, use service account
+  const serviceAccount = getFirebaseServiceAccount();
+  if (serviceAccount) {
+    try {
+      serviceAccount.private_key = (serviceAccount.private_key || '').replace(/\\n/g, '\n');
+
+      // Check if the app is already initialized to prevent errors
+      try {
+        getApp();
+      } catch (error) {
+        initializeApp({
+          credential: cert(serviceAccount),
+          databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
+        });
+      }
+      
+      db = getFirestore();
+      auth = getAuth();
+      console.log('Firebase Admin SDK initialized successfully for local development.');
+    } catch (err) {
+      console.error('Failed to initialize Firebase Admin SDK with local credentials:', err);
+    }
+  } else {
+    console.log('No Firebase Admin credentials configured for local development. Set FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json.');
+  }
 }
 
 // ==========================================
