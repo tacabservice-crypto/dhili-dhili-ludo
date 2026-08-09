@@ -272,7 +272,9 @@ async function loadStoreFromFirestore() {
         store.agentTransactions = parsed.agentTransactions || [];
         store.tournaments = parsed.tournaments || {};
         console.log("Database loaded successfully from Firebase Firestore.");
-        import_fs.default.writeFileSync(DB_FILE, payload.data, "utf8");
+        if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
+          import_fs.default.writeFileSync(DB_FILE, payload.data, "utf8");
+        }
         return;
       }
     }
@@ -332,6 +334,9 @@ async function syncToFirestore() {
   }
 }
 function saveStore() {
+  if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
+    return;
+  }
   try {
     import_fs.default.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
   } catch (error) {
@@ -340,10 +345,12 @@ function saveStore() {
 }
 async function saveStoreAndWait() {
   try {
-    import_fs.default.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
+    if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
+      import_fs.default.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
+    }
     return await syncToFirestore();
   } catch (error) {
-    console.error("Failed to write database to disk.", error);
+    console.error("Failed to write database to disk or sync to Firestore.", error);
     return { success: false, error: error.message };
   }
 }
