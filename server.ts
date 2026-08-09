@@ -5128,7 +5128,7 @@ export const api = onRequest({
 // Start the server manually if we're NOT in a Firebase Function environment
 if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
   const PORT = process.env.PORT || 3002;
-  app.listen(PORT, () => {
+  app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server is listening on port ${PORT}`);
   });
 }
