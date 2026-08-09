@@ -113,11 +113,10 @@ function getFirebaseServiceAccount() {
 
   if (envValue) {
     try {
-      let normalizedEnvValue = envValue.trim();
-
-      if (normalizedEnvValue.startsWith("\\{")) {
-        normalizedEnvValue = normalizedEnvValue.slice(1);
-      }
+      // Replace literal newline characters with escaped newlines for JSON parsing.
+      // This handles cases where the environment variable might be set with actual newlines
+      // instead of properly escaped JSON strings.
+      let normalizedEnvValue = envValue.trim().replace(/\n/g, '\\n');
 
       const parsed = JSON.parse(normalizedEnvValue);
 
