@@ -683,7 +683,7 @@ function advanceTurn(room: GameRoom) {
 }
 
 // Add a transaction helper
-function addTransaction(userId: string, type: WalletTransaction['type'], amount: number, matchId?: string, description = '') {
+async function addTransaction(userId: string, type: WalletTransaction['type'], amount: number, matchId?: string, description = '') {
   const tx: WalletTransaction = {
     id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     userId,
@@ -693,8 +693,24 @@ function addTransaction(userId: string, type: WalletTransaction['type'], amount:
     matchId,
     description
   };
+
+  // New: Save directly to Firestore
+  if (db) {
+    try {
+      // Use the new top-level transactions collection
+      await db.collection('transactions').doc(tx.id).set(tx);
+    } catch (error) {
+        console.error("CRITICAL: Failed to save transaction to Firestore!", tx, error);
+        // Fallback or error handling here. For now, we will still add to in-memory store.
+    }
+  }
+
+  // For backward compatibility, also add to the in-memory store
   store.transactions.unshift(tx);
-  saveStore();
+  
+  // The call to saveStore() is often redundant if the calling function calls saveStoreAndWait()
+  // but we'll leave it for now to be safe during the transition.
+  saveStore(); 
   return tx;
 }
 
@@ -774,8 +790,8 @@ function executeBotTurnIfActive(room: GameRoom) {
         }
 
         // Apply movement
-        setTimeout(() => {
-          moveTokenLogic(room, selectedToken.id, d);
+        setTimeout(async () => {
+          await moveTokenLogic(room, selectedToken.id, d);
           broadcastToRoom(room.id, 'game_update', room);
           executeBotTurnIfActive(room);
         }, 500);
@@ -785,7 +801,7 @@ function executeBotTurnIfActive(room: GameRoom) {
 }
 
 // Core token movement logic
-function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
+async function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
   const gs = room.gameState;
   const token = gs.tokens.find(t => t.id === tokenId);
   if (!token) return;
@@ -892,7 +908,7 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
 
     if (room.tournamentDetails) {
       addLog(room, `🏆 ${activePlayer.username} has won the tournament match!`);
-      handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, activePlayer.userId);
+      await handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, activePlayer.userId);
       gs.escrowBalance = 0;
       return;
     }
@@ -907,17 +923,17 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
 
       if (room.betAmount > 0) {
         const share = gs.escrowBalance / 2;
-        winningTeammates.forEach(p => {
+        for (const p of winningTeammates) {
           if (!isBotPlayer(p.userId)) {
             const user = store.users[p.userId];
             if (user) {
               user.balance += share;
               user.winCount += 1;
-              addTransaction(p.userId, 'win_payout', share, room.id, `Team Win payout for match ${room.id}.`);
+              await addTransaction(p.userId, 'win_payout', share, room.id, `Team Win payout for match ${room.id}.`);
               broadcastUserUpdate(p.userId);
             }
           }
-        });
+        }
 
         // Record losses for other real players
         room.players.forEach(p => {
@@ -950,7 +966,7 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
 
           winnerProfile.balance += payoutAmount;
           winnerProfile.winCount += 1;
-          addTransaction(
+          await addTransaction(
             activePlayer.userId,
             'win_payout',
             payoutAmount,
@@ -960,7 +976,7 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
           broadcastUserUpdate(activePlayer.userId);
 
           store.houseRevenue += rakeAmount;
-          addTransaction(
+          await addTransaction(
             'house', // A special ID for house transactions
             'app_commission',
             rakeAmount,
@@ -999,7 +1015,7 @@ function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
 }
 
 // Helper to handle inactivity forfeit
-function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
+async function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
   if (room.status !== 'playing') return;
 
   addLog(room, `⏱️ ${inactivePlayer.username} has been forfeited due to inactivity.`);
@@ -1014,7 +1030,7 @@ function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
 
     if (room.tournamentDetails) {
       addLog(room, `🏆 ${winner.username} has won the tournament match by forfeit!`);
-      handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, winner.userId);
+      await handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, winner.userId);
       room.gameState.escrowBalance = 0;
     } else {
       const totalPayout = room.gameState.escrowBalance;
@@ -1036,11 +1052,11 @@ function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
 
           winnerProfile.balance += payoutAmount;
           winnerProfile.winCount += 1;
-          addTransaction(winner.userId, 'win_payout', payoutAmount, room.id, `Win by opponent inactivity forfeit (Rake: $${rakeAmount.toFixed(2)}).`);
+          await addTransaction(winner.userId, 'win_payout', payoutAmount, room.id, `Win by opponent inactivity forfeit (Rake: $${rakeAmount.toFixed(2)}).`);
           broadcastUserUpdate(winner.userId);
 
           store.houseRevenue += rakeAmount;
-          addTransaction(
+          await addTransaction(
             'house', // A special ID for house transactions
             'app_commission',
             rakeAmount,
@@ -1053,14 +1069,14 @@ function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
     }
   }
 
-  saveStore();
+  await saveStoreAndWait();
   broadcastToRoom(room.id, 'game_update', room);
 }
 
 // Initialize continuous turn timers thread (1s interval)
-setInterval(() => {
+setInterval(async () => {
   let changed = false;
-  Object.keys(store.rooms).forEach(roomId => {
+  for (const roomId of Object.keys(store.rooms)) {
     const room = store.rooms[roomId];
     if (room.status === 'playing') {
       const gs = room.gameState;
@@ -1081,9 +1097,9 @@ setInterval(() => {
 
         // Forfeit if 5 minutes are up
         if (activePlayer.inactivityTimer <= 0) {
-          handleInactivityForfeit(room, activePlayer);
+          await handleInactivityForfeit(room, activePlayer);
           // Skip the rest of the turn logic for this room
-          return; 
+          continue; 
         }
       }
 
@@ -1103,7 +1119,7 @@ setInterval(() => {
         }
       }
     }
-  });
+  }
 
   if (changed) {
     // Notify clients about updated timers
@@ -1392,36 +1408,27 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
   const { username, email, avatar, promoCode } = req.body;
   const firebaseUid = req.user.uid;
 
-  if (!db) {
+  if (!db || !auth) {
     return res.status(500).json({ error: 'Database not initialized' });
   }
 
-  const usersRef = db.collection('users');
+  const userRef = db.collection('users').doc(firebaseUid);
 
   try {
-    const allUsers = Object.values(store.users);
-    
-    // 1. Find existing user by Firebase UID
-    const existingUser = allUsers.find(u => u.firebaseUid === firebaseUid);
-    if (existingUser) {
-      return res.json(existingUser);
-    }
+    const userDoc = await userRef.get();
 
-    // 2. If not found, try to link an old account by email
-    if (email) {
-      const userToLink = allUsers.find(u => u.email === email && !u.firebaseUid);
-      if (userToLink) {
-        userToLink.firebaseUid = firebaseUid;
-        await saveStoreAndWait();
-        console.log(`Linked existing user with email ${email} to firebaseUid ${firebaseUid}.`);
-        return res.json(userToLink);
+    // 1. If user document exists, return it
+    if (userDoc.exists) {
+      const userData = userDoc.data();
+      // Also ensure this user data is present in the local store for now for compatibility
+      if (userData && userData.id && !store.users[userData.id]) {
+          console.log(`Syncing returning user ${userData.id} to local store.`);
+          store.users[userData.id] = userData as UserProfile;
       }
+      return res.json(userData);
     }
 
-    // 3. If still no user, this is a new registration.
-    if (!auth) {
-      return res.status(500).json({ error: 'Firebase Admin not configured on server for new user registration.' });
-    }
+    // 2. If no user document, this is a new registration.
     const firebaseUser = await auth.getUser(firebaseUid);
 
     let finalUsername = username;
@@ -1439,34 +1446,57 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
     const cleanUsername = finalUsername.trim().substring(0, 20);
 
     let linkedAgentId: string | undefined = undefined;
-    if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '' && db) {
+    let agent: Agent | undefined = undefined;
+    if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '') {
       const agentsRef = db.collection('agents');
       const agentSnapshot = await agentsRef.where('promoCode', '==', promoCode.trim()).limit(1).get();
       if (agentSnapshot.empty) {
         return res.status(400).json({ error: 'Invalid or expired promo code.' });
       }
-      const agent = agentSnapshot.docs[0].data() as Agent;
+      agent = agentSnapshot.docs[0].data() as Agent;
       linkedAgentId = agent.id;
     }
-
-    const newId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    
+    // The new user's ID will be their Firebase UID for direct lookup.
+    // We also keep a separate `id` field for compatibility with other parts of the system for now.
+    const newId = firebaseUid; 
     const newUser: UserProfile = {
       id: newId,
       firebaseUid: firebaseUid,
       username: cleanUsername,
       email: email || firebaseUser.email || undefined,
       avatar: avatar || '🌸',
-      balance: 10.0,
+      balance: 10.0, // Welcome bonus
       winCount: 0,
       lossCount: 0,
       linkedAgentId: linkedAgentId,
+      promoCode: promoCode, // Explicitly save the promo code used
+      createdAt: Date.now(),
     };
 
-    store.users[newId] = newUser;
-    addTransaction(newId, 'deposit', 10.0, undefined, 'Welcome signup bonus.'); // This calls saveStore()
-
-    await saveStoreAndWait(); // Ensure sync is complete before responding
+    // Create the user document in Firestore
+    await userRef.set(newUser);
     
+    // Also create the user in the local store for compatibility with the rest of the app
+    store.users[newId] = newUser;
+
+    // Add welcome bonus transaction (this still uses the old system, which is OK for now)
+    addTransaction(newId, 'deposit', 10.0, undefined, 'Welcome signup bonus.');
+
+    // We still call saveStoreAndWait to keep the JSON/Firestore backup in sync for now.
+    // This call can be removed once all data is migrated.
+    await saveStoreAndWait(); 
+    
+    // If a promo code was used, add the player to the agent's list of players
+    if (agent && linkedAgentId) {
+        const agentPlayersRef = db.collection('agents').doc(linkedAgentId).collection('players').doc(newId);
+        await agentPlayersRef.set({
+            playerId: newId,
+            username: newUser.username,
+            joinedAt: Date.now()
+        });
+    }
+
     res.status(201).json(newUser);
 
   } catch (error) {
@@ -1476,32 +1506,81 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
 });
 
 // Retrieve single profile
-app.get('/api/users/:userId', (req, res, next) => {
+app.get('/api/users/:userId', async (req, res, next) => {
   if (req.params.userId === 'online' || req.params.userId === 'leaderboard') {
     return next();
   }
-  const user = store.users[req.params.userId];
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
+  
+  if (!db) {
+    // Fallback to old method if DB is not connected
+    const user = store.users[req.params.userId];
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+    return res.json(user);
   }
-  res.json(user);
+
+  try {
+      const userRef = db.collection('users').doc(req.params.userId);
+      const doc = await userRef.get();
+      if (!doc.exists) {
+          return res.status(404).json({ error: 'User not found' });
+      }
+      res.json(doc.data());
+  } catch (error) {
+      console.error("Failed to get user from Firestore:", error);
+      res.status(500).json({ error: "Failed to retrieve user."});
+  }
 });
 
 // Update profile
-app.post('/api/users/:userId/update', async (req, res) => {
-  const user = store.users[req.params.userId];
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
+app.post('/api/users/:userId/update', verifyFirebaseToken, async (req: any, res) => {
+    if (!db) return res.status(500).json({ error: 'Database not initialized' });
 
-  const { username, avatar, isOfflinePreference } = req.body;
-  if (username) user.username = username.trim().substring(0, 20);
-  if (avatar) user.avatar = avatar;
-  if (typeof isOfflinePreference === 'boolean') user.isOfflinePreference = isOfflinePreference;
+    const userIdToUpdate = req.params.userId;
+    // Security check: Make sure the authenticated user is the one they are trying to update
+    if (req.user.uid !== userIdToUpdate) {
+        return res.status(403).json({ error: 'You are not authorized to update this profile.' });
+    }
 
-  await saveStoreAndWait();
-  broadcastUserUpdate(user.id);
-  res.json(user);
+    const userRef = db.collection('users').doc(userIdToUpdate);
+
+    try {
+        const userDoc = await userRef.get();
+        if (!userDoc.exists) {
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        const { username, avatar, isOfflinePreference } = req.body;
+        const updateData: Partial<UserProfile> = {};
+
+        if (username) updateData.username = username.trim().substring(0, 20);
+        if (avatar) updateData.avatar = avatar;
+        if (typeof isOfflinePreference === 'boolean') updateData.isOfflinePreference = isOfflinePreference;
+        
+        if (Object.keys(updateData).length > 0) {
+            await userRef.update(updateData);
+        }
+
+        const updatedUserDoc = await userRef.get();
+        const updatedUser = updatedUserDoc.data() as UserProfile;
+
+        // Also update the in-memory store for compatibility
+        if (store.users[userIdToUpdate]) {
+            store.users[userIdToUpdate] = { ...store.users[userIdToUpdate], ...updatedUser };
+        } else {
+            store.users[userIdToUpdate] = updatedUser;
+        }
+
+        await saveStoreAndWait(); // Still sync the main store for now
+
+        broadcastUserUpdate(userIdToUpdate);
+        res.json(updatedUser);
+
+    } catch (error) {
+        console.error('Error updating user profile:', error);
+        res.status(500).json({ error: 'An internal server error occurred.' });
+    }
 });
 
 // Update online/offline status preference
@@ -1520,7 +1599,7 @@ app.post('/api/users/:userId/status', (req, res) => {
 });
 
 // Wallet Deposits / Withdrawals
-app.post('/api/wallet/deposit', (req, res) => {
+app.post('/api/wallet/deposit', async (req, res) => {
   const { userId, amount } = req.body;
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -1531,13 +1610,14 @@ app.post('/api/wallet/deposit', (req, res) => {
   }
 
   user.balance += depAmt;
-  addTransaction(userId, 'deposit', depAmt, undefined, `Deposited funds via Simulated Net Banking.`);
+  await addTransaction(userId, 'deposit', depAmt, undefined, `Deposited funds via Simulated Net Banking.`);
   broadcastUserUpdate(userId);
 
+  await saveStoreAndWait();
   res.json({ success: true, balance: user.balance });
 });
 
-app.post('/api/wallet/withdraw', (req, res) => {
+app.post('/api/wallet/withdraw', async (req, res) => {
   const { userId, amount } = req.body;
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -1556,9 +1636,10 @@ app.post('/api/wallet/withdraw', (req, res) => {
   }
 
   user.balance -= withAmt;
-  addTransaction(userId, 'withdrawal', withAmt, undefined, `Withdrawn funds to bank account.`);
+  await addTransaction(userId, 'withdrawal', withAmt, undefined, `Withdrawn funds to bank account.`);
   broadcastUserUpdate(userId);
 
+  await saveStoreAndWait();
   res.json({ success: true, balance: user.balance });
 });
 
@@ -1622,9 +1703,37 @@ app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
   res.json({ success: true, message: 'Your request has been submitted for review.' });
 });
 
-app.get('/api/wallet/transactions/:userId', (req, res) => {
-  const txs = store.transactions.filter(t => t.userId === req.params.userId);
-  res.json(txs);
+app.get('/api/wallet/transactions/:userId', verifyFirebaseToken, async (req: any, res) => {
+  if (!db) {
+    // Fallback to old in-memory store if DB not available
+    const txs = store.transactions.filter(t => t.userId === req.params.userId);
+    return res.json(txs);
+  }
+
+  const userId = req.params.userId;
+  // Security check: Ensure the authenticated user is requesting their own transactions
+  if (req.user.uid !== userId) {
+      return res.status(403).json({ error: 'You are not authorized to view these transactions.' });
+  }
+
+  try {
+      const snapshot = await db.collection('transactions')
+                                .where('userId', '==', userId)
+                                .orderBy('timestamp', 'desc')
+                                .limit(100) // Limit to the last 100 transactions for performance
+                                .get();
+
+      if (snapshot.empty) {
+          return res.json([]);
+      }
+      
+      const transactions = snapshot.docs.map(doc => doc.data());
+      res.json(transactions);
+
+  } catch (error) {
+      console.error(`Failed to get transactions for user ${userId}:`, error);
+      res.status(500).json({ error: 'Failed to retrieve transactions.' });
+  }
 });
 
 app.get('/api/payment/settings', (req, res) => {
@@ -1661,7 +1770,7 @@ app.post('/api/wallet/process-api-payment', async (req, res) => {
       return res.status(400).json({ error: 'Insufficient funds.' });
     }
     user.balance -= parsedAmount;
-    addTransaction(userId, 'withdrawal', parsedAmount, undefined, `API withdrawal via ${providerKey}.`);
+    await addTransaction(userId, 'withdrawal', parsedAmount, undefined, `API withdrawal via ${providerKey}.`);
     broadcastUserUpdate(userId);
     await saveStoreAndWait();
     return res.json({ success: true, balance: user.balance, message: 'Withdrawal processed via API.' });
@@ -1672,7 +1781,7 @@ app.post('/api/wallet/process-api-payment', async (req, res) => {
       return res.status(400).json({ error: 'Sender phone number is required for deposit requests.' });
     }
     user.balance += parsedAmount;
-    addTransaction(userId, 'deposit', parsedAmount, undefined, `API deposit via ${providerKey}.`);
+    await addTransaction(userId, 'deposit', parsedAmount, undefined, `API deposit via ${providerKey}.`);
     broadcastUserUpdate(userId);
     await saveStoreAndWait();
     return res.json({ success: true, balance: user.balance, message: 'Deposit processed via API.' });
@@ -1715,7 +1824,7 @@ app.post('/api/vip/subscribe', verifyFirebaseToken, async (req: any, res) => {
   };
 
   // Record transaction
-  addTransaction(user.id, 'app_commission', vipTier.price, undefined, `VIP Subscription (${vipTier.name}) purchase.`);
+  await addTransaction(user.id, 'app_commission', vipTier.price, undefined, `VIP Subscription (${vipTier.name}) purchase.`);
 
   await saveStoreAndWait();
   broadcastUserUpdate(user.id);
@@ -1774,7 +1883,7 @@ app.post('/api/tournaments/:id/register', verifyFirebaseToken, async (req: any, 
 
   // Deduct entry fee
   user.balance -= tournament.entryFee;
-  addTransaction(user.id, 'bet_escrow_locked', tournament.entryFee, id, `Tournament entry fee for "${tournament.name}".`);
+  await addTransaction(user.id, 'bet_escrow_locked', tournament.entryFee, id, `Tournament entry fee for "${tournament.name}".`);
 
   // Add player to tournament
   tournament.players.push({
@@ -1824,7 +1933,7 @@ async function handleTournamentMatchWin(tournamentId: string, matchId: string, w
       const winnerUser = store.users[winners[0].userId];
       if (winnerUser) {
         winnerUser.balance += tournament.prizePool;
-        addTransaction(winnerUser.id, 'win_payout', tournament.prizePool, tournament.id, `Tournament "${tournament.name}" prize.`);
+        await addTransaction(winnerUser.id, 'win_payout', tournament.prizePool, tournament.id, `Tournament "${tournament.name}" prize.`);
         broadcastUserUpdate(winnerUser.id);
       }
       broadcastToAll('tournament_ended', tournament);
@@ -1850,7 +1959,7 @@ async function handleTournamentMatchWin(tournamentId: string, matchId: string, w
       // Create Ludo rooms for each pending match
       for (const nextMatch of nextRoundMatches) {
         if (nextMatch.status === 'pending' && nextMatch.player1 && nextMatch.player2) {
-          const room = startMatchedRoom(
+          const room = await startMatchedRoom(
             [nextMatch.player1, nextMatch.player2],
             0, 2, 'solo'
           );
@@ -1902,7 +2011,7 @@ function checkAndStartTournaments() {
       // Create Ludo rooms for each pending match
       for (const match of t.matches) {
         if (match.status === 'pending' && match.player1 && match.player2) {
-          const room = startMatchedRoom(
+          const room = await startMatchedRoom(
             [match.player1, match.player2],
             0, // No extra bet for tournament matches
             2, 'solo'
@@ -2213,7 +2322,7 @@ app.post('/api/request-to-agent', authMiddleware, async (req, res) => {
 });
 
 // Helper to build and start a matched game room
-function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; avatar: string; winCount?: number; lossCount?: number; balance: number }>, bet: number, cap: number, mode: 'solo' | 'team'): GameRoom {
+async function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; avatar: string; winCount?: number; lossCount?: number; balance: number }>, bet: number, cap: number, mode: 'solo' | 'team'): Promise<GameRoom> {
   const roomId = `MATCH_${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
   let colors: PlayerColor[];
 
@@ -2239,17 +2348,17 @@ function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; av
 
   // Create escrow holding for real players
   let totalEscrow = 0;
-  players.forEach(p => {
+  for (const p of players) {
     if (!isBotPlayer(p.userId)) {
       const u = store.users[p.userId];
       if (u) {
         u.balance = Math.max(0, u.balance - bet);
-        addTransaction(p.userId, 'bet_escrow_locked', bet, roomId, `Escrow stake for Ludo Match ${roomId}.`);
+        await addTransaction(p.userId, 'bet_escrow_locked', bet, roomId, `Escrow stake for Ludo Match ${roomId}.`);
         broadcastUserUpdate(p.userId);
       }
     }
     totalEscrow += bet;
-  });
+  }
 
   const tokens: LudoToken[] = [];
   players.forEach(p => {
@@ -2282,7 +2391,7 @@ function startMatchedRoom(matchedUsers: Array<{ id: string; username: string; av
   };
 
   store.rooms[roomId] = newRoom;
-  saveStore();
+  await saveStoreAndWait();
 
   // Notify real players instantly over SSE with redirect payload
   players.forEach(p => {
@@ -2376,7 +2485,7 @@ app.post('/api/rooms/matchmaking/enter-queue', (req, res) => {
 });
 
 // Join Matchmaking Game (Challenge Player)
-app.post('/api/rooms/matchmaking/join', (req, res) => {
+app.post('/api/rooms/matchmaking/join', async (req, res) => {
   const { userId, betAmount, capacity, gameMode, opponentId } = req.body;
   
   if (!opponentId) {
@@ -2416,7 +2525,7 @@ app.post('/api/rooms/matchmaking/join', (req, res) => {
   // For a direct 1v1 challenge, capacity is always 2 and mode is solo.
   const finalCapacity = 2;
   const finalMode = 'solo';
-  const room = startMatchedRoom(matchedList, bet, finalCapacity, finalMode);
+  const room = await startMatchedRoom(matchedList, bet, finalCapacity, finalMode);
   // Notify both players instantly over SSE with redirect payload
   matchedList.forEach(p => {
     if (!isBotPlayer(p.id)) {
@@ -2425,13 +2534,13 @@ app.post('/api/rooms/matchmaking/join', (req, res) => {
     }
   });
   broadcastToAll('online_players_updated', {});
-  saveStore();
+  await saveStoreAndWait();
 
   return res.json({ matched: true, roomId: room.id, room });
 });
 
 // Explicit endpoint to play against AI Bots ONLY (when user explicitly chooses)
-app.post('/api/rooms/create-bot-room', (req, res) => {
+app.post('/api/rooms/create-bot-room', async (req, res) => {
   const { userId, betAmount, capacity, gameMode } = req.body;
   const user = store.users[userId];
   if (!user) return res.status(404).json({ error: 'User not found' });
@@ -2460,7 +2569,7 @@ app.post('/api/rooms/create-bot-room', (req, res) => {
     });
   }
 
-  const room = startMatchedRoom(matchedList, bet, cap, mode);
+  const room = await startMatchedRoom(matchedList, bet, cap, mode);
   res.json({ success: true, roomId: room.id });
 });
 
@@ -2608,7 +2717,7 @@ app.get('/api/users/online', async (req, res) => {
 });
 
 // Challenge / Invite a player (PUBG-style)
-app.post('/api/rooms/challenge/invite', (req, res) => {
+app.post('/api/rooms/challenge/invite', async (req, res) => {
   const { senderId, receiverId, betAmount, capacity, gameMode } = req.body;
   const sender = store.users[senderId];
   if (!sender) return res.status(404).json({ error: 'Sender user not found.' });
@@ -2646,7 +2755,7 @@ app.post('/api/rooms/challenge/invite', (req, res) => {
       });
     }
 
-    const room = startMatchedRoom(matchedList, bet, selectedCapacity, selectedMode);
+    const room = await startMatchedRoom(matchedList, bet, selectedCapacity, selectedMode);
     return res.json({ success: true, roomId: room.id, room });
   }
 
@@ -2681,7 +2790,7 @@ app.post('/api/rooms/challenge/invite', (req, res) => {
       });
     }
 
-    const room = startMatchedRoom(matchedList, bet, selectedCapacity, selectedMode);
+    const room = await startMatchedRoom(matchedList, bet, selectedCapacity, selectedMode);
     
     // Notify receiver directly that they are matched!
     sendEventToUser(receiverId, 'matchmaker_success', { roomId: room.id, room });
@@ -2910,7 +3019,7 @@ app.post('/api/rooms/add-bot', (req, res) => {
 });
 
 // Start Match (Host only)
-app.post('/api/rooms/start', (req, res) => {
+app.post('/api/rooms/start', async (req, res) => {
   const { userId, roomId } = req.body;
   const room = store.rooms[roomId];
   if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -2961,14 +3070,15 @@ app.post('/api/rooms/start', (req, res) => {
   const bet = room.betAmount;
   let success = true;
 
-  room.players.forEach(pl => {
+  for (const pl of room.players) {
     if (!isBotPlayer(pl.userId)) {
       const user = store.users[pl.userId];
       if (!user || user.balance < bet) {
         success = false;
+        break;
       }
     }
-  });
+  }
 
   if (!success) {
     return res.status(400).json({ error: 'Nus ama mid ka mid ah ciyaartoyda kuma filna baaqiga wallet-kiisa bet-kan.' });
@@ -2976,15 +3086,15 @@ app.post('/api/rooms/start', (req, res) => {
 
   // Execute deductions
   let totalEscrow = 0;
-  room.players.forEach(pl => {
+  for (const pl of room.players) {
     if (!isBotPlayer(pl.userId)) {
       const user = store.users[pl.userId]!;
       user.balance -= bet;
-      addTransaction(pl.userId, 'bet_escrow_locked', bet, room.id, `Escrow lock for Match ${room.id}`);
+      await addTransaction(pl.userId, 'bet_escrow_locked', bet, room.id, `Escrow lock for Match ${room.id}`);
       broadcastUserUpdate(pl.userId);
     }
     totalEscrow += bet;
-  });
+  }
 
   // Setup tokens
   const tokens: LudoToken[] = [];
@@ -2999,7 +3109,7 @@ app.post('/api/rooms/start', (req, res) => {
   room.gameState.turnTimer = 30;
   addLog(room, `⚔️ Ciyaartu waa ay bilaabatay! Ciyaartoyda: ${room.players.length}. Bet: $${bet}. Escrow Locked: $${totalEscrow}`);
 
-  saveStore();
+  await saveStoreAndWait();
   broadcastToRoom(room.id, 'game_update', room);
 
   res.json(room);
@@ -3092,7 +3202,7 @@ app.post('/api/rooms/roll-dice', (req, res) => {
   }
 });
 // Token Move Action
-app.post('/api/rooms/move-token', (req, res) => {
+app.post('/api/rooms/move-token', async (req, res) => {
   const { userId, roomId, tokenId } = req.body;
   const room = store.rooms[roomId];
   if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -3124,7 +3234,7 @@ app.post('/api/rooms/move-token', (req, res) => {
   }
 
   // Execute Move
-  moveTokenLogic(room, tokenId, gs.diceRoll);
+  await moveTokenLogic(room, tokenId, gs.diceRoll);
   broadcastToRoom(room.id, 'game_update', room);
   
   // Trigger bot turn if needed
@@ -3303,7 +3413,7 @@ app.post('/api/rooms/emoji', (req, res) => {
 });
 
 // Leave / Forfeit Game Room
-app.post('/api/rooms/leave', (req, res) => {
+app.post('/api/rooms/leave', async (req, res) => {
   const { userId, roomId } = req.body;
   const room = store.rooms[roomId];
   if (!room) return res.status(404).json({ error: 'Room not found' });
@@ -3353,7 +3463,7 @@ app.post('/api/rooms/leave', (req, res) => {
         if (winnerProfile && !isBotPlayer(winnerProfile.id)) {
           winnerProfile.balance += totalPayout;
           winnerProfile.winCount = (winnerProfile.winCount || 0) + 1;
-          addTransaction(opponent.userId, 'win_payout', totalPayout, room.id, `Win by opponent forfeit.`);
+          await addTransaction(opponent.userId, 'win_payout', totalPayout, room.id, `Win by opponent forfeit.`);
           broadcastUserUpdate(opponent.userId);
         }
       }
@@ -3361,7 +3471,7 @@ app.post('/api/rooms/leave', (req, res) => {
 
       // Broadcast the final game state to everyone in the room
       broadcastToRoom(room.id, 'game_update', room);
-      res.json({ success: true, room }); // Respond with the final room state
+      
 
     } else {
       // This case handles if somehow the last player leaves, or a player leaves a game with only bots.
@@ -3369,11 +3479,13 @@ app.post('/api/rooms/leave', (req, res) => {
       room.status = 'completed';
       // No winner is declared if no one is left.
       broadcastToRoom(room.id, 'game_update', room);
-      res.json({ success: true, room }); // Also respond with room state here
     }
+    await saveStoreAndWait();
+    return res.json({ success: true, room });
   }
 
-  saveStore();
+  await saveStoreAndWait();
+  res.json({ success: true });
 });
 
 // Spectate a game room
@@ -4402,7 +4514,7 @@ app.put('/api/admin/agents/:agentId', isAdmin, async (req, res) => {
 
 
 // Cancel a game
-app.post('/api/admin/rooms/:roomId/cancel', isAdmin, (req, res) => {
+app.post('/api/admin/rooms/:roomId/cancel', isAdmin, async (req, res) => {
     const { roomId } = req.params;
     const room = store.rooms[roomId];
     if (!room) {
@@ -4411,23 +4523,23 @@ app.post('/api/admin/rooms/:roomId/cancel', isAdmin, (req, res) => {
 
     // Refund players
     if (room.betAmount > 0) {
-        room.players.forEach(p => {
+        for (const p of room.players) {
             if (!isBotPlayer(p.userId)) {
                 const user = store.users[p.userId];
                 if (user) {
                     user.balance += room.betAmount;
-                    addTransaction(p.userId, 'refund', room.betAmount, room.id, `Refund for canceled match ${room.id}.`);
+                    await addTransaction(p.userId, 'refund', room.betAmount, room.id, `Refund for canceled match ${room.id}.`);
                     broadcastUserUpdate(p.userId);
                 }
             }
-        });
+        }
     }
 
     addLog(room, `Game canceled by admin. Bets refunded.`);
     broadcastToRoom(room.id, 'game_canceled', { roomId });
     
     delete store.rooms[roomId];
-    saveStore();
+    await saveStoreAndWait();
     res.json({ success: true, message: `Room ${roomId} has been canceled and bets refunded.` });
 });
 

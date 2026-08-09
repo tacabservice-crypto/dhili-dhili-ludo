@@ -18,6 +18,7 @@ export interface UserProfile {
   role?: string;
   password?: string; // In a real app, this should be securely hashed.
   linkedAgentId?: string;
+  promoCode?: string;
   firebaseUid?: string;
 }
 
