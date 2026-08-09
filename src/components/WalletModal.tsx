@@ -50,10 +50,21 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
         try {
           const agentsRes = await fetch(`/api/agents?location=${user.location || ''}`);
           if (agentsRes.ok) {
-            const data = await agentsRes.json();
-            setAgents(data);
-            if (data.length > 0 && !selectedAgentId) {
-              setSelectedAgentId(data[0].id);
+            const allAgents = await agentsRes.json();
+            if (user.linkedAgentId) {
+              const linkedAgent = allAgents.find((agent: Agent) => agent.id === user.linkedAgentId);
+              if (linkedAgent) {
+                setAgents([linkedAgent]);
+                setSelectedAgentId(linkedAgent.id);
+              } else {
+                setError("Your linked agent is currently not available. Please contact support.");
+                setAgents([]);
+              }
+            } else {
+              setAgents(allAgents);
+              if (allAgents.length > 0 && !selectedAgentId) {
+                setSelectedAgentId(allAgents[0].id);
+              }
             }
           }
         } catch (err) {
@@ -279,8 +290,8 @@ export default function WalletModal({ user, onClose, onBalanceUpdated }: WalletM
                     <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block">
                       {activeTab === 'deposit' ? 'Deposit to Agent' : 'Withdraw from Agent'}
                     </label>
-                    <select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white">
-                      {agents.length === 0 && <option>Loading agents...</option>}
+                    <select value={selectedAgentId} onChange={(e) => setSelectedAgentId(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white disabled:bg-black/20 disabled:opacity-70" disabled={!!user.linkedAgentId}>
+                      {agents.length === 0 && <option>{user.linkedAgentId ? 'Loading your agent...' : 'No agents available.'}</option>}
                       {agents.map(agent => (
                         <option key={agent.id} value={agent.id}>{agent.username} ({agent.location || 'N/A'})</option>
                       ))}
