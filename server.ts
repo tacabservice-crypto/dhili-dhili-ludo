@@ -10,7 +10,7 @@ import cors from 'cors';
 import path from 'path';
 import fs from 'fs';
 import { createServer as createViteServer, ViteDevServer } from 'vite';
-import * as admin from 'firebase-admin';
+import { initializeApp, cert, getApp } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
 import { onRequest } from "firebase-functions/v2/https";
@@ -159,7 +159,7 @@ function getFirebaseServiceAccount() {
 if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
   // We are in the Firebase Functions environment, use default credentials
   try {
-    admin.initializeApp();
+    initializeApp();
     db = getFirestore();
     auth = getAuth();
     console.log('Firebase Admin SDK initialized in Cloud Function environment.');
@@ -171,15 +171,15 @@ if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
   if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
     try {
       const privateKey = process.env.FIREBASE_PRIVATE_KEY
-        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n').trim()
         : undefined;
 
       // Check if the app is already initialized to prevent errors
       try {
-        admin.app(); // Use admin.app() instead of getApp()
+        getApp();
       } catch (error) {
-        admin.initializeApp({ // Use admin.initializeApp()
-          credential: admin.credential.cert({
+        initializeApp({
+          credential: cert({
             projectId: process.env.FIREBASE_PROJECT_ID,
             clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
             privateKey: privateKey,
@@ -187,8 +187,8 @@ if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
           databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`
         });
       }
-      db = getFirestore(); // Keep these as they are from separate imports
-      auth = getAuth(); // Keep these as they are from separate imports
+      db = getFirestore();
+      auth = getAuth();
       console.log('Firebase Admin SDK initialized with separate environment variables (PROJECT_ID, CLIENT_EMAIL, PRIVATE_KEY).');
     } catch (err) {
       console.error('Failed to initialize Firebase Admin SDK with separate environment variables:', err);
