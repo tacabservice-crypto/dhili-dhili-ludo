@@ -335,10 +335,8 @@ async function loadStoreFromFirestore() {
         store.agentTransactions = parsed.agentTransactions || [];
         store.tournaments = parsed.tournaments || {};
         console.log('Database loaded successfully from Firebase Firestore.');
-        // Update local file backup (only in local dev)
-        if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
-          fs.writeFileSync(DB_FILE, payload.data, 'utf8');
-        }
+        // Update local file backup
+        fs.writeFileSync(DB_FILE, payload.data, 'utf8');
         return;
       }
     }
@@ -414,10 +412,6 @@ async function syncToFirestore(): Promise<{ success: boolean; error?: string }> 
 
 // Save store to disk and sync with Firestore
 function saveStore() {
-  // In a serverless environment, don't write to disk. `saveStoreAndWait` handles Firestore persistence.
-  if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
-    return;
-  }
   try {
     fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
     // syncToFirestore(); // Fire-and-forget for non-critical updates
@@ -429,14 +423,10 @@ function saveStore() {
 // Slower, awaited version for critical updates
 async function saveStoreAndWait(): Promise<{ success: boolean; error?: string }> {
     try {
-      // In a function environment, skip writing to the local filesystem.
-      if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
-        fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-      }
+      fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
       return await syncToFirestore();
     } catch (error: any) {
-      // This will catch errors from either writeFileSync or syncToFirestore.
-      console.error('Failed to write database to disk or sync to Firestore.', error);
+      console.error('Failed to write database to disk.', error);
       return { success: false, error: error.message };
     }
 }
