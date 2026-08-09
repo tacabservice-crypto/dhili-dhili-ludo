@@ -352,14 +352,25 @@ async function syncToFirestore(): Promise<{ success: boolean; error?: string }> 
       storeToSync.transactions = storeToSync.transactions.slice(-5000); // Keep the last 5000
     }
 
+    // Trim agent transactions to the most recent 5000
+    if (storeToSync.agentTransactions && storeToSync.agentTransactions.length > 5000) {
+      console.log(`Trimming agentTransactions from ${storeToSync.agentTransactions.length} to 5000 for Firestore sync.`);
+      storeToSync.agentTransactions = storeToSync.agentTransactions.slice(-5000);
+    }
+
     const serialized = JSON.stringify(storeToSync);
 
     if (serialized.length > 1048487) {
       const errorMsg = `Data store is too large to sync to Firestore, even after trimming. Size: ${serialized.length}`;
       console.error(errorMsg);
        // As a fallback, try trimming even more aggressively
-      if (storeToSync.transactions && storeToSync.transactions.length > 1000) {
-        storeToSync.transactions = storeToSync.transactions.slice(-1000);
+      if ((storeToSync.transactions && storeToSync.transactions.length > 1000) || (storeToSync.agentTransactions && storeToSync.agentTransactions.length > 1000)) {
+        if (storeToSync.transactions && storeToSync.transactions.length > 1000) {
+          storeToSync.transactions = storeToSync.transactions.slice(-1000);
+        }
+        if (storeToSync.agentTransactions && storeToSync.agentTransactions.length > 1000) {
+          storeToSync.agentTransactions = storeToSync.agentTransactions.slice(-1000);
+        }
         const serialized2 = JSON.stringify(storeToSync);
         if (serialized2.length < 1048487) {
           await storeRef.set({ data: serialized2, updatedAt: Date.now() });
