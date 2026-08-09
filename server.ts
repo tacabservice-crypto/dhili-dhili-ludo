@@ -1315,7 +1315,16 @@ const authMiddleware = async (req: any, res: any, next: () => void) => {
 
 const verifyFirebaseToken = async (req: any, res: any, next: any) => {
   if (!auth) {
-    return res.status(500).json({ error: 'Firebase Admin not configured on server.' });
+    console.error("Firebase Admin SDK verification failed: 'auth' object is null.");
+    console.error("This means server initialization failed to connect to Firebase.");
+    console.error("Please check your server's environment variables. You must set ONE of the following:");
+    console.error("1. FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY");
+    console.error("2. FIREBASE_SERVICE_ACCOUNT (as a JSON string)");
+    console.error("3. A file named 'firebase-admin-key.json' in the root directory.");
+    return res.status(500).json({ 
+      error: 'Firebase Admin not configured on server.',
+      debugInfo: 'The server is missing credentials to connect to Firebase. Check server logs for instructions on how to set environment variables.' 
+    });
   }
 
   const authHeader = req.headers.authorization;
