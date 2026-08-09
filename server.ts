@@ -4726,8 +4726,19 @@ app.get('/api/agent/player-requests', isAgent, async (req, res) => {
             .orderBy('createdAt', 'desc')
             .get();
 
-        const requests = requestsSnapshot.docs.map(doc => doc.data() as PlayerAgentRequest);
-        res.json(requests);
+        const allAgentRequests = requestsSnapshot.docs.map(doc => doc.data() as PlayerAgentRequest);
+
+        // Get all player IDs that are explicitly linked to this agent via promo code
+        const linkedPlayerIds = new Set(
+            Object.values(store.users)
+                .filter(user => user.linkedAgentId === agent.id)
+                .map(user => user.id)
+        );
+        
+        // Only show requests from players who are linked to this agent
+        const filteredRequests = allAgentRequests.filter(req => linkedPlayerIds.has(req.playerId));
+
+        res.json(filteredRequests);
 
     } catch (error: any) {
         console.error(`Failed to get player requests for agent ${agent.id}:`, error);
