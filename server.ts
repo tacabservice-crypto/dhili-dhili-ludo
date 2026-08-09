@@ -11,6 +11,7 @@ import { createServer as createViteServer, ViteDevServer } from 'vite';
 import { initializeApp, cert, getApp } from 'firebase-admin/app';
 import { getFirestore, Firestore } from 'firebase-admin/firestore';
 import { getAuth, Auth } from 'firebase-admin/auth';
+import { onRequest } from "firebase-functions/v2/https";
 
 import {
   UserProfile,
@@ -5032,59 +5033,14 @@ app.get('/api/agent/my-players', isAgent, (req, res) => {
 // ==========================================
 // 7. VITE MIDDLEWARE SETUP
 // ==========================================
-async function startServer() {
-  // Load authoritative state from Firebase Firestore on startup
-  await loadStoreFromFirestore();
-  purgeSimulatedUsers(); // Ensure simulated users are purged from the memory state
+// The original startServer() function is removed, as Firebase will manage the server lifecycle.
+// The Vite middleware is only for local development, which is handled by the `npm run dev` script.
+// Static file serving is now handled by Firebase Hosting configuration.
 
-  let vite: ViteDevServer | undefined;
-  if (process.env.NODE_ENV !== "production") {
-    vite = await createViteServer({
-      server: { middlewareMode: true },
-      appType: "spa",
-    });
-    app.use(vite.middlewares);
-  } else {
-    const distPath = path.join(process.cwd(), 'dist');
-    
-    app.use(express.static(distPath));
-    
-    // Specific route for the Agent Dashboard
-    app.get('/agent', (req, res) => {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.sendFile(path.join(distPath, 'agent.html'));
-    });
+// Export the Express app for Firebase Functions
+export const api = onRequest({
+  region: 'us-central1', // You can change this to your preferred region
+  memory: '1GiB',      // Adjust memory as needed
+  timeoutSeconds: 60,  // Adjust timeout as needed
+}, app);
 
-    // For all other non-API routes, serve the main app's index.html file.
-    app.get(/^(?!\/api).*/, (req, res) => {
-      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
-      res.setHeader('Pragma', 'no-cache');
-      res.setHeader('Expires', '0');
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
-  }
-
-  const server = app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Betting Ludo Game Full-Stack App listening at http://localhost:${PORT}`);
-  });
-
-  // Handle Vite HMR WebSocket upgrade requests
-  server.on('upgrade', (req, socket, head) => {
-    if (vite && req.url?.includes('__vite_hmr')) {
-      vite.ws.handleUpgrade(req, socket, head);
-    }
-  });
-
-  // Graceful shutdown
-  process.on('SIGINT', () => {
-    console.log('\nShutting down server...');
-    server.close(() => {
-      console.log('Server shut down.');
-      process.exit(0);
-    });
-  });
-}
-
-startServer();
