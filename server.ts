@@ -111,6 +111,16 @@ let db: Firestore | null = null;
 let auth: Auth | null = null;
 
 function getFirebaseServiceAccount() {
+  console.log('--- DEBUGGING FIREBASE_SERVICE_ACCOUNT ---');
+  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    console.log('Found FIREBASE_SERVICE_ACCOUNT environment variable.');
+    // Log a small, non-sensitive part of it to confirm it's not empty
+    console.log('Variable starts with:', process.env.FIREBASE_SERVICE_ACCOUNT.substring(0, 30));
+  } else {
+    console.log('Did NOT find FIREBASE_SERVICE_ACCOUNT environment variable.');
+  }
+  console.log('--- END DEBUGGING ---');
+  
   const envValue = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
 
   if (envValue) {
