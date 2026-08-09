@@ -5059,6 +5059,23 @@ app.get('/api/agent/my-players', isAgent, (req, res) => {
 // ==========================================
 // 7. VITE MIDDLEWARE SETUP
 // ==========================================
+
+// In production, serve the static files from the 'dist' folder
+app.use(express.static(path.join(process.cwd(), 'dist')));
+
+// For any request that doesn't match a static file or an API route,
+// send the 'index.html' file. This is the entry point for the React SPA.
+app.get('*', (req, res, next) => {
+  if (req.originalUrl.startsWith('/api')) {
+    // This is an API call that fell through, so it's a 404.
+    // The `next()` call without an argument will let it fall through to Express's default 404 handler.
+    return next();
+  }
+  // For all other GET requests, serve the React app's entry point.
+  res.sendFile(path.join(process.cwd(), 'dist', 'index.html'));
+});
+
+
 // The original startServer() function is removed, as Firebase will manage the server lifecycle.
 // The Vite middleware is only for local development, which is handled by the `npm run dev` script.
 // Static file serving is now handled by Firebase Hosting configuration.

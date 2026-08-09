@@ -1,45 +1,12 @@
-var __create = Object.create;
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __export = (target, all) => {
-  for (var name in all)
-    __defProp(target, name, { get: all[name], enumerable: true });
-};
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
-
 // server.ts
-var server_exports = {};
-__export(server_exports, {
-  api: () => api
-});
-module.exports = __toCommonJS(server_exports);
-var import_express = __toESM(require("express"), 1);
-var import_cors = __toESM(require("cors"), 1);
-var import_path = __toESM(require("path"), 1);
-var import_fs = __toESM(require("fs"), 1);
-var import_app = require("firebase-admin/app");
-var import_firestore = require("firebase-admin/firestore");
-var import_auth = require("firebase-admin/auth");
-var import_https = require("firebase-functions/v2/https");
+import express from "express";
+import cors from "cors";
+import path from "path";
+import fs from "fs";
+import { initializeApp, cert, getApp } from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
+import { onRequest } from "firebase-functions/v2/https";
 var VIP_TIERS = {
   gold: {
     name: "Gold VIP",
@@ -59,7 +26,7 @@ var VIP_TIERS = {
   }
 };
 var RAKE_PERCENTAGE = 0.1;
-var app = (0, import_express.default)();
+var app = express();
 var configuredAllowedOrigins = [
   process.env.VITE_APP_URL,
   process.env.PUBLIC_URL,
@@ -80,7 +47,7 @@ var allowedOrigins = Array.from(/* @__PURE__ */ new Set([
   "http://127.0.0.1:5173",
   ...configuredAllowedOrigins
 ]));
-app.use((0, import_cors.default)({
+app.use(cors({
   origin: function(origin, callback) {
     if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
@@ -93,9 +60,9 @@ app.use((0, import_cors.default)({
   credentials: true
 }));
 var PORT = Number(process.env.PORT) || 3002;
-var DB_FILE = import_path.default.join(process.cwd(), "db_store.json");
-app.use(import_express.default.json());
-app.use(import_express.default.static(import_path.default.join(process.cwd(), "public")));
+var DB_FILE = path.join(process.cwd(), "db_store.json");
+app.use(express.json());
+app.use(express.static(path.join(process.cwd(), "public")));
 var db = null;
 var auth = null;
 function getFirebaseServiceAccount() {
@@ -111,12 +78,12 @@ function getFirebaseServiceAccount() {
       console.error("Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON:", error);
     }
   }
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH ? process.env.FIREBASE_SERVICE_ACCOUNT_PATH : import_path.default.join(process.cwd(), "firebase-admin-key.json");
-  if (!import_fs.default.existsSync(serviceAccountPath)) {
+  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH ? process.env.FIREBASE_SERVICE_ACCOUNT_PATH : path.join(process.cwd(), "firebase-admin-key.json");
+  if (!fs.existsSync(serviceAccountPath)) {
     return null;
   }
   try {
-    const serviceAccountFile = import_fs.default.readFileSync(serviceAccountPath, "utf8");
+    const serviceAccountFile = fs.readFileSync(serviceAccountPath, "utf8");
     return JSON.parse(serviceAccountFile);
   } catch (error) {
     console.error("Failed to read Firebase service account JSON file:", error);
@@ -125,9 +92,9 @@ function getFirebaseServiceAccount() {
 }
 if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
   try {
-    (0, import_app.initializeApp)();
-    db = (0, import_firestore.getFirestore)();
-    auth = (0, import_auth.getAuth)();
+    initializeApp();
+    db = getFirestore();
+    auth = getAuth();
     console.log("Firebase Admin SDK initialized in Cloud Function environment.");
   } catch (err) {
     console.error("Critical: Failed to initialize Firebase Admin SDK in function environment:", err);
@@ -138,15 +105,15 @@ if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
     try {
       serviceAccount.private_key = (serviceAccount.private_key || "").replace(/\\n/g, "\n");
       try {
-        (0, import_app.getApp)();
+        getApp();
       } catch (error) {
-        (0, import_app.initializeApp)({
-          credential: (0, import_app.cert)(serviceAccount),
+        initializeApp({
+          credential: cert(serviceAccount),
           databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
         });
       }
-      db = (0, import_firestore.getFirestore)();
-      auth = (0, import_auth.getAuth)();
+      db = getFirestore();
+      auth = getAuth();
       console.log("Firebase Admin SDK initialized successfully for local development.");
     } catch (err) {
       console.error("Failed to initialize Firebase Admin SDK with local credentials:", err);
@@ -193,8 +160,8 @@ var store = {
 };
 function loadStore() {
   try {
-    if (import_fs.default.existsSync(DB_FILE)) {
-      const raw = import_fs.default.readFileSync(DB_FILE, "utf8");
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, "utf8");
       const parsed = JSON.parse(raw);
       store.users = parsed.users || {};
       store.transactions = parsed.transactions || [];
@@ -273,7 +240,7 @@ async function loadStoreFromFirestore() {
         store.tournaments = parsed.tournaments || {};
         console.log("Database loaded successfully from Firebase Firestore.");
         if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
-          import_fs.default.writeFileSync(DB_FILE, payload.data, "utf8");
+          fs.writeFileSync(DB_FILE, payload.data, "utf8");
         }
         return;
       }
@@ -338,7 +305,7 @@ function saveStore() {
     return;
   }
   try {
-    import_fs.default.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
+    fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
   } catch (error) {
     console.error("Failed to write database to disk.", error);
   }
@@ -346,7 +313,7 @@ function saveStore() {
 async function saveStoreAndWait() {
   try {
     if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
-      import_fs.default.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
+      fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
     }
     return await syncToFirestore();
   } catch (error) {
@@ -1009,7 +976,7 @@ app.get("/api/debug/firebase", async (req, res) => {
       initialized: true,
       writeAndReadSuccess: data?.test === true,
       data,
-      projectId: (0, import_app.getApp)().options.projectId
+      projectId: getApp().options.projectId
     });
   } catch (err) {
     return res.json({
@@ -3788,7 +3755,14 @@ app.get("/api/agent/my-players", isAgent, (req, res) => {
   });
   res.json(sanitizedPlayers);
 });
-var api = (0, import_https.onRequest)({
+app.use(express.static(path.join(process.cwd(), "dist")));
+app.get("*", (req, res, next) => {
+  if (req.originalUrl.startsWith("/api")) {
+    return next();
+  }
+  res.sendFile(path.join(process.cwd(), "dist", "index.html"));
+});
+var api = onRequest({
   region: "us-central1",
   // You can change this to your preferred region
   memory: "1GiB",
@@ -3796,10 +3770,15 @@ var api = (0, import_https.onRequest)({
   timeoutSeconds: 60
   // Adjust timeout as needed
 }, app);
-// Annotate the CommonJS export names for ESM import in node:
-0 && (module.exports = {
+if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
+  const PORT2 = process.env.PORT || 3002;
+  app.listen(PORT2, () => {
+    console.log(`Server is listening on port ${PORT2}`);
+  });
+}
+export {
   api
-});
+};
 /**
  * @license
  * SPDX-License-Identifier: Apache-2.0
