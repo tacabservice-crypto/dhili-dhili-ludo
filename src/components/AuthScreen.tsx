@@ -24,7 +24,15 @@ interface AuthScreenProps {
 }
 
 export default function AuthScreen({ onLoginSuccess, initialError }: AuthScreenProps) {
-  
+  const API_BASE_URL = (() => {
+    if (typeof window === 'undefined') return 'http://localhost:3002';
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return ''; // Use relative paths for local dev to use proxy
+    }
+    // For any other host, use the hardcoded production URL
+    return 'https://ludosom.com';
+  })();
   const { t } = useLanguage();
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
