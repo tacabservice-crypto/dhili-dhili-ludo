@@ -106,12 +106,25 @@ app.use(express.static(path.join(process.cwd(), 'public')));
 let db: Firestore | null = null;
 let auth: Auth | null = null;
 
+const logFilePath = path.join(process.cwd(), 'public', 'logs.txt');
+
+function logToFile(message: string) {
+  const timestamp = new Date().toISOString();
+  try {
+    fs.appendFileSync(logFilePath, `${timestamp}: ${message}\n`);
+  } catch (err) {
+    console.error("Failed to write to log file:", err);
+  }
+}
+
 function getFirebaseServiceAccount() {
+  logToFile("Attempting to get Firebase service account...");
   const envValue =
     process.env.FIREBASE_SERVICE_ACCOUNT ||
     process.env.FIREBASE_ADMIN_CREDENTIALS;
 
   if (envValue) {
+    logToFile("Found FIREBASE_SERVICE_ACCOUNT or FIREBASE_ADMIN_CREDENTIALS environment variable.");
     try {
       let normalizedEnvValue = envValue.trim();
 
@@ -122,17 +135,13 @@ function getFirebaseServiceAccount() {
       const parsed = JSON.parse(normalizedEnvValue);
 
       if (parsed && parsed.project_id && parsed.private_key) {
+        logToFile("Successfully parsed service account from environment variable.");
         return parsed;
       }
 
-      console.warn(
-        "FIREBASE_SERVICE_ACCOUNT was set but did not contain project_id/private_key."
-      );
-    } catch (error) {
-      console.error(
-        "Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON:",
-        error
-      );
+      logToFile("WARNING: FIREBASE_SERVICE_ACCOUNT was set but did not contain project_id/private_key.");
+    } catch (error: any) {
+      logToFile(`ERROR: Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON: ${error.message}`);
     }
   }
 
@@ -140,43 +149,48 @@ function getFirebaseServiceAccount() {
     ? process.env.FIREBASE_SERVICE_ACCOUNT_PATH
     : path.join(process.cwd(), "firebase-admin-key.json");
 
+  logToFile(`Checking for service account file at: ${serviceAccountPath}`);
   if (!fs.existsSync(serviceAccountPath)) {
+    logToFile("Service account file does not exist.");
     return null;
   }
 
   try {
     const serviceAccountFile = fs.readFileSync(serviceAccountPath, "utf8");
+    logToFile("Successfully read service account file.");
     return JSON.parse(serviceAccountFile);
-  } catch (error) {
-    console.error(
-      "Failed to read Firebase service account JSON file:",
-      error
-    );
+  } catch (error: any) {
+    logToFile(`ERROR: Failed to read or parse Firebase service account JSON file: ${error.message}`);
     return null;
   }
 }
 
 // On Firebase, the SDK automatically picks up credentials. For local dev, it falls back to the service account.
 if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
+  logToFile("Detected Firebase Functions environment. Initializing with default credentials.");
   // We are in the Firebase Functions environment, use default credentials
   try {
     initializeApp();
     db = getFirestore();
     auth = getAuth();
-    console.log('Firebase Admin SDK initialized in Cloud Function environment.');
-  } catch (err) {
-    console.error('Critical: Failed to initialize Firebase Admin SDK in function environment:', err);
+    logToFile('Firebase Admin SDK initialized in Cloud Function environment.');
+  } catch (err: any) {
+    logToFile(`CRITICAL: Failed to initialize Firebase Admin SDK in function environment: ${err.message}`);
   }
 } else {
+  logToFile("Not in a Firebase Functions environment. Checking for other credential types.");
   // Prefer separate environment variables for Hostinger-like environments
   if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
+    logToFile("Found separate environment variables (PROJECT_ID, CLIENT_EMAIL, PRIVATE_KEY).");
     try {
       const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
       
       // Check if the app is already initialized to prevent errors
       try {
         getApp();
+        logToFile("Firebase app already initialized.");
       } catch (error) {
+        logToFile("Firebase app not initialized. Initializing now...");
         initializeApp({
           credential: cert({
             projectId: process.env.FIREBASE_PROJECT_ID,
@@ -188,20 +202,24 @@ if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
       }
       db = getFirestore();
       auth = getAuth();
-      console.log('Firebase Admin SDK initialized with separate environment variables (PROJECT_ID, CLIENT_EMAIL, PRIVATE_KEY).');
-    } catch (err) {
-      console.error('Failed to initialize Firebase Admin SDK with separate environment variables:', err);
+      logToFile('Firebase Admin SDK initialized with separate environment variables.');
+    } catch (err: any) {
+      logToFile(`ERROR: Failed to initialize Firebase Admin SDK with separate environment variables: ${err.message}`);
     }
   } else {
+    logToFile("Separate environment variables not found. Falling back to service account JSON.");
     // Fallback to single FIREBASE_SERVICE_ACCOUNT variable or local file for compatibility
     const serviceAccount = getFirebaseServiceAccount();
     if (serviceAccount) {
+      logToFile("Found service account JSON. Initializing with it.");
       try {
         serviceAccount.private_key = (serviceAccount.private_key || '').replace(/\\n/g, '\n');
 
         try {
           getApp();
+          logToFile("Firebase app already initialized.");
         } catch (error) {
+          logToFile("Firebase app not initialized. Initializing now...");
           initializeApp({
             credential: cert(serviceAccount),
             databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
@@ -210,12 +228,12 @@ if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
         
         db = getFirestore();
         auth = getAuth();
-        console.log('Firebase Admin SDK initialized successfully for local development (using FIREBASE_SERVICE_ACCOUNT variable or file).');
-      } catch (err) {
-        console.error('Failed to initialize Firebase Admin SDK with local credentials (using FIREBASE_SERVICE_ACCOUNT variable or file):', err);
+        logToFile('Firebase Admin SDK initialized successfully using service account JSON.');
+      } catch (err: any) {
+        logToFile(`ERROR: Failed to initialize Firebase Admin SDK with service account JSON: ${err.message}`);
       }
     } else {
-      console.log('No Firebase Admin credentials configured for local development. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json.');
+      logToFile('CRITICAL: No Firebase Admin credentials found. Firebase Admin will not be available.');
     }
   }
 }
@@ -1315,12 +1333,14 @@ const authMiddleware = async (req: any, res: any, next: () => void) => {
 
 const verifyFirebaseToken = async (req: any, res: any, next: any) => {
   if (!auth) {
-    console.error("Firebase Admin SDK verification failed: 'auth' object is null.");
-    console.error("This means server initialization failed to connect to Firebase.");
-    console.error("Please check your server's environment variables. You must set ONE of the following:");
-    console.error("1. FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY");
-    console.error("2. FIREBASE_SERVICE_ACCOUNT (as a JSON string)");
-    console.error("3. A file named 'firebase-admin-key.json' in the root directory.");
+    const errorMessage = "Firebase Admin SDK verification failed: 'auth' object is null.";
+    logToFile(errorMessage);
+    logToFile("This means server initialization failed to connect to Firebase.");
+    logToFile("Please check your server's environment variables. You must set ONE of the following:");
+    logToFile("1. FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY");
+    logToFile("2. FIREBASE_SERVICE_ACCOUNT (as a JSON string)");
+    logToFile("3. A file named 'firebase-admin-key.json' in the root directory.");
+    
     return res.status(500).json({ 
       error: 'Firebase Admin not configured on server.',
       debugInfo: 'The server is missing credentials to connect to Firebase. Check server logs for instructions on how to set environment variables.' 
@@ -1337,8 +1357,8 @@ const verifyFirebaseToken = async (req: any, res: any, next: any) => {
     const decodedToken = await auth.verifyIdToken(idToken);
     req.user = decodedToken;
     next();
-  } catch (error) {
-    console.error('Error verifying Firebase ID token:', error);
+  } catch (error: any) {
+    logToFile(`Error verifying Firebase ID token: ${error.message}`);
     res.status(403).json({ error: 'Unauthorized: Invalid token.' });
   }
 };
