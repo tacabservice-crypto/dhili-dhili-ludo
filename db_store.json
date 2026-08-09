@@ -363,35 +363,46 @@
       "winCount": 1,
       "lossCount": 0,
       "earnings": 0
+    },
+    "PmWZkLbaysOEHsYZlsYqlTOfIwh2": {
+      "username": "khaalid",
+      "id": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+      "lossCount": 0,
+      "winCount": 0,
+      "email": "khaalid@gmail.com",
+      "avatar": "🎮",
+      "isAdmin": true,
+      "balance": 99,
+      "earnings": 0
     }
   },
   "transactions": [
     {
-      "id": "tx_1786262271881_0sib0",
+      "id": "tx_1786276774117_8v4f0",
       "userId": "house",
       "type": "app_commission",
       "amount": 0.06,
-      "timestamp": 1786262271881,
+      "timestamp": 1786276774117,
       "matchId": "MATCH_0F4HR",
       "description": "Rake from forfeit match MATCH_0F4HR (10%)."
     },
     {
-      "id": "tx_1786262271861_8igib",
+      "id": "tx_1786276773662_sefml",
       "userId": "user_1785871427921_us98b",
       "type": "win_payout",
       "amount": 0.54,
-      "timestamp": 1786262271861,
+      "timestamp": 1786276773662,
       "matchId": "MATCH_0F4HR",
       "description": "Win by opponent inactivity forfeit (Rake: $0.06)."
     },
     {
-      "id": "tx_1786262015238_015m1",
+      "id": "tx_1786276528883_nb455",
       "userId": "user_1785704210390_bck7d",
       "type": "bet_escrow_locked",
       "amount": 0.3,
-      "timestamp": 1786262015238,
-      "matchId": "MATCH_064R5",
-      "description": "Escrow stake for Ludo Match MATCH_064R5."
+      "timestamp": 1786276528883,
+      "matchId": "MATCH_TDZUE",
+      "description": "Escrow stake for Ludo Match MATCH_TDZUE."
     },
     {
       "id": "tx_1785871808899_3505h",
@@ -53995,33 +54006,33 @@
             "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday Boocame. Ganaaxa daahitaanka ayaa bilaabanaya."
           },
           {
-            "id": "log_1786262022117_cg6f7",
-            "timestamp": 1786262022117,
+            "id": "log_1786276532570_8rtha",
+            "timestamp": 1786276532570,
             "text": "⏱️ Digniin: Boocame waxaa u harsan 4 daqiiqo. (Warning: Boocame has 4 minutes left.)"
           },
           {
-            "id": "log_1786262082146_b2wsr",
-            "timestamp": 1786262082146,
+            "id": "log_1786276593562_gnbqi",
+            "timestamp": 1786276593562,
             "text": "⏱️ Digniin: Boocame waxaa u harsan 3 daqiiqo. (Warning: Boocame has 3 minutes left.)"
           },
           {
-            "id": "log_1786262151813_h8ap8",
-            "timestamp": 1786262151813,
+            "id": "log_1786276653589_n13du",
+            "timestamp": 1786276653589,
             "text": "⏱️ Digniin: Boocame waxaa u harsan 2 daqiiqo. (Warning: Boocame has 2 minutes left.)"
           },
           {
-            "id": "log_1786262211838_q0qco",
-            "timestamp": 1786262211838,
+            "id": "log_1786276713627_g7i99",
+            "timestamp": 1786276713627,
             "text": "⏱️ Digniin: Boocame waxaa u harsan 1 daqiiqo. (Warning: Boocame has 1 minutes left.)"
           },
           {
-            "id": "log_1786262271861_2l5iq",
-            "timestamp": 1786262271861,
+            "id": "log_1786276773662_wx5sr",
+            "timestamp": 1786276773662,
             "text": "⏱️ Boocame has been forfeited due to inactivity."
           },
           {
-            "id": "log_1786262271861_z21xu",
-            "timestamp": 1786262271861,
+            "id": "log_1786276773662_9dcl1",
+            "timestamp": 1786276773662,
             "text": "🏆 Game Over! Me wins by forfeit and takes the pot of $0.60!"
           }
         ],
@@ -54032,8 +54043,8 @@
       },
       "createdAt": 1785871809005
     },
-    "MATCH_064R5": {
-      "id": "MATCH_064R5",
+    "MATCH_TDZUE": {
+      "id": "MATCH_TDZUE",
       "status": "playing",
       "betAmount": 0.3,
       "players": [
@@ -54050,15 +54061,15 @@
           "balance": 100.45
         },
         {
-          "userId": "bot_match_1786262015237_1",
-          "username": "NomadLudo AI #67",
+          "userId": "bot_match_1786276528882_1",
+          "username": "LudoPro AI #29",
           "avatar": "🦊",
           "color": "blue",
           "isHost": false,
           "isReady": true,
           "status": "online",
-          "winCount": 22,
-          "lossCount": 20,
+          "winCount": 20,
+          "lossCount": 17,
           "balance": 100
         }
       ],
@@ -54096,25 +54107,25 @@
           },
           {
             "id": "token_blue_0",
-            "ownerId": "bot_match_1786262015237_1",
+            "ownerId": "bot_match_1786276528882_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_1",
-            "ownerId": "bot_match_1786262015237_1",
+            "ownerId": "bot_match_1786276528882_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_2",
-            "ownerId": "bot_match_1786262015237_1",
+            "ownerId": "bot_match_1786276528882_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_3",
-            "ownerId": "bot_match_1786262015237_1",
+            "ownerId": "bot_match_1786276528882_1",
             "color": "blue",
             "position": -1
           }
@@ -54124,24 +54135,24 @@
         "logs": [
           {
             "id": "1",
-            "timestamp": 1786262015252,
+            "timestamp": 1786276530418,
             "text": "Match found! Mode: Solo 2P"
           },
           {
             "id": "2",
-            "timestamp": 1786262015252,
+            "timestamp": 1786276530418,
             "text": "Stake of $0.3 locked in secure escrow pool ($0.60)"
           },
           {
-            "id": "log_1786262047128_beafd",
-            "timestamp": 1786262047128,
+            "id": "log_1786276561547_e5wdv",
+            "timestamp": 1786276561547,
             "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday khaalid. Ganaaxa daahitaanka ayaa bilaabanaya."
           }
         ],
         "chat": [],
-        "lastActivity": 1786262015252
+        "lastActivity": 1786276530418
       },
-      "createdAt": 1786262015252
+      "createdAt": 1786276530418
     }
   },
   "matchmakingQueues": {
