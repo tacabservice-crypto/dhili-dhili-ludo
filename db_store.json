@@ -359,13 +359,31 @@
       "username": "Me",
       "email": "thedigitalsharif@gmail.com",
       "avatar": "🎮",
-      "balance": 9.7,
-      "winCount": 0,
+      "balance": 10.239999999999998,
+      "winCount": 1,
       "lossCount": 0,
       "earnings": 0
     }
   },
   "transactions": [
+    {
+      "id": "tx_1786279361975_q3fs5",
+      "userId": "house",
+      "type": "app_commission",
+      "amount": 0.06,
+      "timestamp": 1786279361975,
+      "matchId": "MATCH_0F4HR",
+      "description": "Rake from forfeit match MATCH_0F4HR (10%)."
+    },
+    {
+      "id": "tx_1786279361471_852ar",
+      "userId": "user_1785871427921_us98b",
+      "type": "win_payout",
+      "amount": 0.54,
+      "timestamp": 1786279361471,
+      "matchId": "MATCH_0F4HR",
+      "description": "Win by opponent inactivity forfeit (Rake: $0.06)."
+    },
     {
       "id": "tx_1786279117203_b7zsi",
       "userId": "user_1785704210390_bck7d",
@@ -53836,7 +53854,7 @@
     },
     "MATCH_0F4HR": {
       "id": "MATCH_0F4HR",
-      "status": "playing",
+      "status": "completed",
       "betAmount": 0.3,
       "players": [
         {
@@ -53846,11 +53864,11 @@
           "color": "green",
           "isHost": true,
           "isReady": true,
-          "status": "online",
+          "status": "left",
           "winCount": 3,
           "lossCount": 0,
           "balance": 10.899999999999997,
-          "inactivityTimer": 243
+          "inactivityTimer": 0
         },
         {
           "userId": "user_1785871427921_us98b",
@@ -53923,8 +53941,8 @@
             "position": -1
           }
         ],
-        "winnerId": null,
-        "escrowBalance": 0.6,
+        "winnerId": "user_1785871427921_us98b",
+        "escrowBalance": 0,
         "logs": [
           {
             "id": "1",
@@ -53975,6 +53993,36 @@
             "id": "log_1785878580824_fn0n6",
             "timestamp": 1785878580824,
             "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday Boocame. Ganaaxa daahitaanka ayaa bilaabanaya."
+          },
+          {
+            "id": "log_1786279121302_i83cq",
+            "timestamp": 1786279121302,
+            "text": "⏱️ Digniin: Boocame waxaa u harsan 4 daqiiqo. (Warning: Boocame has 4 minutes left.)"
+          },
+          {
+            "id": "log_1786279181327_86clp",
+            "timestamp": 1786279181327,
+            "text": "⏱️ Digniin: Boocame waxaa u harsan 3 daqiiqo. (Warning: Boocame has 3 minutes left.)"
+          },
+          {
+            "id": "log_1786279241381_8kpru",
+            "timestamp": 1786279241381,
+            "text": "⏱️ Digniin: Boocame waxaa u harsan 2 daqiiqo. (Warning: Boocame has 2 minutes left.)"
+          },
+          {
+            "id": "log_1786279301436_3w6zc",
+            "timestamp": 1786279301436,
+            "text": "⏱️ Digniin: Boocame waxaa u harsan 1 daqiiqo. (Warning: Boocame has 1 minutes left.)"
+          },
+          {
+            "id": "log_1786279361471_lbsg8",
+            "timestamp": 1786279361471,
+            "text": "⏱️ Boocame has been forfeited due to inactivity."
+          },
+          {
+            "id": "log_1786279361471_a1z22",
+            "timestamp": 1786279361471,
+            "text": "🏆 Game Over! Me wins by forfeit and takes the pot of $0.60!"
           }
         ],
         "chat": [],
@@ -54020,7 +54068,7 @@
         "turn": 0,
         "diceRoll": null,
         "hasRolled": false,
-        "turnTimer": 30,
+        "turnTimer": 0,
         "tokens": [
           {
             "id": "token_green_0",
@@ -54083,6 +54131,11 @@
             "id": "2",
             "timestamp": 1786279118733,
             "text": "Stake of $0.3 locked in secure escrow pool ($0.60)"
+          },
+          {
+            "id": "log_1786279148314_z4dpf",
+            "timestamp": 1786279148314,
+            "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday khaalid. Ganaaxa daahitaanka ayaa bilaabanaya."
           }
         ],
         "chat": [],
@@ -54109,7 +54162,7 @@
     "10_4_team": [],
     "0.75_2_solo": []
   },
-  "houseRevenue": 23,
+  "houseRevenue": 23.06,
   "pendingManualTransactions": [
     {
       "id": "req_1785863837983_i4ine",
