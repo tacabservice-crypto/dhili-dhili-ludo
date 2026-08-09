@@ -111,16 +111,6 @@ let db: Firestore | null = null;
 let auth: Auth | null = null;
 
 function getFirebaseServiceAccount() {
-  console.log('--- DEBUGGING FIREBASE_SERVICE_ACCOUNT ---');
-  if (process.env.FIREBASE_SERVICE_ACCOUNT) {
-    console.log('Found FIREBASE_SERVICE_ACCOUNT environment variable.');
-    // Log a small, non-sensitive part of it to confirm it's not empty
-    console.log('Variable starts with:', process.env.FIREBASE_SERVICE_ACCOUNT.substring(0, 30));
-  } else {
-    console.log('Did NOT find FIREBASE_SERVICE_ACCOUNT environment variable.');
-  }
-  console.log('--- END DEBUGGING ---');
-  
   const envValue = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
 
   if (envValue) {
@@ -164,30 +154,55 @@ if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
     console.error('Critical: Failed to initialize Firebase Admin SDK in function environment:', err);
   }
 } else {
-  // We are in a local development environment, use service account
-  const serviceAccount = getFirebaseServiceAccount();
-  if (serviceAccount) {
+  // Prefer separate environment variables for Hostinger-like environments
+  if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
     try {
-      serviceAccount.private_key = (serviceAccount.private_key || '').replace(/\\n/g, '\n');
-
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n');
+      
       // Check if the app is already initialized to prevent errors
       try {
         getApp();
       } catch (error) {
         initializeApp({
-          credential: cert(serviceAccount),
-          databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
+          credential: cert({
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: privateKey,
+          }),
+          databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`
         });
       }
-      
       db = getFirestore();
       auth = getAuth();
-      console.log('Firebase Admin SDK initialized successfully for local development.');
+      console.log('Firebase Admin SDK initialized with separate environment variables (PROJECT_ID, CLIENT_EMAIL, PRIVATE_KEY).');
     } catch (err) {
-      console.error('Failed to initialize Firebase Admin SDK with local credentials:', err);
+      console.error('Failed to initialize Firebase Admin SDK with separate environment variables:', err);
     }
   } else {
-    console.log('No Firebase Admin credentials configured for local development. Set FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json.');
+    // Fallback to single FIREBASE_SERVICE_ACCOUNT variable or local file for compatibility
+    const serviceAccount = getFirebaseServiceAccount();
+    if (serviceAccount) {
+      try {
+        serviceAccount.private_key = (serviceAccount.private_key || '').replace(/\\n/g, '\n');
+
+        try {
+          getApp();
+        } catch (error) {
+          initializeApp({
+            credential: cert(serviceAccount),
+            databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
+          });
+        }
+        
+        db = getFirestore();
+        auth = getAuth();
+        console.log('Firebase Admin SDK initialized successfully for local development (using FIREBASE_SERVICE_ACCOUNT variable or file).');
+      } catch (err) {
+        console.error('Failed to initialize Firebase Admin SDK with local credentials (using FIREBASE_SERVICE_ACCOUNT variable or file):', err);
+      }
+    } else {
+      console.log('No Firebase Admin credentials configured for local development. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json.');
+    }
   }
 }
 
