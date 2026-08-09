@@ -5070,3 +5070,10 @@ export const api = onRequest({
   timeoutSeconds: 60,  // Adjust timeout as needed
 }, app);
 
+// Start the server manually if we're NOT in a Firebase Function environment
+if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
+  const PORT = process.env.PORT || 3002;
+  app.listen(PORT, () => {
+    console.log(`Server is listening on port ${PORT}`);
+  });
+}
