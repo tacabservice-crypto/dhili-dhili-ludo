@@ -12,6 +12,7 @@ import { MatchmakingModel } from './models/MatchmakingModel';
 import { GameRoom } from './models/GameRoom';
 import { LudoPlayer } from './models/LudoPlayer';
 import { LudoToken } from './models/LudoToken';
+import { GameState } from './models/GameState';
 
 dotenv.config();
 
@@ -35,7 +36,8 @@ const sequelize = new Sequelize(
         MatchmakingModel,
         GameRoom,
         LudoPlayer,
-        LudoToken
+        LudoToken,
+        GameState
     ],
   }
 );

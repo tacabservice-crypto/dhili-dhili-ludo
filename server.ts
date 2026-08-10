@@ -26,6 +26,7 @@ import { WalletTransaction as WalletTransactionModel } from './src/models/Wallet
 import { Agent as AgentModel } from './src/models/Agent';
 import { AgentTransaction as AgentTransactionModel } from './src/models/AgentTransaction';
 import { PlayerAgentRequestModel } from './src/models/PlayerAgentRequestModel';
+import { GameState as GameStateModel } from './src/models/GameState';
 
 /**
  * @license
