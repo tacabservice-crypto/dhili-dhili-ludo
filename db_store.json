@@ -362,36 +362,147 @@
       "balance": 10.239999999999998,
       "winCount": 1,
       "lossCount": 0,
-      "earnings": 0
+      "earnings": 0.54
+    },
+    "PmWZkLbaysOEHsYZlsYqlTOfIwh2": {
+      "username": "khaalid",
+      "id": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+      "lossCount": 1,
+      "winCount": 1,
+      "email": "khaalid@gmail.com",
+      "avatar": "🎮",
+      "isAdmin": true,
+      "balance": 98.7,
+      "earnings": 0.6
+    },
+    "WGdP4DgHQfgEZrzDGok71hpm3D33": {
+      "lossCount": 1,
+      "id": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+      "username": "saalax",
+      "avatar": "🎮",
+      "email": "saalax@gmail.com",
+      "winCount": 2,
+      "balance": 99.24000000000001,
+      "earnings": 0.54
     }
   },
   "transactions": [
     {
-      "id": "tx_1786279361975_q3fs5",
+      "id": "tx_1786371640184_rqv4c",
+      "userId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+      "type": "win_payout",
+      "amount": 0.6,
+      "timestamp": 1786371640184,
+      "matchId": "MATCH_WC1CM",
+      "description": "Win by opponent forfeit."
+    },
+    {
+      "id": "tx_1786371421083_vqo62",
       "userId": "house",
       "type": "app_commission",
       "amount": 0.06,
-      "timestamp": 1786279361975,
+      "timestamp": 1786371421083,
+      "matchId": "MATCH_2AK4H",
+      "description": "Rake from forfeit match MATCH_2AK4H (10%)."
+    },
+    {
+      "id": "tx_1786371420650_vy65p",
+      "userId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+      "type": "win_payout",
+      "amount": 0.54,
+      "timestamp": 1786371420650,
+      "matchId": "MATCH_2AK4H",
+      "description": "Win by opponent inactivity forfeit (Rake: $0.06)."
+    },
+    {
+      "id": "tx_1786371244422_36j7l",
+      "userId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+      "type": "win_payout",
+      "amount": 0.6,
+      "timestamp": 1786371244422,
+      "matchId": "MATCH_ZV7U9",
+      "description": "Win by opponent forfeit."
+    },
+    {
+      "id": "tx_1786371101023_ctsen",
+      "userId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+      "type": "bet_escrow_locked",
+      "amount": 0.3,
+      "timestamp": 1786371101023,
+      "matchId": "MATCH_ZV7U9",
+      "description": "Escrow stake for Ludo Match MATCH_ZV7U9."
+    },
+    {
+      "id": "tx_1786371100376_c89d8",
+      "userId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+      "type": "bet_escrow_locked",
+      "amount": 0.3,
+      "timestamp": 1786371100376,
+      "matchId": "MATCH_ZV7U9",
+      "description": "Escrow stake for Ludo Match MATCH_ZV7U9."
+    },
+    {
+      "id": "tx_1786371097746_1oamq",
+      "userId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+      "type": "bet_escrow_locked",
+      "amount": 0.3,
+      "timestamp": 1786371097746,
+      "matchId": "MATCH_2AK4H",
+      "description": "Escrow stake for Ludo Match MATCH_2AK4H."
+    },
+    {
+      "id": "tx_1786371096917_1fxv1",
+      "userId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+      "type": "bet_escrow_locked",
+      "amount": 0.3,
+      "timestamp": 1786371096917,
+      "matchId": "MATCH_2AK4H",
+      "description": "Escrow stake for Ludo Match MATCH_2AK4H."
+    },
+    {
+      "id": "tx_1786371094250_pi2sz",
+      "userId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+      "type": "bet_escrow_locked",
+      "amount": 0.3,
+      "timestamp": 1786371094250,
+      "matchId": "MATCH_WC1CM",
+      "description": "Escrow stake for Ludo Match MATCH_WC1CM."
+    },
+    {
+      "id": "tx_1786371093589_olb3c",
+      "userId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+      "type": "bet_escrow_locked",
+      "amount": 0.3,
+      "timestamp": 1786371093589,
+      "matchId": "MATCH_WC1CM",
+      "description": "Escrow stake for Ludo Match MATCH_WC1CM."
+    },
+    {
+      "id": "tx_1786370678137_rs2m2",
+      "userId": "house",
+      "type": "app_commission",
+      "amount": 0.06,
+      "timestamp": 1786370678137,
       "matchId": "MATCH_0F4HR",
       "description": "Rake from forfeit match MATCH_0F4HR (10%)."
     },
     {
-      "id": "tx_1786279361471_852ar",
+      "id": "tx_1786370677186_fa7ia",
       "userId": "user_1785871427921_us98b",
       "type": "win_payout",
       "amount": 0.54,
-      "timestamp": 1786279361471,
+      "timestamp": 1786370677186,
       "matchId": "MATCH_0F4HR",
       "description": "Win by opponent inactivity forfeit (Rake: $0.06)."
     },
     {
-      "id": "tx_1786279117203_b7zsi",
+      "id": "tx_1786370432978_fdzkk",
       "userId": "user_1785704210390_bck7d",
       "type": "bet_escrow_locked",
       "amount": 0.3,
-      "timestamp": 1786279117203,
-      "matchId": "MATCH_AY8KT",
-      "description": "Escrow stake for Ludo Match MATCH_AY8KT."
+      "timestamp": 1786370432978,
+      "matchId": "MATCH_JGBJE",
+      "description": "Escrow stake for Ludo Match MATCH_JGBJE."
     },
     {
       "id": "tx_1785871808899_3505h",
@@ -53995,33 +54106,33 @@
             "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday Boocame. Ganaaxa daahitaanka ayaa bilaabanaya."
           },
           {
-            "id": "log_1786279121302_i83cq",
-            "timestamp": 1786279121302,
+            "id": "log_1786370437061_x7w19",
+            "timestamp": 1786370437061,
             "text": "⏱️ Digniin: Boocame waxaa u harsan 4 daqiiqo. (Warning: Boocame has 4 minutes left.)"
           },
           {
-            "id": "log_1786279181327_86clp",
-            "timestamp": 1786279181327,
+            "id": "log_1786370497089_iei7u",
+            "timestamp": 1786370497089,
             "text": "⏱️ Digniin: Boocame waxaa u harsan 3 daqiiqo. (Warning: Boocame has 3 minutes left.)"
           },
           {
-            "id": "log_1786279241381_8kpru",
-            "timestamp": 1786279241381,
+            "id": "log_1786370557115_2cxk3",
+            "timestamp": 1786370557115,
             "text": "⏱️ Digniin: Boocame waxaa u harsan 2 daqiiqo. (Warning: Boocame has 2 minutes left.)"
           },
           {
-            "id": "log_1786279301436_3w6zc",
-            "timestamp": 1786279301436,
+            "id": "log_1786370617146_jd2l5",
+            "timestamp": 1786370617146,
             "text": "⏱️ Digniin: Boocame waxaa u harsan 1 daqiiqo. (Warning: Boocame has 1 minutes left.)"
           },
           {
-            "id": "log_1786279361471_lbsg8",
-            "timestamp": 1786279361471,
+            "id": "log_1786370677185_ul1za",
+            "timestamp": 1786370677185,
             "text": "⏱️ Boocame has been forfeited due to inactivity."
           },
           {
-            "id": "log_1786279361471_a1z22",
-            "timestamp": 1786279361471,
+            "id": "log_1786370677186_kjhyp",
+            "timestamp": 1786370677186,
             "text": "🏆 Game Over! Me wins by forfeit and takes the pot of $0.60!"
           }
         ],
@@ -54032,8 +54143,8 @@
       },
       "createdAt": 1785871809005
     },
-    "MATCH_AY8KT": {
-      "id": "MATCH_AY8KT",
+    "MATCH_JGBJE": {
+      "id": "MATCH_JGBJE",
       "status": "playing",
       "betAmount": 0.3,
       "players": [
@@ -54050,14 +54161,14 @@
           "balance": 100.45
         },
         {
-          "userId": "bot_match_1786279117202_1",
-          "username": "SomaliLudoBot #19",
+          "userId": "bot_match_1786370432963_1",
+          "username": "Dhili Master AI #87",
           "avatar": "🦊",
           "color": "blue",
           "isHost": false,
           "isReady": true,
           "status": "online",
-          "winCount": 24,
+          "winCount": 34,
           "lossCount": 23,
           "balance": 100
         }
@@ -54096,25 +54207,25 @@
           },
           {
             "id": "token_blue_0",
-            "ownerId": "bot_match_1786279117202_1",
+            "ownerId": "bot_match_1786370432963_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_1",
-            "ownerId": "bot_match_1786279117202_1",
+            "ownerId": "bot_match_1786370432963_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_2",
-            "ownerId": "bot_match_1786279117202_1",
+            "ownerId": "bot_match_1786370432963_1",
             "color": "blue",
             "position": -1
           },
           {
             "id": "token_blue_3",
-            "ownerId": "bot_match_1786279117202_1",
+            "ownerId": "bot_match_1786370432963_1",
             "color": "blue",
             "position": -1
           }
@@ -54124,24 +54235,660 @@
         "logs": [
           {
             "id": "1",
-            "timestamp": 1786279118733,
+            "timestamp": 1786370434934,
             "text": "Match found! Mode: Solo 2P"
           },
           {
             "id": "2",
-            "timestamp": 1786279118733,
+            "timestamp": 1786370434934,
             "text": "Stake of $0.3 locked in secure escrow pool ($0.60)"
           },
           {
-            "id": "log_1786279148314_z4dpf",
-            "timestamp": 1786279148314,
+            "id": "log_1786370464072_5scfh",
+            "timestamp": 1786370464072,
             "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday khaalid. Ganaaxa daahitaanka ayaa bilaabanaya."
           }
         ],
         "chat": [],
-        "lastActivity": 1786279118733
+        "lastActivity": 1786370434934
       },
-      "createdAt": 1786279118733
+      "createdAt": 1786370434934
+    },
+    "MATCH_WC1CM": {
+      "id": "MATCH_WC1CM",
+      "status": "completed",
+      "betAmount": 0.3,
+      "players": [
+        {
+          "userId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+          "username": "saalax",
+          "avatar": "🎮",
+          "color": "green",
+          "isHost": true,
+          "isReady": true,
+          "status": "online",
+          "winCount": 0,
+          "lossCount": 0,
+          "balance": 99
+        },
+        {
+          "userId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+          "username": "khaalid",
+          "avatar": "🎮",
+          "color": "blue",
+          "isHost": false,
+          "isReady": true,
+          "status": "left",
+          "winCount": 0,
+          "lossCount": 0,
+          "balance": 99
+        }
+      ],
+      "capacity": 2,
+      "gameMode": "solo",
+      "gameState": {
+        "turn": 0,
+        "diceRoll": null,
+        "hasRolled": false,
+        "turnTimer": 0,
+        "tokens": [
+          {
+            "id": "token_green_0",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_1",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_2",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_3",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_blue_0",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_1",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_2",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_3",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          }
+        ],
+        "winnerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+        "escrowBalance": 0,
+        "logs": [
+          {
+            "id": "1",
+            "timestamp": 1786371094741,
+            "text": "Match found! Mode: Solo 2P"
+          },
+          {
+            "id": "2",
+            "timestamp": 1786371094741,
+            "text": "Stake of $0.3 locked in secure escrow pool ($0.60)"
+          },
+          {
+            "id": "log_1786371124425_l5vv6",
+            "timestamp": 1786371124426,
+            "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday saalax. Ganaaxa daahitaanka ayaa bilaabanaya."
+          },
+          {
+            "id": "log_1786371640184_q3od9",
+            "timestamp": 1786371640184,
+            "text": "khaalid has left the game."
+          },
+          {
+            "id": "log_1786371640184_29ehq",
+            "timestamp": 1786371640184,
+            "text": "😭 khaalid waa lagu helay ciyaarta!"
+          },
+          {
+            "id": "log_1786371640184_pe3tl",
+            "timestamp": 1786371640184,
+            "text": "🏆 khaalid has left the game. saalax wins by forfeit and takes the pot of $0.60!"
+          }
+        ],
+        "chat": [],
+        "lastActivity": 1786371094741
+      },
+      "createdAt": 1786371094741
+    },
+    "MATCH_2AK4H": {
+      "id": "MATCH_2AK4H",
+      "status": "completed",
+      "betAmount": 0.3,
+      "players": [
+        {
+          "userId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+          "username": "saalax",
+          "avatar": "🎮",
+          "color": "green",
+          "isHost": true,
+          "isReady": true,
+          "status": "online",
+          "winCount": 0,
+          "lossCount": 0,
+          "balance": 98.7,
+          "inactivityTimer": 300
+        },
+        {
+          "userId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+          "username": "khaalid",
+          "avatar": "🎮",
+          "color": "blue",
+          "isHost": false,
+          "isReady": true,
+          "status": "left",
+          "winCount": 0,
+          "lossCount": 0,
+          "balance": 98.7,
+          "inactivityTimer": 0
+        }
+      ],
+      "capacity": 2,
+      "gameMode": "solo",
+      "gameState": {
+        "turn": 1,
+        "diceRoll": null,
+        "hasRolled": false,
+        "turnTimer": 0,
+        "tokens": [
+          {
+            "id": "token_green_0",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_1",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_2",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_3",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_blue_0",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_1",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_2",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_3",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          }
+        ],
+        "winnerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+        "escrowBalance": 0,
+        "logs": [
+          {
+            "id": "1",
+            "timestamp": 1786371098155,
+            "text": "Match found! Mode: Solo 2P"
+          },
+          {
+            "id": "2",
+            "timestamp": 1786371098155,
+            "text": "Stake of $0.3 locked in secure escrow pool ($0.60)"
+          },
+          {
+            "id": "log_1786371115655_vvf3f",
+            "timestamp": 1786371115655,
+            "text": "🎲 saalax rolled a 1!"
+          },
+          {
+            "id": "log_1786371115655_j8h4i",
+            "timestamp": 1786371115655,
+            "text": "saalax has no valid moves with roll 1. Turn passes."
+          },
+          {
+            "id": "log_1786371117208_s1d0q",
+            "timestamp": 1786371117208,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371150495_rnjh3",
+            "timestamp": 1786371150495,
+            "text": "⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday khaalid. Ganaaxa daahitaanka ayaa bilaabanaya."
+          },
+          {
+            "id": "log_1786371180516_9tx5w",
+            "timestamp": 1786371180516,
+            "text": "⏱️ Digniin: khaalid waxaa u harsan 4 daqiiqo. (Warning: khaalid has 4 minutes left.)"
+          },
+          {
+            "id": "log_1786371240553_p967y",
+            "timestamp": 1786371240553,
+            "text": "⏱️ Digniin: khaalid waxaa u harsan 3 daqiiqo. (Warning: khaalid has 3 minutes left.)"
+          },
+          {
+            "id": "log_1786371300584_0abk3",
+            "timestamp": 1786371300584,
+            "text": "⏱️ Digniin: khaalid waxaa u harsan 2 daqiiqo. (Warning: khaalid has 2 minutes left.)"
+          },
+          {
+            "id": "log_1786371360612_q1mqo",
+            "timestamp": 1786371360612,
+            "text": "⏱️ Digniin: khaalid waxaa u harsan 1 daqiiqo. (Warning: khaalid has 1 minutes left.)"
+          },
+          {
+            "id": "log_1786371420650_okilf",
+            "timestamp": 1786371420650,
+            "text": "⏱️ khaalid has been forfeited due to inactivity."
+          },
+          {
+            "id": "log_1786371420650_0z2v4",
+            "timestamp": 1786371420650,
+            "text": "🏆 Game Over! saalax wins by forfeit and takes the pot of $0.60!"
+          }
+        ],
+        "chat": [],
+        "lastActivity": 1786371098155,
+        "lastDiceRoll": 1,
+        "consecutiveSixes": 0
+      },
+      "createdAt": 1786371098155
+    },
+    "MATCH_ZV7U9": {
+      "id": "MATCH_ZV7U9",
+      "status": "completed",
+      "betAmount": 0.3,
+      "players": [
+        {
+          "userId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+          "username": "saalax",
+          "avatar": "🎮",
+          "color": "green",
+          "isHost": true,
+          "isReady": true,
+          "status": "left",
+          "winCount": 0,
+          "lossCount": 0,
+          "balance": 98.4,
+          "inactivityTimer": 300
+        },
+        {
+          "userId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+          "username": "khaalid",
+          "avatar": "🎮",
+          "color": "blue",
+          "isHost": false,
+          "isReady": true,
+          "status": "online",
+          "winCount": 0,
+          "lossCount": 0,
+          "balance": 98.4,
+          "inactivityTimer": 295
+        }
+      ],
+      "capacity": 2,
+      "gameMode": "solo",
+      "gameState": {
+        "turn": 1,
+        "diceRoll": null,
+        "hasRolled": false,
+        "turnTimer": 25,
+        "tokens": [
+          {
+            "id": "token_green_0",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_1",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_2",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_green_3",
+            "ownerId": "WGdP4DgHQfgEZrzDGok71hpm3D33",
+            "color": "green",
+            "position": -1
+          },
+          {
+            "id": "token_blue_0",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_1",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_2",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          },
+          {
+            "id": "token_blue_3",
+            "ownerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+            "color": "blue",
+            "position": -1
+          }
+        ],
+        "winnerId": "PmWZkLbaysOEHsYZlsYqlTOfIwh2",
+        "escrowBalance": 0,
+        "logs": [
+          {
+            "id": "log_1786371158802_sa42v",
+            "timestamp": 1786371158802,
+            "text": "khaalid has no valid moves with roll 4. Turn passes."
+          },
+          {
+            "id": "log_1786371160353_ynr64",
+            "timestamp": 1786371160353,
+            "text": "It is now saalax's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371162239_wojaf",
+            "timestamp": 1786371162239,
+            "text": "🎲 saalax rolled a 4!"
+          },
+          {
+            "id": "log_1786371162239_h42gq",
+            "timestamp": 1786371162239,
+            "text": "saalax has no valid moves with roll 4. Turn passes."
+          },
+          {
+            "id": "log_1786371163795_rba9r",
+            "timestamp": 1786371163795,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371165209_1z5k9",
+            "timestamp": 1786371165209,
+            "text": "🎲 khaalid rolled a 4!"
+          },
+          {
+            "id": "log_1786371165209_5gb8a",
+            "timestamp": 1786371165209,
+            "text": "khaalid has no valid moves with roll 4. Turn passes."
+          },
+          {
+            "id": "log_1786371166745_tc9md",
+            "timestamp": 1786371166745,
+            "text": "It is now saalax's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371169304_u6lrp",
+            "timestamp": 1786371169304,
+            "text": "🎲 saalax rolled a 4!"
+          },
+          {
+            "id": "log_1786371169304_2fx56",
+            "timestamp": 1786371169304,
+            "text": "saalax has no valid moves with roll 4. Turn passes."
+          },
+          {
+            "id": "log_1786371170847_dsp6r",
+            "timestamp": 1786371170847,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371172169_r0aqr",
+            "timestamp": 1786371172169,
+            "text": "🎲 khaalid rolled a 2!"
+          },
+          {
+            "id": "log_1786371172169_2kvdc",
+            "timestamp": 1786371172169,
+            "text": "khaalid has no valid moves with roll 2. Turn passes."
+          },
+          {
+            "id": "log_1786371173702_dk6gb",
+            "timestamp": 1786371173702,
+            "text": "It is now saalax's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371175714_ilvin",
+            "timestamp": 1786371175714,
+            "text": "🎲 saalax rolled a 5!"
+          },
+          {
+            "id": "log_1786371175714_8g7n2",
+            "timestamp": 1786371175714,
+            "text": "saalax has no valid moves with roll 5. Turn passes."
+          },
+          {
+            "id": "log_1786371177260_t8ybt",
+            "timestamp": 1786371177260,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371178914_t4o6d",
+            "timestamp": 1786371178914,
+            "text": "🎲 khaalid rolled a 3!"
+          },
+          {
+            "id": "log_1786371178914_n7eyk",
+            "timestamp": 1786371178914,
+            "text": "khaalid has no valid moves with roll 3. Turn passes."
+          },
+          {
+            "id": "log_1786371180450_o4q72",
+            "timestamp": 1786371180450,
+            "text": "It is now saalax's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371182487_cbdrx",
+            "timestamp": 1786371182487,
+            "text": "🎲 saalax rolled a 2!"
+          },
+          {
+            "id": "log_1786371182487_c3t2h",
+            "timestamp": 1786371182487,
+            "text": "saalax has no valid moves with roll 2. Turn passes."
+          },
+          {
+            "id": "log_1786371184025_mndl6",
+            "timestamp": 1786371184025,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371185400_mi8xl",
+            "timestamp": 1786371185400,
+            "text": "🎲 khaalid rolled a 4!"
+          },
+          {
+            "id": "log_1786371185400_3eoe3",
+            "timestamp": 1786371185400,
+            "text": "khaalid has no valid moves with roll 4. Turn passes."
+          },
+          {
+            "id": "log_1786371186945_m5rcj",
+            "timestamp": 1786371186945,
+            "text": "It is now saalax's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371189208_t99y3",
+            "timestamp": 1786371189208,
+            "text": "🎲 saalax rolled a 2!"
+          },
+          {
+            "id": "log_1786371189208_x8wok",
+            "timestamp": 1786371189208,
+            "text": "saalax has no valid moves with roll 2. Turn passes."
+          },
+          {
+            "id": "log_1786371190756_vstgs",
+            "timestamp": 1786371190756,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371192194_u14wd",
+            "timestamp": 1786371192194,
+            "text": "🎲 khaalid rolled a 5!"
+          },
+          {
+            "id": "log_1786371192194_u48at",
+            "timestamp": 1786371192194,
+            "text": "khaalid has no valid moves with roll 5. Turn passes."
+          },
+          {
+            "id": "log_1786371193724_rnwew",
+            "timestamp": 1786371193724,
+            "text": "It is now saalax's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371195785_xse2m",
+            "timestamp": 1786371195785,
+            "text": "🎲 saalax rolled a 5!"
+          },
+          {
+            "id": "log_1786371195785_sjr0v",
+            "timestamp": 1786371195785,
+            "text": "saalax has no valid moves with roll 5. Turn passes."
+          },
+          {
+            "id": "log_1786371197328_uz1qx",
+            "timestamp": 1786371197328,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371199185_ayz6g",
+            "timestamp": 1786371199185,
+            "text": "🎲 khaalid rolled a 1!"
+          },
+          {
+            "id": "log_1786371199185_zcjku",
+            "timestamp": 1786371199185,
+            "text": "khaalid has no valid moves with roll 1. Turn passes."
+          },
+          {
+            "id": "log_1786371200731_lqj8h",
+            "timestamp": 1786371200731,
+            "text": "It is now saalax's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371203817_wcohc",
+            "timestamp": 1786371203817,
+            "text": "🎲 saalax rolled a 2!"
+          },
+          {
+            "id": "log_1786371203817_zv474",
+            "timestamp": 1786371203817,
+            "text": "saalax has no valid moves with roll 2. Turn passes."
+          },
+          {
+            "id": "log_1786371205365_ml95a",
+            "timestamp": 1786371205365,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371206906_qhmbq",
+            "timestamp": 1786371206906,
+            "text": "🎲 khaalid rolled a 1!"
+          },
+          {
+            "id": "log_1786371206906_f8yk6",
+            "timestamp": 1786371206906,
+            "text": "khaalid has no valid moves with roll 1. Turn passes."
+          },
+          {
+            "id": "log_1786371208444_4d61p",
+            "timestamp": 1786371208444,
+            "text": "It is now saalax's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371237224_e5qn1",
+            "timestamp": 1786371237224,
+            "text": "🎲 saalax rolled a 3!"
+          },
+          {
+            "id": "log_1786371237224_qhkz0",
+            "timestamp": 1786371237224,
+            "text": "saalax has no valid moves with roll 3. Turn passes."
+          },
+          {
+            "id": "log_1786371238767_2r8bt",
+            "timestamp": 1786371238767,
+            "text": "It is now khaalid's turn. Please roll the dice!"
+          },
+          {
+            "id": "log_1786371244422_4yd0a",
+            "timestamp": 1786371244422,
+            "text": "saalax has left the game."
+          },
+          {
+            "id": "log_1786371244422_tvqsp",
+            "timestamp": 1786371244422,
+            "text": "😭 saalax waa lagu helay ciyaarta!"
+          },
+          {
+            "id": "log_1786371244422_3xakp",
+            "timestamp": 1786371244422,
+            "text": "🏆 saalax has left the game. khaalid wins by forfeit and takes the pot of $0.60!"
+          }
+        ],
+        "chat": [],
+        "lastActivity": 1786371101617,
+        "lastDiceRoll": 3,
+        "consecutiveSixes": 0
+      },
+      "createdAt": 1786371101617
     }
   },
   "matchmakingQueues": {
@@ -54162,7 +54909,7 @@
     "10_4_team": [],
     "0.75_2_solo": []
   },
-  "houseRevenue": 23.06,
+  "houseRevenue": 23.119999999999997,
   "pendingManualTransactions": [
     {
       "id": "req_1785863837983_i4ine",

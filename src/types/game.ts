@@ -20,6 +20,7 @@ export interface UserProfile {
   linkedAgentId?: string;
   promoCode?: string;
   firebaseUid?: string;
+  createdAt: number;
 }
 
 export interface WalletTransaction {
@@ -32,7 +33,7 @@ export interface WalletTransaction {
   description: string;
 }
 
-export interface ManualTransactionRequest {
+export interface ManualTransaction {
   id: string;
   userId: string;
   username: string;
@@ -142,6 +143,7 @@ export interface AgentTransaction {
   amount: number;
   discountAmount?: number; // For FloatPurchase, records the profit made by the platform owner
   playerId?: string; // For PlayerDeposit, the user who received the funds
+  playerName?: string;
   timestamp: number;
   description: string;
 }
@@ -200,7 +202,7 @@ export interface Tournament {
 }
 
 export interface TournamentMatch {
-  id: string;
+  id:string;
   tournamentId: string;
   round: number;
   player1: { userId: string; username: string; avatar: string; } | null;
@@ -210,3 +212,16 @@ export interface TournamentMatch {
   status: 'pending' | 'in_progress' | 'completed' | 'cancelled';
 }
 
+export interface AdminUser {
+    id: string;
+    username: string;
+    password?: string;
+    permissions: string[];
+    name?: string;
+}
+
+export interface AdminRole {
+    id: string;
+    name: string;
+    permissions: string[];
+}

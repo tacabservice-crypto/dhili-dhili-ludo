@@ -22,5 +22,7 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "include": ["src", "server.ts", "db-connection.ts", "db-test.ts"],
+  "exclude": ["node_modules", "admin_panel_source"]
 }

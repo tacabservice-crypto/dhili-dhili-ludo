@@ -706,8 +706,6 @@ const AgentDashboard = () => {
 };
 
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <AgentDashboard />
-  </React.StrictMode>
-);
+
+export default AgentDashboard;
+

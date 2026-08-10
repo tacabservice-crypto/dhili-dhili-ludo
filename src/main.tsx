@@ -9,6 +9,7 @@ import AdminDashboard from './pages/AdminDashboard';
 import BecomeVip from './pages/BecomeVip';
 import Tournaments from './pages/Tournaments';
 
+import AgentDashboard from '../src/agent-dashboard';
 const router = createBrowserRouter([
   {
     path: "/",
@@ -32,9 +33,10 @@ const router = createBrowserRouter([
     element: <Tournaments />,
   },
   {
-    path: "/*",
-    element: <Navigate to="/" replace />,
+    path: "/agent",
+    element: <AgentDashboard />,
   },
+
 ]);
 
 createRoot(document.getElementById('root')!).render(

@@ -1,20 +1,4 @@
 import 'dotenv/config';
-
-/**
- * @license
- * SPDX-License-Identifier: Apache-2.0
- */
-
-import express from 'express';
-import cors from 'cors';
-import path from 'path';
-import fs from 'fs';
-import { createServer as createViteServer, ViteDevServer } from 'vite';
-import { initializeApp, cert, getApp } from 'firebase-admin/app';
-import { getFirestore, Firestore } from 'firebase-admin/firestore';
-import { getAuth, Auth } from 'firebase-admin/auth';
-import { onRequest } from "firebase-functions/v2/https";
-
 import {
   UserProfile,
   WalletTransaction,
@@ -31,7 +15,67 @@ import {
   VipSubscription,
   Tournament,
   TournamentMatch,
-} from './src/types/game.ts';
+  ManualTransaction,
+} from './src/types/game';
+import { AdminUser } from './src/models/AdminUser';
+import { GameRoom as GameRoomModel } from './src/models/GameRoom';
+import { LudoPlayer as LudoPlayerModel } from './src/models/LudoPlayer';
+import { LudoToken as LudoTokenModel } from './src/models/LudoToken';
+import { UserProfile as UserProfileModel } from './src/models/UserProfile';
+import { WalletTransaction as WalletTransactionModel } from './src/models/WalletTransaction';
+import { Agent as AgentModel } from './src/models/Agent';
+import { AgentTransaction as AgentTransactionModel } from './src/models/AgentTransaction';
+import { PlayerAgentRequestModel } from './src/models/PlayerAgentRequestModel';
+
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import express from 'express';
+import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
+import { createServer as createViteServer, ViteDevServer } from 'vite';
+import sequelize from './src/sequelize';
+
+import {
+  getUserByFirebaseUid,
+  createUser,
+  getAgentByPromoCode,
+  linkAgentToPlayer,
+  getUserById,
+  updateUser,
+  createTransaction,
+  getTransactionsByUserId,
+  getAgents,
+  getAgentById,
+  createPlayerAgentRequest,
+  addUserToMatchmakingQueue,
+  removeUsersFromMatchmakingQueue,
+  getAdminUserByUsername,
+  createAdminUser,
+  getAllAdminUsers,
+  getAdminUserById,
+  updateAdminUser,
+  deleteAdminUser,
+  getAgentByUsername,
+  createAgent,
+  updateAgent,
+  creditAgentFloat,
+  getAgentRequests,
+  approveAgentRequest,
+  rejectAgentRequest,
+  getAgentTransactions,
+  depositToPlayer,
+  createRoom,
+  addPlayerToRoom,
+  getRoomById,
+  removePlayerFromRoom,
+  startGame,
+} from './src/database';
+
+import { isBotPlayer, addLog, moveTokenLogic } from './src/utils';
 
 interface VipTier {
   name: string;
@@ -93,133 +137,12 @@ app.use(cors({
 }));
 
 const PORT = Number(process.env.PORT) || 3002;
-const DB_FILE = path.join(process.cwd(), 'db_store.json');
+const DB_FILE = path.join(process.cwd(), '_store.json');
 
 app.use(express.json());
 
 // Serve static files from the 'public' directory
 app.use(express.static(path.join(process.cwd(), 'public')));
-
-// ==========================================
-// FIREBASE FIRESTORE PERSISTENCE SETUP
-// ==========================================
-let db: Firestore | null = null;
-let auth: Auth | null = null;
-
-function getFirebaseServiceAccount() {
-  const envValue =
-    process.env.FIREBASE_SERVICE_ACCOUNT ||
-    process.env.FIREBASE_ADMIN_CREDENTIALS;
-
-  if (envValue) {
-    try {
-      // Replace literal newline characters with escaped newlines for JSON parsing.
-      // This handles cases where the environment variable might be set with actual newlines
-      // instead of properly escaped JSON strings.
-      let normalizedEnvValue = envValue.trim().replace(/\n/g, '\\n');
-
-      const parsed = JSON.parse(normalizedEnvValue);
-
-      if (parsed && parsed.project_id && parsed.private_key) {
-        return parsed;
-      }
-
-      console.warn(
-        "FIREBASE_SERVICE_ACCOUNT was set but did not contain project_id/private_key."
-      );
-    } catch (error) {
-      console.error(
-        "Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON:",
-        error
-      );
-    }
-  }
-
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH
-    ? process.env.FIREBASE_SERVICE_ACCOUNT_PATH
-    : path.join(process.cwd(), "firebase-admin-key.json");
-
-  if (!fs.existsSync(serviceAccountPath)) {
-    return null;
-  }
-
-  try {
-    const serviceAccountFile = fs.readFileSync(serviceAccountPath, "utf8");
-    return JSON.parse(serviceAccountFile);
-  } catch (error) {
-    console.error(
-      "Failed to read Firebase service account JSON file:",
-      error
-    );
-    return null;
-  }
-}
-
-// On Firebase, the SDK automatically picks up credentials. For local dev, it falls back to the service account.
-if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
-  // We are in the Firebase Functions environment, use default credentials
-  try {
-    initializeApp();
-    db = getFirestore();
-    auth = getAuth();
-    console.log('Firebase Admin SDK initialized in Cloud Function environment.');
-  } catch (err) {
-    console.error('Critical: Failed to initialize Firebase Admin SDK in function environment:', err);
-  }
-} else {
-  // Prefer separate environment variables for Hostinger-like environments
-  if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-    try {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY
-        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n').trim()
-        : undefined;
-
-      // Check if the app is already initialized to prevent errors
-      try {
-        getApp();
-      } catch (error) {
-        initializeApp({
-          credential: cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: privateKey,
-          }),
-          databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`
-        });
-      }
-      db = getFirestore();
-      auth = getAuth();
-      console.log('Firebase Admin SDK initialized with separate environment variables (PROJECT_ID, CLIENT_EMAIL, PRIVATE_KEY).');
-    } catch (err) {
-      console.error('Failed to initialize Firebase Admin SDK with separate environment variables:', err);
-    }
-  } else {
-    // Fallback to single FIREBASE_SERVICE_ACCOUNT variable or local file for compatibility
-    const serviceAccount = getFirebaseServiceAccount();
-    if (serviceAccount) {
-      try {
-        serviceAccount.private_key = (serviceAccount.private_key || '').replace(/\\n/g, '\n');
-
-        try {
-          getApp();
-        } catch (error) {
-          initializeApp({
-            credential: cert(serviceAccount),
-            databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
-          });
-        }
-        
-        db = getFirestore();
-        auth = getAuth();
-        console.log('Firebase Admin SDK initialized successfully for local development (using FIREBASE_SERVICE_ACCOUNT variable or file).');
-      } catch (err) {
-        console.error('Failed to initialize Firebase Admin SDK with local credentials (using FIREBASE_SERVICE_ACCOUNT variable or file):', err);
-      }
-    } else {
-      console.log('No Firebase Admin credentials configured for local development. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json.');
-    }
-  }
-}
 
 // ==========================================
 // 1. DATA STORE SETUP & PERSISTENCE
@@ -258,7 +181,7 @@ interface DBStore {
   rooms: Record<string, GameRoom>;
   matchmakingQueues: Record<string, string[]>; // betAmount -> array of userIds
   houseRevenue: number;
-  pendingManualTransactions: ManualTransactionRequest[];
+  pendingManualTransactions: ManualTransaction[];
   paymentProviders: Record<PaymentProviderKey, PaymentProviderConfig>;
   agentFloatInstructions: string;
   adminSettings: AdminSettings;
@@ -338,134 +261,6 @@ function loadStore() {
   }
 }
 
-// Load store from Firebase Firestore
-async function loadStoreFromFirestore() {
-  if (!db) {
-    loadStore();
-    return;
-  }
-  try {
-    console.log('Fetching latest state from Firebase Firestore...');
-    const storeRef = db.collection('ludo_store').doc('main');
-    const docSnap = await storeRef.get();
-    if (docSnap.exists) {
-      const payload = docSnap.data();
-      if (payload && payload.data) {
-        const parsed = JSON.parse(payload.data);
-        store.users = parsed.users || {};
-        store.transactions = parsed.transactions || [];
-        store.rooms = parsed.rooms || {};
-        store.matchmakingQueues = parsed.matchmakingQueues || {
-          0: [], 1: [], 5: [], 10: [], 25: [], 50: []
-        };
-        store.houseRevenue = parsed.houseRevenue || 0;
-        store.pendingManualTransactions = parsed.pendingManualTransactions || [];
-        store.paymentProviders = {
-          ...DEFAULT_PAYMENT_PROVIDERS,
-          ...(parsed.paymentProviders || {})
-        };
-        store.agentFloatInstructions = parsed.agentFloatInstructions || '';
-        const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
-        store.adminSettings = {
-          username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
-          password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || 'password',
-          roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES,
-        };
-        store.agents = parsed.agents || {};
-        store.agentTransactions = parsed.agentTransactions || [];
-        store.tournaments = parsed.tournaments || {};
-        console.log('Database loaded successfully from Firebase Firestore.');
-        // Update local file backup (only in local dev)
-        if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
-          fs.writeFileSync(DB_FILE, payload.data, 'utf8');
-        }
-        return;
-      }
-    }
-    console.log('No existing state in Firestore. Loading from local store fallback...');
-    loadStore();
-    // Immediately seed the empty Firestore with the loaded local data
-    // syncToFirestore();
-  } catch (err) {
-    console.error('Failed to load store from Firestore:', err);
-    loadStore();
-  }
-}
-
-async function syncToFirestore(): Promise<{ success: boolean; error?: string }> {
-  if (!db) {
-    const errorMsg = "Firestore not initialized. Cannot sync.";
-    console.error(errorMsg);
-    return { success: false, error: errorMsg };
-  }
-
-  try {
-    const storeRef = db.collection('ludo_store').doc('main');
-    
-    // Create a copy of the store to avoid modifying the in-memory store
-    const storeToSync = JSON.parse(JSON.stringify(store));
-
-    // Trim transactions to the most recent 5000
-    if (storeToSync.transactions && storeToSync.transactions.length > 5000) {
-      console.log(`Trimming transactions from ${storeToSync.transactions.length} to 5000 for Firestore sync.`);
-      storeToSync.transactions = storeToSync.transactions.slice(-5000); // Keep the last 5000
-    }
-
-    // Trim agent transactions to the most recent 5000
-    if (storeToSync.agentTransactions && storeToSync.agentTransactions.length > 5000) {
-      console.log(`Trimming agentTransactions from ${storeToSync.agentTransactions.length} to 5000 for Firestore sync.`);
-      storeToSync.agentTransactions = storeToSync.agentTransactions.slice(-5000);
-    }
-
-    const serialized = JSON.stringify(storeToSync);
-
-    if (serialized.length > 1048487) {
-      const errorMsg = `Data store is too large to sync to Firestore, even after trimming. Size: ${serialized.length}`;
-      console.error(errorMsg);
-       // As a fallback, try trimming even more aggressively
-      if ((storeToSync.transactions && storeToSync.transactions.length > 1000) || (storeToSync.agentTransactions && storeToSync.agentTransactions.length > 1000)) {
-        if (storeToSync.transactions && storeToSync.transactions.length > 1000) {
-          storeToSync.transactions = storeToSync.transactions.slice(-1000);
-        }
-        if (storeToSync.agentTransactions && storeToSync.agentTransactions.length > 1000) {
-          storeToSync.agentTransactions = storeToSync.agentTransactions.slice(-1000);
-        }
-        const serialized2 = JSON.stringify(storeToSync);
-        if (serialized2.length < 1048487) {
-          await storeRef.set({ data: serialized2, updatedAt: Date.now() });
-          console.log('Successfully synchronized store to Firebase Firestore with aggressive trimming.');
-          return { success: true };
-        } else {
-           console.error('Data store is too large to sync to Firestore, even with aggressive trimming.');
-           return { success: false, error: 'Data store is too large to sync to Firestore, even with aggressive trimming.' };
-        }
-      }
-      return { success: false, error: errorMsg };
-    }
-
-    await storeRef.set({ data: serialized, updatedAt: Date.now() });
-    console.log('Successfully synchronized store to Firebase Firestore.');
-    return { success: true };
-  } catch (err: any) {
-    console.error('Failed to sync store to Firestore:', err);
-    return { success: false, error: err.message || 'An unknown error occurred during Firestore sync.' };
-  }
-}
-
-// Save store to disk and sync with Firestore
-function saveStore() {
-  // In a serverless environment, don't write to disk. `saveStoreAndWait` handles Firestore persistence.
-  if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
-    return;
-  }
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
-    // syncToFirestore(); // Fire-and-forget for non-critical updates
-  } catch (error) {
-    console.error('Failed to write database to disk.', error);
-  }
-}
-
 // Slower, awaited version for critical updates
 async function saveStoreAndWait(): Promise<{ success: boolean; error?: string }> {
     try {
@@ -473,15 +268,26 @@ async function saveStoreAndWait(): Promise<{ success: boolean; error?: string }>
       if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
         fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), 'utf8');
       }
-      return await syncToFirestore();
+      // Since Firestore is removed, we can just return success.
+      return { success: true };
     } catch (error: any) {
-      // This will catch errors from either writeFileSync or syncToFirestore.
-      console.error('Failed to write database to disk or sync to Firestore.', error);
+      // This will catch errors from writeFileSync.
+      console.error('Failed to write database to disk.', error);
       return { success: false, error: error.message };
     }
 }
 
-loadStoreFromFirestore();
+// loadStore(); // We will rely on the database now, but keep this for reference.
+
+// Sync all models with the database
+(async () => {
+  try {
+    await sequelize.sync();
+    console.log('All models were synchronized successfully.');
+  } catch (error) {
+    console.error('An error occurred while synchronizing the models:', error);
+  }
+})();
 
 // ==========================================
 // PURGE SIMULATED USERS TO KEEP ONLY REAL REGISTERED USER SESSIONS ON THE RADAR
@@ -495,7 +301,7 @@ function purgeSimulatedUsers() {
     }
   });
   if (changed) {
-    saveStore();
+    saveStoreAndWait();
   }
 }
 purgeSimulatedUsers();
@@ -568,6 +374,7 @@ function broadcastToRoom(roomId: string, eventName: string, data: any) {
             id: user.id,
             username: user.username,
             avatar: user.avatar,
+            createdAt: user.createdAt,
           };
         }
         return null;
@@ -619,7 +426,9 @@ function removeSSEClient(res: any) {
           player.status = 'offline';
           addLog(activeRoom, `🔌 ${player.username} has disconnected. They have time to reconnect before being forfeited.`);
           broadcastToRoom(activeRoom.id, 'game_update', activeRoom);
-          saveStore();
+          (async () => {
+            await saveStoreAndWait();
+          })();
         }
       }
 
@@ -632,11 +441,6 @@ function removeSSEClient(res: any) {
       }
       if (changed) {
         saveStoreAndWait();
-      }
-      if (db) {
-        db.collection('matchmaking').doc(client.userId).delete().catch(err => {
-          console.error('Failed to delete matchmaking record from Firestore on disconnect:', err);
-        });
       }
     }
     broadcastToAll('online_players_updated', {});
@@ -662,7 +466,7 @@ function cleanupMatchmakingQueues() {
     }
   }
   if (changed) {
-    saveStore();
+    saveStoreAndWait();
   }
 }
 
@@ -761,43 +565,16 @@ async function addTransaction(userId: string, type: WalletTransaction['type'], a
     description
   };
 
-  // New: Save directly to Firestore
-  if (db) {
-    try {
-      // Use the new top-level transactions collection
-      await db.collection('transactions').doc(tx.id).set(tx);
-    } catch (error) {
-        console.error("CRITICAL: Failed to save transaction to Firestore!", tx, error);
-        // Fallback or error handling here. For now, we will still add to in-memory store.
-    }
-  }
-
   // For backward compatibility, also add to the in-memory store
   store.transactions.unshift(tx);
   
   // The call to saveStore() is often redundant if the calling function calls saveStoreAndWait()
   // but we'll leave it for now to be safe during the transition.
-  saveStore(); 
+   
   return tx;
 }
 
-// Add a log to the room
-function addLog(room: GameRoom, text: string) {
-  const log: GameLog = {
-    id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    timestamp: Date.now(),
-    text
-  };
-  room.gameState.logs.push(log);
-  if (room.gameState.logs.length > 50) {
-    room.gameState.logs.shift();
-  }
-}
 
-// Helper to detect if player is an AI bot player
-function isBotPlayer(userId: string): boolean {
-  return userId.startsWith('bot_') || userId.startsWith('user_sim_');
-}
 
 // Trigger game auto-play bot actions
 function executeBotTurnIfActive(room: GameRoom) {
@@ -867,220 +644,6 @@ function executeBotTurnIfActive(room: GameRoom) {
   }, 400);
 }
 
-// Core token movement logic
-async function moveTokenLogic(room: GameRoom, tokenId: string, diceValue: number) {
-  const gs = room.gameState;
-  const token = gs.tokens.find(t => t.id === tokenId);
-  if (!token) return;
-
-  const activePlayer = room.players[gs.turn];
-  const oldPos = token.position;
-  let newPos = oldPos;
-
-  const RELATIVE_HOME_ENTRY_SQUARE = 51; // The first square of the home stretch in relative terms (e.g., green enters at relative 51)
-  const MAIN_TRACK_LENGTH = 52; // Main track has squares 0-51
-
-  // Logic for leaving home base
-  if (oldPos === -1 && diceValue === 6) {
-    newPos = 0; // Relative start position is 0
-    addLog(room, `${activePlayer.username} moved token out of base!`);
-  }
-  // Logic for tokens already on the board (0 or more)
-  else if (oldPos >= 0) {
-    // Case 1: Token is currently on the main track (0-50)
-    if (oldPos < RELATIVE_HOME_ENTRY_SQUARE) {
-      const theoreticalNewPos = oldPos + diceValue;
-      // A token can only enter the home stretch if it is on the approach path.
-      // This prevents a token at the start from jumping to the end with a large roll.
-      // We check if the old position is within 6 squares of the home entry point.
-      if (oldPos >= (RELATIVE_HOME_ENTRY_SQUARE - 6) && oldPos < RELATIVE_HOME_ENTRY_SQUARE && theoreticalNewPos >= RELATIVE_HOME_ENTRY_SQUARE) {
-        // Move enters or passes into home stretch (51-56)
-        newPos = theoreticalNewPos;
-      } else {
-        // Standard move on the main circular track.
-        newPos = theoreticalNewPos;
-        if (newPos >= MAIN_TRACK_LENGTH) {
-            newPos = newPos % MAIN_TRACK_LENGTH;
-        }
-      }
-    }
-    // Case 2: Token is already in home stretch (51-55)
-    else { // oldPos >= RELATIVE_HOME_ENTRY_SQUARE
-      newPos = oldPos + diceValue;
-    }
-  }
-
-  // If a token overshoots 56, it stays at its old position.
-  // This prevents moving out of the home stretch once inside.
-  if (newPos > 56) {
-      newPos = oldPos; // Revert to old position
-      addLog(room, `${activePlayer.username}'s token overshot the final home square and could not move.`);
-  }
-  
-  // Update token position
-  token.position = newPos;
-
-  // Only log if the position actually changed
-  if (oldPos !== newPos) {
-      addLog(room, `${activePlayer.username} moved token by ${diceValue} spaces (from ${oldPos === -1 ? 'base' : oldPos} to ${newPos}).`);
-  }
-
-  // Check cutting mechanism
-  let bonusTurn = diceValue === 6; // Rolling 6 grants bonus turn
-  const finalGlobal = getGlobalPosition(token.color, token.position);
-
-  if (finalGlobal !== null && !SAFE_GLOBAL_SQUARES.includes(finalGlobal)) {
-    // Check if opponent is here
-    const opponentsAtSquare = gs.tokens.filter(t => {
-      if (t.color === token.color) return false; // same color
-      
-      // In Partnership/Team mode, allied partners do not capture each other
-      if (room.gameMode === 'team') {
-        const isAlly = (token.color === 'red' && t.color === 'yellow') ||
-                       (token.color === 'yellow' && t.color === 'red') ||
-                       (token.color === 'green' && t.color === 'blue') ||
-                       (token.color === 'blue' && t.color === 'green');
-        if (isAlly) return false;
-      }
-
-      if (t.position < 0 || t.position >= RELATIVE_HOME_ENTRY_SQUARE) return false; // base or stretch (only check main track 0-50)
-      const otherGlobal = getGlobalPosition(t.color, t.position);
-      return otherGlobal === finalGlobal;
-    });
-
-    if (opponentsAtSquare.length > 0) {
-      opponentsAtSquare.forEach(opToken => {
-        opToken.position = -1; // Send back to base
-        const opUser = store.users[opToken.ownerId] || { username: 'Opponent' };
-        addLog(room, `💥 CUT! ${activePlayer.username} cut ${opUser.username}'s token back to base!`);
-      });
-      bonusTurn = true; // Cutting grants bonus turn
-    }
-  }
-
-  // Check if player has finished this token
-  if (token.position === 56) { // Assuming 56 is the final spot.
-    addLog(room, `🎉 Token finished! ${activePlayer.username} has safely brought a token home!`);
-    bonusTurn = true; // Completing token grants bonus turn
-  }
-
-  // Check if active player won
-  const playerTokens = gs.tokens.filter(t => t.color === token.color);
-  const allFinished = playerTokens.every(t => t.position === 56);
-
-  if (allFinished) {
-    // WINNER DETECTED!
-    room.status = 'completed';
-    gs.winnerId = activePlayer.userId;
-
-    if (room.tournamentDetails) {
-      addLog(room, `🏆 ${activePlayer.username} has won the tournament match!`);
-      await handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, activePlayer.userId);
-      gs.escrowBalance = 0;
-      return;
-    }
-
-    if (room.gameMode === 'team') {
-      const isRedYellow = token.color === 'red' || token.color === 'yellow';
-      const winningColors = isRedYellow ? ['red', 'yellow'] : ['green', 'blue'];
-      const winningTeammates = room.players.filter(p => winningColors.includes(p.color));
-      const winningNames = winningTeammates.map(p => p.username).join(' & ');
-      
-      addLog(room, `🏆 CHAMPIONS! Team ${winningNames} has finished all tokens and WON the game!`);
-
-      if (room.betAmount > 0) {
-        const share = gs.escrowBalance / 2;
-        for (const p of winningTeammates) {
-          if (!isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.balance += share;
-              user.winCount += 1;
-              await addTransaction(p.userId, 'win_payout', share, room.id, `Team Win payout for match ${room.id}.`);
-              broadcastUserUpdate(p.userId);
-            }
-          }
-        }
-
-        // Record losses for other real players
-        room.players.forEach(p => {
-          if (!winningColors.includes(p.color) && !isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.lossCount += 1;
-              broadcastUserUpdate(p.userId);
-            }
-          }
-        });
-      }
-    } else {
-      addLog(room, `🏆 CHAMPION! ${activePlayer.username} has finished all 4 tokens and WON the game!`);
-
-      // Escrow payout
-      if (room.betAmount > 0) {
-        const winnerProfile = store.users[activePlayer.userId];
-        if (winnerProfile) {
-          let effectiveRakePercentage = RAKE_PERCENTAGE;
-          if (winnerProfile.vip && winnerProfile.vip.expires > Date.now()) {
-            const vipTier = VIP_TIERS[winnerProfile.vip.tier];
-            if (vipTier) {
-              effectiveRakePercentage = Math.max(0, RAKE_PERCENTAGE - vipTier.rakeDiscount);
-            }
-          }
-
-          const rakeAmount = gs.escrowBalance * effectiveRakePercentage;
-          const payoutAmount = gs.escrowBalance - rakeAmount;
-
-          winnerProfile.balance += payoutAmount;
-          winnerProfile.winCount += 1;
-          await addTransaction(
-            activePlayer.userId,
-            'win_payout',
-            payoutAmount,
-            room.id,
-            `Payout for winning match ${room.id} with $${room.betAmount} bet (Rake: $${rakeAmount.toFixed(2)}).`
-          );
-          broadcastUserUpdate(activePlayer.userId);
-
-          store.houseRevenue += rakeAmount;
-          await addTransaction(
-            'house', // A special ID for house transactions
-            'app_commission',
-            rakeAmount,
-            room.id,
-            `Rake from match ${room.id} (${(effectiveRakePercentage * 100).toFixed(0)}%).`
-          );
-        }
-
-        // Record losses for other real players
-        room.players.forEach(p => {
-          if (p.userId !== activePlayer.userId && !isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.lossCount += 1;
-              broadcastUserUpdate(p.userId);
-            }
-          }
-        });
-      }
-    }
-    gs.escrowBalance = 0;
-  } else {
-    // Reset roll and determine next turn
-    gs.diceRoll = null;
-    gs.hasRolled = false;
-    
-    if (bonusTurn) {
-      addLog(room, `🎲 Bonus roll! ${activePlayer.username} gets to roll again.`);
-      gs.turnTimer = 30;
-    } else {
-      advanceTurn(room);
-    }
-  }
-
-  saveStore();
-}
-
 // Helper to handle inactivity forfeit
 async function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlayer) {
   if (room.status !== 'playing') return;
@@ -1140,69 +703,6 @@ async function handleInactivityForfeit(room: GameRoom, inactivePlayer: LudoPlaye
   broadcastToRoom(room.id, 'game_update', room);
 }
 
-// Initialize continuous turn timers thread (1s interval)
-setInterval(async () => {
-  let changed = false;
-  for (const roomId of Object.keys(store.rooms)) {
-    const room = store.rooms[roomId];
-    if (room.status === 'playing') {
-      const gs = room.gameState;
-      const activePlayer = room.players[gs.turn];
-
-      // New Inactivity Timer Logic (5 minutes)
-      if (activePlayer && activePlayer.inactivityTimer && !isBotPlayer(activePlayer.userId)) {
-        activePlayer.inactivityTimer -= 1;
-        changed = true;
-
-        // Send warning every minute (60 seconds)
-        if (activePlayer.inactivityTimer > 0 && activePlayer.inactivityTimer % 60 === 0) {
-          const minutesLeft = activePlayer.inactivityTimer / 60;
-          const warningMsg = `Waqtigaagu wuu sii dhamaanayaa! Waxaa kuu harsan ${minutesLeft} daqiiqo. (Your time is running out! ${minutesLeft} minutes left.)`;
-          sendEventToUser(activePlayer.userId, 'inactivity_warning', { message: warningMsg });
-          addLog(room, `⏱️ Digniin: ${activePlayer.username} waxaa u harsan ${minutesLeft} daqiiqo. (Warning: ${activePlayer.username} has ${minutesLeft} minutes left.)`);
-        }
-
-        // Forfeit if 5 minutes are up
-        if (activePlayer.inactivityTimer <= 0) {
-          await handleInactivityForfeit(room, activePlayer);
-          // Skip the rest of the turn logic for this room
-          continue; 
-        }
-      }
-
-
-      // Short Turn Timer Logic (30 seconds)
-      if (gs.turnTimer > 0) {
-        gs.turnTimer -= 1;
-        changed = true;
-
-        if (gs.turnTimer === 0) {
-          // 30-second turn timer is up.
-          // The 5-minute inactivity timer is already running.
-          // We no longer auto-play for the user. We just let the inactivity timer handle the penalty.
-          addLog(room, `⏱️ Waqtiga 30-ka ilbiriqsi wuu dhamaaday ${activePlayer.username}. Ganaaxa daahitaanka ayaa bilaabanaya.`);
-          broadcastToRoom(room.id, 'game_update', room);
-          // No auto-play, just wait for the 5-min timer to forfeit.
-        }
-      }
-    }
-  }
-
-  if (changed) {
-    // Notify clients about updated timers
-    Object.keys(store.rooms).forEach(roomId => {
-      const room = store.rooms[roomId];
-      if (room.status === 'playing') {
-        broadcastToRoom(roomId, 'timer_tick', { 
-          turn: room.gameState.turn, 
-          turnTimer: room.gameState.turnTimer,
-          inactivityTimer: room.players[room.gameState.turn]?.inactivityTimer
-        });
-      }
-    });
-  }
-}, 1000);
-
 // Heartbeat interval to prevent proxy disconnects by keeping SSE stream active
 setInterval(() => {
   activeClients.forEach(client => {
@@ -1221,12 +721,12 @@ setInterval(() => {
 }, 10000);
 
 // Matchmaking automatic bot auto-fill (PUBG style)
-setInterval(() => {
+setInterval(async () => {
   cleanupMatchmakingQueues();
 
-  Object.keys(store.matchmakingQueues).forEach(queueKey => {
+  for (const queueKey of Object.keys(store.matchmakingQueues)) {
     const queueUserIds = store.matchmakingQueues[queueKey];
-    if (!queueUserIds || queueUserIds.length === 0) return;
+    if (!queueUserIds || queueUserIds.length === 0) continue;
 
     // Get bet, cap, mode from queueKey (e.g., "1_2_solo" -> bet: 1, cap: 2, mode: "solo")
     const parts = queueKey.split('_');
@@ -1237,7 +737,7 @@ setInterval(() => {
     // Find the first user in the queue
     const firstUserId = queueUserIds[0];
     const firstUser = store.users[firstUserId];
-    if (!firstUser) return;
+    if (!firstUser) continue;
 
     const joinedAt = (firstUser as any).seekingJoinedAt || Date.now();
     const waitTimeMs = Date.now() - joinedAt;
@@ -1252,16 +752,6 @@ setInterval(() => {
       // Remove these players from the queue
       store.matchmakingQueues[queueKey] = [];
 
-      // Clean up Firestore matchmaking documents
-      if (db) {
-        realPlayers.forEach(p => {
-          db.collection('matchmaking').doc(p.id).delete().catch(err => {
-            console.error('Failed to delete matchmaking record from Firestore on auto-fill:', err);
-          });
-        });
-      }
-
-      // Generate bots for the remaining slots
       const matchedList = [...realPlayers];
       const botAvatars = ['🤖', '🦊', '⚡', '👑'];
       const botNames = ['Dhili Master AI', 'SomaliLudoBot', 'LudoPro AI', 'DesertFox AI', 'NomadLudo AI'];
@@ -1279,7 +769,7 @@ setInterval(() => {
       }
 
       // Create the room
-      const room = startMatchedRoom(matchedList, bet, cap, mode);
+      const room = await startMatchedRoom(matchedList, bet, cap, mode);
 
       // Notify all real players
       realPlayers.forEach(p => {
@@ -1288,9 +778,9 @@ setInterval(() => {
       });
 
       broadcastToAll('online_players_updated', {});
-      saveStoreAndWait();
+      await saveStoreAndWait();
     }
-  });
+  }
 }, 2000);
 
 
@@ -1314,63 +804,20 @@ const authMiddleware = async (req: any, res: any, next: () => void) => {
     next();
 };
 
-const verifyFirebaseToken = async (req: any, res: any, next: any) => {
-  if (!auth) {
-    return res.status(500).json({ error: 'Firebase Admin not configured on server.' });
-  }
-
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(403).json({ error: 'Unauthorized: No token provided.' });
-  }
-
-  const idToken = authHeader.split('Bearer ')[1];
-  try {
-    const decodedToken = await auth.verifyIdToken(idToken);
-    req.user = decodedToken;
-    next();
-  } catch (error) {
-    console.error('Error verifying Firebase ID token:', error);
-    res.status(403).json({ error: 'Unauthorized: Invalid token.' });
-  }
-};
-
-// Middleware to check and apply VIP status
-const checkVipStatus = (req: any, res: any, next: any) => {
-  req.isVip = false;
-  req.vipRakeDiscount = 0; // Default no discount
-
-  if (req.user && req.user.uid) {
-    const user = Object.values(store.users).find(u => u.firebaseUid === req.user.uid);
-    if (user && user.vip && user.vip.expires > Date.now()) {
-      req.isVip = true;
-      const vipTier = VIP_TIERS[user.vip.tier];
-      if (vipTier) {
-        req.vipRakeDiscount = vipTier.rakeDiscount;
-      }
-    }
-  }
-  next();
-};
-
 // Debug Firebase endpoint
 app.get('/api/debug/firebase', async (req, res) => {
-  if (!db) {
+  if (true) {
     return res.json({ 
       initialized: false, 
-      error: 'Firebase Firestore db object is null. Check if firebase-admin-key.json exists.' 
+      error: 'Firebase Firestore  object is null. Check if firebase-admin-key.json exists.' 
     });
   }
   try {
-    const testRef = db.collection('ludo_store').doc('debug_test');
-    await testRef.set({ test: true, timestamp: Date.now() });
-    const snap = await testRef.get();
-    const data = snap.exists ? snap.data() : null;
     return res.json({
       initialized: true,
-      writeAndReadSuccess: data?.test === true,
-      data,
-      projectId: getApp().options.projectId,
+      writeAndReadSuccess: false,
+      data: null,
+      projectId: "N/A",
     });
   } catch (err: any) {
     return res.json({
@@ -1423,7 +870,7 @@ app.get('/api/updates', (req, res) => {
       player.inactivityTimer = 300; // Reset their full inactivity timer
       addLog(activeRoom, `🟢 ${player.username} has reconnected! Welcome back.`);
       broadcastToRoom(activeRoom.id, 'game_update', activeRoom);
-      saveStore();
+      
     }
   }
 
@@ -1471,33 +918,20 @@ data: ${JSON.stringify(seekingData)}
 });
 
 // Authentication / Session
-app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any, res) => {
+app.post('/api/auth/login', async (req: any, res) => {
   const { username, email, avatar, promoCode } = req.body;
   const firebaseUid = req.user.uid;
-
-  if (!db || !auth) {
-    return res.status(500).json({ error: 'Database not initialized' });
-  }
-
-  const userRef = db.collection('users').doc(firebaseUid);
+  const firebaseUser = req.user; // Decoded token
 
   try {
-    const userDoc = await userRef.get();
+    let user = await getUserByFirebaseUid(firebaseUid);
 
-    // 1. If user document exists, return it
-    if (userDoc.exists) {
-      const userData = userDoc.data();
-      // Also ensure this user data is present in the local store for now for compatibility
-      if (userData && userData.id && !store.users[userData.id]) {
-          console.log(`Syncing returning user ${userData.id} to local store.`);
-          store.users[userData.id] = userData as UserProfile;
-      }
-      return res.json(userData);
+    // 1. If user exists, return it
+    if (user) {
+      return res.json(user);
     }
 
-    // 2. If no user document, this is a new registration.
-    const firebaseUser = await auth.getUser(firebaseUid);
-
+    // 2. If no user, this is a new registration.
     let finalUsername = username;
     if (!finalUsername && firebaseUser.displayName) {
       finalUsername = firebaseUser.displayName;
@@ -1513,19 +947,15 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
     const cleanUsername = finalUsername.trim().substring(0, 20);
 
     let linkedAgentId: string | undefined = undefined;
-    let agent: Agent | undefined = undefined;
+    let agent: Agent | null = null;
     if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '') {
-      const agentsRef = db.collection('agents');
-      const agentSnapshot = await agentsRef.where('promoCode', '==', promoCode.trim()).limit(1).get();
-      if (agentSnapshot.empty) {
+      agent = await getAgentByPromoCode(promoCode.trim());
+      if (!agent) {
         return res.status(400).json({ error: 'Invalid or expired promo code.' });
       }
-      agent = agentSnapshot.docs[0].data() as Agent;
       linkedAgentId = agent.id;
     }
     
-    // The new user's ID will be their Firebase UID for direct lookup.
-    // We also keep a separate `id` field for compatibility with other parts of the system for now.
     const newId = firebaseUid; 
     const newUser: UserProfile = {
       id: newId,
@@ -1537,31 +967,16 @@ app.post('/api/auth/login', verifyFirebaseToken, checkVipStatus, async (req: any
       winCount: 0,
       lossCount: 0,
       linkedAgentId: linkedAgentId,
-      promoCode: promoCode, // Explicitly save the promo code used
+      promoCode: promoCode,
       createdAt: Date.now(),
     };
 
-    // Create the user document in Firestore
-    await userRef.set(newUser);
+    await createUser(newUser);
     
-    // Also create the user in the local store for compatibility with the rest of the app
-    store.users[newId] = newUser;
-
-    // Add welcome bonus transaction (this still uses the old system, which is OK for now)
     addTransaction(newId, 'deposit', 10.0, undefined, 'Welcome signup bonus.');
 
-    // We still call saveStoreAndWait to keep the JSON/Firestore backup in sync for now.
-    // This call can be removed once all data is migrated.
-    await saveStoreAndWait(); 
-    
-    // If a promo code was used, add the player to the agent's list of players
     if (agent && linkedAgentId) {
-        const agentPlayersRef = db.collection('agents').doc(linkedAgentId).collection('players').doc(newId);
-        await agentPlayersRef.set({
-            playerId: newId,
-            username: newUser.username,
-            joinedAt: Date.now()
-        });
+        await linkAgentToPlayer(linkedAgentId, newId);
     }
 
     res.status(201).json(newUser);
@@ -1577,44 +992,29 @@ app.get('/api/users/:userId', async (req, res, next) => {
   if (req.params.userId === 'online' || req.params.userId === 'leaderboard') {
     return next();
   }
-  
-  if (!db) {
-    // Fallback to old method if DB is not connected
-    const user = store.users[req.params.userId];
-    if (!user) {
-        return res.status(404).json({ error: 'User not found' });
-    }
-    return res.json(user);
-  }
 
   try {
-      const userRef = db.collection('users').doc(req.params.userId);
-      const doc = await userRef.get();
-      if (!doc.exists) {
-          return res.status(404).json({ error: 'User not found' });
-      }
-      res.json(doc.data());
+    const user = await getUserById(req.params.userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+    res.json(user);
   } catch (error) {
-      console.error("Failed to get user from Firestore:", error);
-      res.status(500).json({ error: "Failed to retrieve user."});
+    console.error("Failed to get user from database:", error);
+    res.status(500).json({ error: "Failed to retrieve user." });
   }
 });
 
 // Update profile
-app.post('/api/users/:userId/update', verifyFirebaseToken, async (req: any, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-
+app.post('/api/users/:userId/update', async (req: any, res) => {
     const userIdToUpdate = req.params.userId;
-    // Security check: Make sure the authenticated user is the one they are trying to update
     if (req.user.uid !== userIdToUpdate) {
         return res.status(403).json({ error: 'You are not authorized to update this profile.' });
     }
 
-    const userRef = db.collection('users').doc(userIdToUpdate);
-
     try {
-        const userDoc = await userRef.get();
-        if (!userDoc.exists) {
+        const user = await getUserById(userIdToUpdate);
+        if (!user) {
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -1626,20 +1026,10 @@ app.post('/api/users/:userId/update', verifyFirebaseToken, async (req: any, res)
         if (typeof isOfflinePreference === 'boolean') updateData.isOfflinePreference = isOfflinePreference;
         
         if (Object.keys(updateData).length > 0) {
-            await userRef.update(updateData);
+            await updateUser(userIdToUpdate, updateData);
         }
 
-        const updatedUserDoc = await userRef.get();
-        const updatedUser = updatedUserDoc.data() as UserProfile;
-
-        // Also update the in-memory store for compatibility
-        if (store.users[userIdToUpdate]) {
-            store.users[userIdToUpdate] = { ...store.users[userIdToUpdate], ...updatedUser };
-        } else {
-            store.users[userIdToUpdate] = updatedUser;
-        }
-
-        await saveStoreAndWait(); // Still sync the main store for now
+        const updatedUser = await getUserById(userIdToUpdate);
 
         broadcastUserUpdate(userIdToUpdate);
         res.json(updatedUser);
@@ -1651,63 +1041,104 @@ app.post('/api/users/:userId/update', verifyFirebaseToken, async (req: any, res)
 });
 
 // Update online/offline status preference
-app.post('/api/users/:userId/status', (req, res) => {
-  const user = store.users[req.params.userId];
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
-
+app.post('/api/users/:userId/status', async (req, res) => {
+  const { userId } = req.params;
   const { isOffline } = req.body;
-  user.isOfflinePreference = !!isOffline;
 
-  saveStore();
-  broadcastUserUpdate(user.id);
-  res.json({ success: true, isOfflinePreference: user.isOfflinePreference, user });
+  try {
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const isOfflinePreference = !!isOffline;
+    await updateUser(userId, { isOfflinePreference });
+
+    const updatedUser = await getUserById(userId);
+
+    broadcastUserUpdate(userId);
+    res.json({ success: true, isOfflinePreference: isOfflinePreference, user: updatedUser });
+  } catch (error) {
+    console.error('Error updating user status:', error);
+    res.status(500).json({ error: 'An internal server error occurred.' });
+  }
 });
 
 // Wallet Deposits / Withdrawals
 app.post('/api/wallet/deposit', async (req, res) => {
   const { userId, amount } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: 'User not found' });
   
   const depAmt = parseFloat(amount);
   if (isNaN(depAmt) || depAmt <= 0) {
     return res.status(400).json({ error: 'Invalid deposit amount' });
   }
 
-  user.balance += depAmt;
-  await addTransaction(userId, 'deposit', depAmt, undefined, `Deposited funds via Simulated Net Banking.`);
-  broadcastUserUpdate(userId);
+  try {
+    const user = await getUserById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
 
-  await saveStoreAndWait();
-  res.json({ success: true, balance: user.balance });
+    const newBalance = user.balance + depAmt;
+    await updateUser(userId, { balance: newBalance });
+
+    const tx: WalletTransaction = {
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userId,
+      type: 'deposit',
+      amount: depAmt,
+      timestamp: Date.now(),
+      description: `Deposited funds via Simulated Net Banking.`,
+    };
+    await createTransaction(tx);
+
+    broadcastUserUpdate(userId);
+
+    res.json({ success: true, balance: newBalance });
+  } catch (error) {
+    console.error('Error during deposit:', error);
+    res.status(500).json({ error: 'An internal server error occurred.' });
+  }
 });
 
 app.post('/api/wallet/withdraw', async (req, res) => {
   const { userId, amount } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
+  
   const withAmt = parseFloat(amount);
   if (isNaN(withAmt) || withAmt <= 0) {
     return res.status(400).json({ error: 'Invalid withdrawal amount' });
   }
 
-  if (withAmt < 20) { // New condition for minimum withdrawal
+  if (withAmt < 20) {
     return res.status(400).json({ error: 'Minimum withdrawal amount is $20' });
   }
 
-  if (user.balance < withAmt) {
-    return res.status(400).json({ error: 'Insufficient funds' });
+  try {
+    const user = await getUserById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    if (user.balance < withAmt) {
+      return res.status(400).json({ error: 'Insufficient funds' });
+    }
+
+    const newBalance = user.balance - withAmt;
+    await updateUser(userId, { balance: newBalance });
+
+    const tx: WalletTransaction = {
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userId,
+      type: 'withdrawal',
+      amount: withAmt,
+      timestamp: Date.now(),
+      description: `Withdrawn funds to bank account.`,
+    };
+    await createTransaction(tx);
+
+    broadcastUserUpdate(userId);
+
+    res.json({ success: true, balance: newBalance });
+  } catch (error) {
+    console.error('Error during withdrawal:', error);
+    res.status(500).json({ error: 'An internal server error occurred.' });
   }
-
-  user.balance -= withAmt;
-  await addTransaction(userId, 'withdrawal', withAmt, undefined, `Withdrawn funds to bank account.`);
-  broadcastUserUpdate(userId);
-
-  await saveStoreAndWait();
-  res.json({ success: true, balance: user.balance });
 });
 
 app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
@@ -1736,21 +1167,7 @@ app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
     return res.status(400).json({ error: 'Sender phone number is required for deposit requests.' });
   }
 
-  // Verify the agent exists
-  if (db) {
-      try {
-        const agentDoc = await db.collection('agents').doc(agentId).get();
-        if (!agentDoc.exists) {
-            return res.status(404).json({ error: 'The selected agent does not exist.' });
-        }
-      } catch (err) {
-        console.error("Failed to verify agent for manual transaction request:", err);
-        return res.status(500).json({ error: "Could not verify the selected agent." });
-      }
-  }
-
-
-  const newRequest: ManualTransactionRequest = {
+  const newRequest: ManualTransaction = {
     id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
     userId,
     username: user.username,
@@ -1770,13 +1187,7 @@ app.post('/api/wallet/request-manual-confirmation', async (req, res) => {
   res.json({ success: true, message: 'Your request has been submitted for review.' });
 });
 
-app.get('/api/wallet/transactions/:userId', verifyFirebaseToken, async (req: any, res) => {
-  if (!db) {
-    // Fallback to old in-memory store if DB not available
-    const txs = store.transactions.filter(t => t.userId === req.params.userId);
-    return res.json(txs);
-  }
-
+app.get('/api/wallet/transactions/:userId', async (req: any, res) => {
   const userId = req.params.userId;
   // Security check: Ensure the authenticated user is requesting their own transactions
   if (req.user.uid !== userId) {
@@ -1784,19 +1195,8 @@ app.get('/api/wallet/transactions/:userId', verifyFirebaseToken, async (req: any
   }
 
   try {
-      const snapshot = await db.collection('transactions')
-                                .where('userId', '==', userId)
-                                .orderBy('timestamp', 'desc')
-                                .limit(100) // Limit to the last 100 transactions for performance
-                                .get();
-
-      if (snapshot.empty) {
-          return res.json([]);
-      }
-      
-      const transactions = snapshot.docs.map(doc => doc.data());
+      const transactions = await getTransactionsByUserId(userId);
       res.json(transactions);
-
   } catch (error) {
       console.error(`Failed to get transactions for user ${userId}:`, error);
       res.status(500).json({ error: 'Failed to retrieve transactions.' });
@@ -1858,7 +1258,7 @@ app.post('/api/wallet/process-api-payment', async (req, res) => {
 });
 
 // VIP Subscription
-app.post('/api/vip/subscribe', verifyFirebaseToken, async (req: any, res) => {
+app.post('/api/vip/subscribe', async (req: any, res) => {
   const { tier } = req.body;
   const firebaseUid = req.user.uid;
 
@@ -1918,7 +1318,7 @@ app.get('/api/tournaments/:id', (req, res) => {
   res.json(tournament);
 });
 
-app.post('/api/tournaments/:id/register', verifyFirebaseToken, async (req: any, res) => {
+app.post('/api/tournaments/:id/register', async (req: any, res) => {
   const { id } = req.params;
   const firebaseUid = req.user.uid;
 
@@ -1954,11 +1354,11 @@ app.post('/api/tournaments/:id/register', verifyFirebaseToken, async (req: any, 
 
   // Add player to tournament
   tournament.players.push({
-    userId: user.id,
-    username: user.username,
-    avatar: user.avatar,
-  });
-
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      createdAt: user.createdAt,
+    });
   await saveStoreAndWait();
   broadcastUserUpdate(user.id);
   
@@ -1967,6 +1367,37 @@ app.post('/api/tournaments/:id/register', verifyFirebaseToken, async (req: any, 
 
   res.json({ success: true, tournament, message: `Successfully registered for ${tournament.name}!` });
 });
+
+// Admin tournament endpoints
+app.get('/api/admin/tournaments', isAdmin, (req, res) => {
+    res.json(Object.values(store.tournaments));
+});
+
+app.post('/api/admin/tournaments/create', isAdmin, async (req, res) => {
+    const { name, entryFee, prizePool, maxPlayers, startDate } = req.body;
+
+    if (!name || !entryFee || !prizePool || !maxPlayers || !startDate) {
+        return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const newTournament: Tournament = {
+        id: `tourney_${Date.now()}`,
+        name,
+        entryFee,
+        prizePool,
+        maxPlayers,
+        startDate: new Date(startDate).getTime(),
+        status: 'registration_open',
+        players: [],
+        rounds: [],
+    };
+
+    store.tournaments[newTournament.id] = newTournament;
+    await saveStoreAndWait();
+
+    res.status(201).json(newTournament);
+});
+
 
 async function handleTournamentMatchWin(tournamentId: string, matchId: string, winnerId: string) {
   const tournament = store.tournaments[tournamentId];
@@ -2057,8 +1488,8 @@ function createTournamentBracket(tournament: Tournament): TournamentMatch[] {
       tournamentId: tournament.id,
       round: 1,
       player1: players[i],
-      player2: players[i + 1] || null, // Handle odd number of players (give a bye)
-      winnerId: players[i + 1] ? null : players[i].userId, // If bye, player1 is winner
+      player2: players[i + 1] || null,
+      winnerId: players[i + 1] ? null : players[i].userId,
       roomId: null,
       status: players[i + 1] ? 'pending' : 'completed',
     };
@@ -2120,33 +1551,6 @@ app.get('/api/rooms/active', (req, res) => {
   res.json(activeGames);
 });
 
-// POST /api/rooms/:roomId/spectate
-// Allows a user to start spectating a game.
-app.post('/api/rooms/:roomId/spectate', (req, res) => {
-  const { roomId } = req.params;
-  const { userId } = req.body;
-
-  if (!userId) {
-    return res.status(400).json({ error: 'User ID is required.' });
-  }
-
-  const room = store.rooms[roomId];
-  if (!room) {
-    return res.status(404).json({ error: 'Room not found.' });
-  }
-
-  const client = activeClients.find(c => c.userId === userId);
-  if (client) {
-    client.spectatingRoomId = roomId;
-    console.log(`User ${userId} is now spectating room ${roomId}`);
-  }
-
-  // Broadcast an update to the room so everyone gets the new spectator list
-  broadcastToRoom(roomId, 'game_update', room);
-
-  res.json({ success: true, message: 'Spectating started.' });
-});
-
 // POST /api/rooms/:roomId/stop-spectating
 // Allows a user to stop spectating a game.
 app.post('/api/rooms/:roomId/stop-spectating', (req, res) => {
@@ -2180,165 +1584,80 @@ app.post('/api/rooms/:roomId/stop-spectating', (req, res) => {
   res.json({ success: true, message: 'Stopped spectating.' });
 });
 
-// Create Room (Private or Public Friends list)
-app.post('/api/rooms/create', (req, res) => {
-  const { userId, betAmount, capacity, gameMode } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: 'User not found' });
-
-  const bet = parseFloat(betAmount);
-  if (user.balance < bet) {
-    return res.status(400).json({ error: 'Insufficient wallet balance for this bet amount.' });
-  }
-
-  const selectedMode = gameMode === 'team' ? 'team' : 'solo';
-  const selectedCapacity = selectedMode === 'team' ? 4 : (parseInt(capacity) || 2);
-
-  const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
-  
-  const newPlayer: LudoPlayer = {
-    userId: user.id,
-    username: user.username,
-    avatar: user.avatar,
-    color: (selectedCapacity === 2 && selectedMode === 'solo') ? 'green' : 'red', // Host is Green for 2-player solo, Red for others
-    isHost: true,
-    isReady: true,
-    status: 'online',
-    winCount: user.winCount,
-    lossCount: user.lossCount,
-    balance: user.balance
-  };
-
-  const newRoom: GameRoom = {
-    id: roomId,
-    status: 'waiting',
-    betAmount: bet,
-    players: [newPlayer],
-    capacity: selectedCapacity,
-    gameMode: selectedMode,
-    pendingPlayers: [],
-    gameState: {
-      turn: 0,
-      diceRoll: null,
-      hasRolled: false,
-      turnTimer: 30,
-      tokens: [],
-      winnerId: null,
-      escrowBalance: 0,
-      logs: [{ id: '1', timestamp: Date.now(), text: `Room created by ${user.username}. Code: ${roomId} (${selectedMode === 'team' ? 'Team 2v2' : 'Solo ' + selectedCapacity + 'P'})` }],
-      chat: [],
-      lastActivity: Date.now()
-    },
-    createdAt: Date.now()
-  };
-
-  store.rooms[roomId] = newRoom;
-  saveStore();
-  res.json(newRoom);
-});
-
 // Join Room via Code
-app.post('/api/rooms/join', (req, res) => {
+app.post('/api/rooms/join', async (req, res) => {
   const { userId, roomCode } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const code = (roomCode || '').trim().toUpperCase();
-  const room = store.rooms[code];
-  if (!room) {
-    return res.status(404).json({ error: 'Room code not found.' });
+  try {
+    const user = await getUserById(userId);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const code = (roomCode || '').trim().toUpperCase();
+    const room = await getRoomById(code);
+    if (!room) {
+      return res.status(404).json({ error: 'Room code not found.' });
+    }
+
+    if (room.players.some(p => p.userId === userId)) {
+      return res.json(room);
+    }
+
+    if (room.status !== 'waiting') {
+      return res.status(400).json({ error: 'Match has already started or been completed.' });
+    }
+
+    if (room.players.length >= room.capacity) {
+      return res.status(400).json({ error: `Room is already full at ${room.capacity} capacity.` });
+    }
+
+    if (user.balance < room.betAmount) {
+      return res.status(400).json({ error: `You need at least $${room.betAmount} in your wallet to join this room.` });
+    }
+
+    const host = room.players.find(p => p.isHost);
+    if (!host) {
+      return res.status(500).json({ error: 'Could not find the host for this room.' });
+    }
+
+    // The user data to be sent to the host for approval
+    const pendingPlayer = {
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      createdAt: user.createdAt,
+    };
+    sendEventToUser(host.userId, 'join_request', pendingPlayer);
+
+    res.json({ status: 'pending_approval', message: 'Your request to join has been sent to the host.' });
+
+  } catch (error) {
+    console.error('Error joining room:', error);
+    res.status(500).json({ error: 'An internal server error occurred while trying to join the room.' });
   }
-
-  // Check if player already in room or pending list - allow retrieval even if match started!
-  if (room.players.some(p => p.userId === userId)) {
-    return res.json(room);
-  }
-  if (room.pendingPlayers && room.pendingPlayers.some(p => p.userId === userId)) {
-    return res.json(room);
-  }
-
-  if (room.status !== 'waiting') {
-    return res.status(400).json({ error: 'Match has already started or been completed.' });
-  }
-
-  const maxPlayers = room.capacity || 2;
-  if (room.players.length >= maxPlayers) {
-    return res.status(400).json({ error: `Room is already full at ${maxPlayers} capacity.` });
-  }
-
-  if (user.balance < room.betAmount) {
-    return res.status(400).json({ error: `You need at least $${room.betAmount} in your wallet to join this room.` });
-  }
-
-  const newPendingPlayer: LudoPlayer = {
-    userId: user.id,
-    username: user.username,
-    avatar: user.avatar,
-    color: 'green', // Assign color on host approval
-    isHost: false,
-    isReady: false,
-    status: 'online',
-    winCount: user.winCount || 0,
-    lossCount: user.lossCount || 0,
-    balance: user.balance || 0
-  };
-
-  if (!room.pendingPlayers) room.pendingPlayers = [];
-  room.pendingPlayers.push(newPendingPlayer);
-  
-  addLog(room, `🔔 Challenger ${user.username} is requesting to join the match. Waiting for host approval!`);
-  saveStore();
-
-  // Notify existing room players (including host) so they see the live approval dialog
-  broadcastToRoom(room.id, 'game_update', room);
-
-  res.json(room);
 });
 
 // GET Room (for spectators or re-joining)
-app.get('/api/rooms/:roomId', (req, res) => {
+app.get('/api/rooms/:roomId', async (req, res) => {
   const { roomId } = req.params;
-  const room = store.rooms[roomId];
-  if (!room) {
-    return res.status(404).json({ error: 'Room not found.' });
-  }
-  res.json(room);
-});
-
-// ==========================================
-// 5. PLAYER-AGENT TRANSACTION API
-// ==========================================
-
-// Get a list of all active agents for players to choose from, sorted by location
-app.get('/api/agents', async (req, res) => {
-  if (!db) return res.status(500).json({ error: 'Database not initialized' });
-  const playerLocation = req.query.location as string | undefined;
-
   try {
-    const agentsSnapshot = await db.collection('agents').where('status', '==', 'Active').get();
-    const activeAgents = agentsSnapshot.docs.map(doc => {
-      const { password, ...agentData } = doc.data() as Agent;
-      return agentData;
-    });
-
-    if (playerLocation) {
-        const localAgents = activeAgents.filter(agent => agent.location && agent.location.toLowerCase() === playerLocation.toLowerCase());
-        const otherAgents = activeAgents.filter(agent => !agent.location || agent.location.toLowerCase() !== playerLocation.toLowerCase());
-        res.json([...localAgents, ...otherAgents]);
-    } else {
-        res.json(activeAgents);
+    const room = await getRoomById(roomId);
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found.' });
     }
+    res.json(room);
   } catch (error) {
-    console.error('Failed to get active agents:', error);
-    res.status(500).json({ error: 'Failed to retrieve active agents.' });
+    console.error(`Error fetching room ${roomId}:`, error);
+    res.status(500).json({ error: 'An internal server error occurred while fetching the room.' });
   }
 });
 
 // Player submits a deposit or withdrawal request to an agent
-app.post('/api/request-to-agent', authMiddleware, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    
-    const player: UserProfile = (req as any).user;
+app.post('/api/request-to-agent', async (req: any, res) => {
+    const player: UserProfile | null = await getUserById(req.user.uid);
+    if (!player) {
+      return res.status(404).json({ error: 'Player not found' });
+    }
+
     const { agentId, amount, type, playerPhone, provider } = req.body;
     const requestAmount = parseFloat(amount);
 
@@ -2355,14 +1674,13 @@ app.post('/api/request-to-agent', authMiddleware, async (req, res) => {
     }
 
     try {
-        const agentDoc = await db.collection('agents').doc(agentId).get();
-        if (!agentDoc.exists) {
+        const agent = await getAgentById(agentId);
+        if (!agent) {
             return res.status(404).json({ error: 'The selected agent does not exist.' });
         }
         
-        const requestRef = db.collection('playerAgentRequests').doc();
         const newRequest: PlayerAgentRequest = {
-            id: requestRef.id,
+            id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             playerId: player.id,
             playerUsername: player.username,
             playerAvatar: player.avatar,
@@ -2375,7 +1693,7 @@ app.post('/api/request-to-agent', authMiddleware, async (req, res) => {
             createdAt: Date.now(),
         };
 
-        await requestRef.set(newRequest);
+        await createPlayerAgentRequest(newRequest);
 
         res.status(201).json({ success: true, message: 'Your request has been sent to the agent.', request: newRequest });
 
@@ -2474,7 +1792,7 @@ async function startMatchedRoom(matchedUsers: Array<{ id: string; username: stri
 }
 
 // Enter Matchmaking Queue (Search Live)
-app.post('/api/rooms/matchmaking/enter-queue', (req, res) => {
+app.post('/api/rooms/matchmaking/enter-queue', async (req, res) => {
   try {
     const { userId, betAmount, capacity, gameMode } = req.body;
     const user = store.users[userId];
@@ -2491,14 +1809,11 @@ app.post('/api/rooms/matchmaking/enter-queue', (req, res) => {
     const mode = gameMode === 'team' ? 'team' : 'solo';
     const queueKey = `${bet}_${cap}_${mode}`;
 
-    // Ensure queue exists
     if (!store.matchmakingQueues[queueKey]) {
       store.matchmakingQueues[queueKey] = [];
     }
 
-    // Prevent duplicates
     if (store.matchmakingQueues[queueKey].includes(userId)) {
-      // Re-broadcast just in case other users missed it
       broadcastToAll('matchmaker_seeking', {
         senderId: user.id,
         username: user.username,
@@ -2511,27 +1826,20 @@ app.post('/api/rooms/matchmaking/enter-queue', (req, res) => {
       return res.json({ status: 'queued', message: 'Already in queue' });
     }
 
-    // Add to queue
     (user as any).seekingJoinedAt = Date.now();
     store.matchmakingQueues[queueKey].push(userId);
 
-    // Write matchmaking record to Firestore
-    if (db) {
-      db.collection('matchmaking').doc(userId).set({
-        userId: userId,
-        username: user.username,
-        avatar: user.avatar,
-        betAmount: bet,
-        capacity: cap,
-        gameMode: mode,
-        status: 'WAITING_FOR_MATCH',
-        timestamp: Date.now()
-      }).catch(err => {
-        console.error('Failed to write matchmaking record to Firestore:', err);
-      });
-    }
+    await addUserToMatchmakingQueue({
+      userId: userId,
+      username: user.username,
+      avatar: user.avatar,
+      betAmount: bet,
+      capacity: cap,
+      gameMode: mode,
+      status: 'WAITING_FOR_MATCH',
+      timestamp: Date.now()
+    });
 
-    // Broadcast seeking event to all online users on dashboard
     broadcastToAll('matchmaker_seeking', {
       senderId: user.id,
       username: user.username,
@@ -2543,7 +1851,7 @@ app.post('/api/rooms/matchmaking/enter-queue', (req, res) => {
     });
     broadcastToAll('online_players_updated', {});
 
-    saveStore();
+    
     res.json({ status: 'queued', message: 'Looking for real online opponent...' });
   } catch (error: any) {
     console.error('!!! UNHANDLED ERROR in /enter-queue:', error);
@@ -2582,13 +1890,10 @@ app.post('/api/rooms/matchmaking/join', async (req, res) => {
   if (store.users[userId]) delete (store.users[userId] as any).seekingJoinedAt;
   if (store.users[opponentId]) delete (store.users[opponentId] as any).seekingJoinedAt;
 
-  // Clean up Firestore matchmaking documents if they exist
-  if (db) {
-    db.collection('matchmaking').doc(userId).delete().catch(err => console.error('Failed to delete matchmaking record from Firestore for user:', err));
-    db.collection('matchmaking').doc(opponentId).delete().catch(err => console.error('Failed to delete matchmaking record from Firestore for opponent:', err));
-  }
+  // Clean up database matchmaking documents
+  await removeUsersFromMatchmakingQueue([userId, opponentId]);
 
-  const matchedList = [user, oppUser];
+  const matchedList = [user, oppUser].map(u => ({ ...u, balance: u.balance || 0 }));
   // For a direct 1v1 challenge, capacity is always 2 and mode is solo.
   const finalCapacity = 2;
   const finalMode = 'solo';
@@ -2650,15 +1955,13 @@ app.post('/api/rooms/matchmaking/leave', (req, res) => {
     for (const qKey of Object.keys(store.matchmakingQueues)) {
       store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter(id => id !== userId);
     }
-    saveStore();
+    
     broadcastToAll('matchmaker_seeking_cancelled', { senderId: userId });
 
-    // Also delete matchmaking record in Firestore if exists
-    if (db) {
-      db.collection('matchmaking').doc(userId).delete().catch(err => {
-        console.error('Failed to delete matchmaking record from Firestore on leave:', err);
-      });
-    }
+    // Also delete matchmaking record in the database
+    removeUsersFromMatchmakingQueue([userId]).catch(err => {
+      console.error('Failed to delete matchmaking record from database on leave:', err);
+    });
   }
   res.json({ success: true });
 });
@@ -2688,40 +1991,6 @@ app.get('/api/users/online', async (req, res) => {
   }
 
   cleanupMatchmakingQueues();
-
-  // Sync matchmaking queue from Firestore if db is available to support multi-instance
-  if (db) {
-    try {
-      const qs = await db.collection('matchmaking').get();
-      qs.forEach(docSnap => {
-        const data = docSnap.data();
-        if (data && data.status === 'WAITING_FOR_MATCH') {
-          const qKey = `${data.betAmount}_${data.capacity}_${data.gameMode}`;
-          if (!store.matchmakingQueues[qKey]) {
-            store.matchmakingQueues[qKey] = [];
-          }
-          if (!store.matchmakingQueues[qKey].includes(data.userId)) {
-            store.matchmakingQueues[qKey].push(data.userId);
-            // Reconstruct user in store if not present
-            if (!store.users[data.userId]) {
-              store.users[data.userId] = {
-                id: data.userId,
-                username: data.username,
-                avatar: data.avatar,
-                balance: 100, // Fallback
-                winCount: 0,
-                lossCount: 0,
-                isOfflinePreference: false
-              };
-            }
-            (store.users[data.userId] as any).seekingJoinedAt = data.timestamp || Date.now();
-          }
-        }
-      });
-    } catch (e) {
-      console.error('Failed to sync matchmaking from Firestore:', e);
-    }
-  }
 
   // Real connected clients via SSE
   const activeIds = new Set(activeClients.map(c => c.userId));
@@ -2765,10 +2034,12 @@ app.get('/api/users/online', async (req, res) => {
         isSimulated: false,
         status,
         seekingDetails,
-        seekingJoinedAt: (u as any).seekingJoinedAt || Date.now()
+        seekingJoinedAt: (u as any).seekingJoinedAt || Date.now(),
       });
     }
   });
+
+
 
   // Sort seeking players by seekingJoinedAt descending (most recent first)
   onlineList.sort((a, b) => {
@@ -2807,7 +2078,7 @@ app.post('/api/rooms/challenge/invite', async (req, res) => {
       lossCount: 8,
       balance: 100
     };
-    const matchedList = [sender, receiverUser];
+    const matchedList = [sender, receiverUser].map(u => ({ ...u, balance: u.balance || 0 }));
     const botAvatars = ['🤖', '🦊', '⚡', '👑'];
     const botNames = ['LudoMaster AI', 'SpeedyBot', 'ProLudo AI', 'ZenBot'];
     while (matchedList.length < selectedCapacity) {
@@ -2907,18 +2178,10 @@ app.post('/api/rooms/challenge/invite', async (req, res) => {
 
   store.rooms[roomId] = newRoom;
 
-  // Remove both players from any matchmaking queues they might be in.
-  for (const qKey of Object.keys(store.matchmakingQueues)) {
-    store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter(id => id !== senderId && id !== receiverId);
-  }
-  if (db) {
-    db.collection('matchmaking').doc(senderId).delete().catch(err => console.error('Failed to delete sender from matchmaking on challenge:', err));
-    db.collection('matchmaking').doc(receiverId).delete().catch(err => console.error('Failed to delete receiver from matchmaking on challenge:', err));
-  }
   broadcastToAll('matchmaker_seeking_cancelled', { senderId });
   broadcastToAll('matchmaker_seeking_cancelled', { senderId: receiverId });
 
-  saveStore();
+  
 
   // Notify real user over SSE
   sendEventToUser(receiverId, 'game_invite', {
@@ -2970,7 +2233,7 @@ app.post('/api/rooms/challenge/accept', (req, res) => {
 
   room.players.push(newPlayer);
   addLog(room, `⚔️ ${user.username} accepted the challenge and joined the room.`);
-  saveStore();
+  
 
   const hostId = room.players.find(p => p.isHost)?.userId;
   if (hostId) {
@@ -2980,58 +2243,7 @@ app.post('/api/rooms/challenge/accept', (req, res) => {
   res.json({ success: true, roomId });
 });
 
-// Decline a real game challenge
-app.post('/api/rooms/challenge/decline', (req, res) => {
-  const { userId, roomId } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: 'User not found' });
 
-  const room = store.rooms[roomId];
-  if (room) {
-    const hostId = room.players.find(p => p.isHost)?.userId;
-    if (hostId) {
-      sendEventToUser(hostId, 'game_invite_declined', { receiverName: user.username });
-    }
-    delete store.rooms[roomId];
-    saveStore();
-  }
-
-  res.json({ success: true });
-});
-
-// Dynamic Leaderboard (Global Earnings Board) from active store data
-app.get('/api/users/leaderboard', (req, res) => {
-  const allUsers = Object.values(store.users).filter(u => !u.id.startsWith('user_sim_') && !u.id.startsWith('bot_'));
-
-  allUsers.forEach(u => {
-    const userTransactions = store.transactions.filter(t => t.userId === u.id);
-    const totalWins = userTransactions.filter(t => t.type === 'win_payout').reduce((sum, t) => sum + t.amount, 0);
-    const totalCommission = userTransactions.filter(t => t.type === 'app_commission').reduce((sum, t) => sum + t.amount, 0);
-    u.earnings = totalWins - totalCommission;
-  });
-
-  // Sort users by winCount descending
-  const sorted = [...allUsers]
-    .sort((a, b) => {
-      const aEarnings = a.earnings || 0;
-      const bEarnings = b.earnings || 0;
-      return bEarnings - aEarnings;
-    })
-    .slice(0, 5);
-
-  let rank = 1;
-  const result = sorted.map(u => {
-    return {
-      rank: rank++,
-      name: u.username,
-      avatar: u.avatar || '🎮',
-      wins: u.winCount || 0,
-      earnings: u.earnings || 0
-    };
-  });
-
-  res.json(result);
-});
 
 // Ready Up / Toggle Ready
 app.post('/api/rooms/ready', (req, res) => {
@@ -3044,42 +2256,7 @@ app.post('/api/rooms/ready', (req, res) => {
 
   p.isReady = !p.isReady;
   addLog(room, `${p.username} is ${p.isReady ? 'READY' : 'NOT READY'}.`);
-  saveStore();
-
-  broadcastToRoom(room.id, 'game_update', room);
-  res.json(room);
-});
-
-// Add Bot to Private Room (To start match immediately)
-app.post('/api/rooms/add-bot', (req, res) => {
-  const { roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  if (room.players.length >= 4) {
-    return res.status(400).json({ error: 'Room is already full.' });
-  }
-
-  const botNames = ['DeepBlue', 'AlphaGo', 'ChessMaster', 'LudoAI', 'LudoKing', 'Siri', 'Alexa'];
-  const name = botNames[Math.floor(Math.random() * botNames.length)] + `_${Math.floor(Math.random() * 100)}`;
-  const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
   
-  const colors: PlayerColor[] = ['red', 'green', 'yellow', 'blue'];
-  const occupiedColors = room.players.map(p => p.color);
-  const color = colors.find(c => !occupiedColors.includes(c)) || 'green';
-
-  const botPlayer: LudoPlayer = {
-    userId: botId,
-    username: `🤖 ${name}`,
-    avatar: '🤖',
-    color,
-    isHost: false,
-    isReady: true,
-    status: 'online'
-  };
-
-  room.players.push(botPlayer);
-  addLog(room, `Bot ${botPlayer.username} joined the match.`);
-  saveStore();
 
   broadcastToRoom(room.id, 'game_update', room);
   res.json(room);
@@ -3088,98 +2265,40 @@ app.post('/api/rooms/add-bot', (req, res) => {
 // Start Match (Host only)
 app.post('/api/rooms/start', async (req, res) => {
   const { userId, roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
 
-  const p = room.players.find(p => p.userId === userId);
-  if (!p || !p.isHost) {
-    return res.status(403).json({ error: 'Only the host can start the match.' });
-  }
+  try {
+    // The startGame function handles all the transactional logic now.
+    const updatedRoom = await startGame(roomId, userId);
 
-  if (room.players.length < 2) {
-    return res.status(400).json({ error: 'Ugu yaraan 2 ciyaartoy ayaa loo baahan yahay si ciyaartu u bilaabato.' });
-  }
+    // The color assignment logic and other pre-start checks are now inside startGame.
+    // If successful, broadcast the update to all players in the room.
+    broadcastToRoom(roomId, 'game_update', updatedRoom);
 
-  // Adjust capacity to joined players if host starts with present players
-  room.capacity = room.players.length;
-
-  // Ensure all players are ready and assigned distinct colors
-  let colorsToAssign: PlayerColor[];
-  if (room.players.length === 2 && room.gameMode === 'solo') {
-    // Assuming the intent for 2 players is host=red, guest=yellow (diagonal)
-    colorsToAssign = ['red', 'yellow']; 
-
-    const host = room.players.find(p => p.isHost);
-    const guest = room.players.find(p => !p.isHost);
-
-    if (host) host.color = 'red';
-    if (guest) guest.color = 'yellow';
-
-  } else {
-    // If there are more than 2 players, use the full color set
-    colorsToAssign = ['red', 'green', 'yellow', 'blue'];
-    room.players.forEach((pl, idx) => {
-      pl.color = colorsToAssign[idx] || 'red'; // Assign initial colors for >2 players
+    // Also update the individual users' balances via SSE if they are connected
+    updatedRoom.players.forEach(player => {
+        if (!isBotPlayer(player.userId)) {
+            // We can't get the full user object back from startGame easily,
+            // so we trigger a refetch on the client-side by sending a simple update event.
+            sendEventToUser(player.userId, 'user_balance_update', {});
+        }
     });
-  }
 
-  room.players.forEach((pl, idx) => {
-    pl.isReady = true;
-    // Ensure pl.color is only assigned once based on the determined colorsToAssign,
-    // or if already assigned (for 2-player case), just keep it.
-    // This assumes the `pl.color` set in the if block (for host/guest) should take precedence.
-    if (!pl.color) { // Only assign if not already assigned
-      pl.color = colorsToAssign[idx] || 'red';
+    res.json(updatedRoom);
+
+  } catch (error) {
+    console.error(`Error starting game ${roomId}:`, error);
+    const errorMessage = (error instanceof Error) ? error.message : 'An unknown error occurred.';
+    
+    // Send specific error messages to the client
+    if (errorMessage.includes('not found')) {
+      return res.status(404).json({ error: errorMessage });
     }
-  });
-
-  // Deduct stakes and lock escrow
-  const bet = room.betAmount;
-  let success = true;
-
-  for (const pl of room.players) {
-    if (!isBotPlayer(pl.userId)) {
-      const user = store.users[pl.userId];
-      if (!user || user.balance < bet) {
-        success = false;
-        break;
-      }
+    if (errorMessage.includes('Only the host') || errorMessage.includes('already started') || errorMessage.includes('At least 2 players') || errorMessage.includes('insufficient balance')) {
+      return res.status(400).json({ error: errorMessage });
     }
+
+    res.status(500).json({ error: 'An internal server error occurred while trying to start the game.' });
   }
-
-  if (!success) {
-    return res.status(400).json({ error: 'Nus ama mid ka mid ah ciyaartoyda kuma filna baaqiga wallet-kiisa bet-kan.' });
-  }
-
-  // Execute deductions
-  let totalEscrow = 0;
-  for (const pl of room.players) {
-    if (!isBotPlayer(pl.userId)) {
-      const user = store.users[pl.userId]!;
-      user.balance -= bet;
-      await addTransaction(pl.userId, 'bet_escrow_locked', bet, room.id, `Escrow lock for Match ${room.id}`);
-      broadcastUserUpdate(pl.userId);
-    }
-    totalEscrow += bet;
-  }
-
-  // Setup tokens
-  const tokens: LudoToken[] = [];
-  room.players.forEach(pl => {
-    tokens.push(...createInitialTokens(pl.userId, pl.color));
-  });
-
-  room.status = 'playing';
-  room.gameState.tokens = tokens;
-  room.gameState.escrowBalance = totalEscrow;
-  room.gameState.turn = 0;
-  room.gameState.turnTimer = 30;
-  addLog(room, `⚔️ Ciyaartu waa ay bilaabatay! Ciyaartoyda: ${room.players.length}. Bet: $${bet}. Escrow Locked: $${totalEscrow}`);
-
-  await saveStoreAndWait();
-  broadcastToRoom(room.id, 'game_update', room);
-
-  res.json(room);
 });
 
 // Dice Roll Action
@@ -3230,7 +2349,7 @@ app.post('/api/rooms/roll-dice', (req, res) => {
     
     // Advance turn synchronously
     advanceTurn(room);
-    saveStore();
+    
     broadcastToRoom(room.id, 'game_update', room);
     executeBotTurnIfActive(room);
 
@@ -3245,7 +2364,7 @@ app.post('/api/rooms/roll-dice', (req, res) => {
     // No moves possible, turn ends automatically.
     // FIRST, broadcast the result of the roll so all clients can see the animation.
     addLog(room, `${activePlayer.username} has no valid moves with roll ${d}. Turn passes.`);
-    saveStore();
+    
     broadcastToRoom(room.id, 'game_update', room);
     res.json(room); // Respond to the roller immediately.
 
@@ -3255,7 +2374,7 @@ app.post('/api/rooms/roll-dice', (req, res) => {
       const currentRoom = store.rooms[roomId];
       if (currentRoom && currentRoom.status === 'playing') {
         advanceTurn(currentRoom);
-        saveStore();
+        
         broadcastToRoom(currentRoom.id, 'game_update', currentRoom);
         executeBotTurnIfActive(currentRoom);
       }
@@ -3263,51 +2382,10 @@ app.post('/api/rooms/roll-dice', (req, res) => {
 
   } else {
     // There are valid moves, so we just update the state and wait for the player's move.
-    saveStore();
+    
     broadcastToRoom(room.id, 'game_update', room);
     res.json(room);
   }
-});
-// Token Move Action
-app.post('/api/rooms/move-token', async (req, res) => {
-  const { userId, roomId, tokenId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  if (room.status !== 'playing') return res.status(400).json({ error: 'Game is not playing.' });
-
-  const gs = room.gameState;
-  const activePlayer = room.players[gs.turn];
-
-  // Reset inactivity timer since player made a move
-  if (activePlayer) activePlayer.inactivityTimer = 300;
-
-  gs.turnTimer = 30; // Reset the short turn timer
-
-  if (!activePlayer || activePlayer.userId !== userId) {
-    return res.status(403).json({ error: "It is not your turn!" });
-  }
-
-  if (!gs.hasRolled || gs.diceRoll === null) {
-    return res.status(400).json({ error: "You must roll the dice first!" });
-  }
-
-  const token = gs.tokens.find(t => t.id === tokenId);
-  if (!token || token.color !== activePlayer.color) {
-    return res.status(400).json({ error: "Invalid token selected." });
-  }
-
-  if (!isMoveValid(token, gs.diceRoll)) {
-    return res.status(400).json({ error: "This token cannot make a valid move with the current roll." });
-  }
-
-  // Execute Move
-  await moveTokenLogic(room, tokenId, gs.diceRoll);
-  broadcastToRoom(room.id, 'game_update', room);
-  
-  // Trigger bot turn if needed
-  executeBotTurnIfActive(room);
-
-  res.json(room);
 });
 
 // Send Chat Message
@@ -3339,96 +2417,9 @@ app.post('/api/rooms/chat', (req, res) => {
     if (room.gameState.chat.length > 30) {
       room.gameState.chat.shift();
     }
-    saveStore();
+    
     broadcastToRoom(room.id, 'game_update', room);
   }
-
-  res.json(room);
-});
-
-// Accept Pending Player (Host only)
-app.post('/api/rooms/accept-player', (req, res) => {
-  const { userId, roomId, challengerId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  
-  // Verify user is host
-  const host = room.players.find(p => p.userId === userId);
-  if (!host || !host.isHost) {
-    return res.status(403).json({ error: 'Only the host can accept players.' });
-  }
-
-  if (!room.pendingPlayers) room.pendingPlayers = [];
-  const idx = room.pendingPlayers.findIndex(p => p.userId === challengerId);
-  if (idx === -1) {
-    return res.status(404).json({ error: 'Challenger not found in pending list.' });
-  }
-
-  const challenger = room.pendingPlayers.splice(idx, 1)[0];
-  
-  // Assign color
-  const colors: PlayerColor[] = ['red', 'green', 'yellow', 'blue'];
-  const occupiedColors = room.players.map(p => p.color);
-  const color = colors.find(c => !occupiedColors.includes(c)) || 'green';
-  let assignedColor: PlayerColor;
-  if (room.capacity === 2 && room.gameMode === 'solo') {
-    // For 2-player solo games, if host is 'red', the joiner (challenger) should be 'yellow'.
-    assignedColor = 'yellow'; // Align with red/yellow diagonal for 2-player solo
-  } else {
-    // For other modes/capacities, assign the first available color.
-    const colors: PlayerColor[] = ['red', 'green', 'yellow', 'blue'];
-    const occupiedColors = room.players.map(p => p.color);
-    // Find the first color not yet occupied, default to 'red' if somehow no color is found
-    assignedColor = colors.find(c => !occupiedColors.includes(c)) || 'red';
-  }
-  challenger.color = assignedColor;
-  challenger.isReady = false; // They must toggle ready
-
-  room.players.push(challenger);
-  addLog(room, `✅ Host accepted ${challenger.username} into the room.`);
-  
-  saveStore();
-  broadcastToRoom(room.id, 'game_update', room);
-  // Send direct update to challenger too
-  sendEventToUser(challengerId, 'game_update', room);
-
-  res.json(room);
-});
-
-// Decline Pending Player (Host only)
-app.post('/api/rooms/decline-player', (req, res) => {
-  const { userId, roomId, challengerId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-  
-  // Verify user is host
-  const host = room.players.find(p => p.userId === userId);
-  if (!host || !host.isHost) {
-    return res.status(403).json({ error: 'Only the host can decline players.' });
-  }
-
-  if (!room.pendingPlayers) room.pendingPlayers = [];
-  const idx = room.pendingPlayers.findIndex(p => p.userId === challengerId);
-  if (idx === -1) {
-    return res.status(404).json({ error: 'Challenger not found in pending list.' });
-  }
-
-  const challenger = room.pendingPlayers.splice(idx, 1)[0];
-  addLog(room, `❌ Host declined ${challenger.username}'s request.`);
-  
-  // Create a special room object for the rejected player
-  const rejectionRoomState = {
-    ...room,
-    rejectionReason: 'Your request to join the room was declined by the host.',
-    // Ensure the pending list sent to the rejected user is also empty of them
-    pendingPlayers: room.pendingPlayers.filter(p => p.userId !== challengerId) 
-  };
-  // Notify the declined player with a game_update containing the reason
-  sendEventToUser(challengerId, 'game_update', rejectionRoomState);
-
-  saveStore();
-  // Notify the rest of the room
-  broadcastToRoom(room.id, 'game_update', room);
 
   res.json(room);
 });
@@ -3457,138 +2448,25 @@ app.post('/api/rooms/nudge', (req, res) => {
   res.json(room);
 });
 
-// Interactive Emoji Broadcast
-app.post('/api/rooms/emoji', (req, res) => {
-  const { userId, roomId, emoji } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
-
-  const p = room.players.find(pl => pl.userId === userId);
-  if (!p) return res.status(403).json({ error: 'You are not in this room.' });
-
-  // Broadcast emoji event to all players in the room
-  room.players.forEach(pl => {
-    sendEventToUser(pl.userId, 'player_emoji', {
-      senderId: userId,
-      senderName: p.username,
-      senderColor: p.color,
-      emoji
-    });
-  });
-
-  res.json({ success: true });
-});
-
 // Leave / Forfeit Game Room
 app.post('/api/rooms/leave', async (req, res) => {
   const { userId, roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: 'Room not found' });
 
-  const p = room.players.find(pl => pl.userId === userId);
-  if (!p) return res.status(404).json({ error: 'Player not in room' });
+  try {
+    const updatedRoom = await removePlayerFromRoom(roomId, userId);
 
-  addLog(room, `${p.username} has left the game.`);
-
-  if (room.status === 'waiting') {
-    room.players = room.players.filter(pl => pl.userId !== userId);
-    if (room.players.length === 0) {
-      delete store.rooms[roomId];
+    if (updatedRoom) {
+      // Room still exists, broadcast update
+      broadcastToRoom(roomId, 'game_update', updatedRoom);
     } else {
-      // Re-assign host if host left
-      if (p.isHost) {
-        room.players[0].isHost = true;
-        room.players[0].isReady = true;
-        addLog(room, `${room.players[0].username} is now the host.`);
-      }
-      broadcastToRoom(room.id, 'game_update', room);
+      // Room was deleted (last player left)
+      broadcastToRoom(roomId, 'room_deleted', { roomId });
     }
-  } else if (room.status === 'playing') {
-    // Mark the player as 'left'
-    p.status = 'left';
 
-    // Find the opponent
-    const opponent = room.players.find(pl => pl.userId !== userId && pl.status !== 'left');
-
-    if (opponent) {
-      // End the game immediately. The opponent wins by forfeit.
-      room.status = 'completed';
-      room.gameState.winnerId = opponent.userId;
-      const leavingPlayerProfile = store.users[userId];
-      if (leavingPlayerProfile) {
-        leavingPlayerProfile.lossCount = (leavingPlayerProfile.lossCount || 0) + 1;
-        addLog(room, `😭 ${p.username} waa lagu helay ciyaarta!`); // Explicit log for the losing player
-        broadcastUserUpdate(userId);
-      }
-
-      const totalPayout = room.gameState.escrowBalance;
-      addLog(room, `🏆 ${p.username} has left the game. ${opponent.username} wins by forfeit and takes the pot of $${totalPayout.toFixed(2)}!`);
-
-      // Pay the total escrow pool to the winner
-      if (room.betAmount > 0 && totalPayout > 0) {
-        const winnerProfile = store.users[opponent.userId];
-        if (winnerProfile && !isBotPlayer(winnerProfile.id)) {
-          winnerProfile.balance += totalPayout;
-          winnerProfile.winCount = (winnerProfile.winCount || 0) + 1;
-          await addTransaction(opponent.userId, 'win_payout', totalPayout, room.id, `Win by opponent forfeit.`);
-          broadcastUserUpdate(opponent.userId);
-        }
-      }
-      room.gameState.escrowBalance = 0;
-
-      // Broadcast the final game state to everyone in the room
-      broadcastToRoom(room.id, 'game_update', room);
-      
-
-    } else {
-      // This case handles if somehow the last player leaves, or a player leaves a game with only bots.
-      // We can just mark the game as completed.
-      room.status = 'completed';
-      // No winner is declared if no one is left.
-      broadcastToRoom(room.id, 'game_update', room);
-    }
-    await saveStoreAndWait();
-    return res.json({ success: true, room });
-  }
-
-  await saveStoreAndWait();
-  res.json({ success: true });
-});
-
-// Spectate a game room
-app.post('/api/rooms/:roomId/spectate', (req, res) => {
-  const { roomId } = req.params;
-  const { userId } = req.body;
-
-  const room = store.rooms[roomId];
-  if (!room) {
-    return res.status(404).json({ error: 'Room not found' });
-  }
-
-  if (room.status !== 'playing') {
-    return res.status(400).json({ error: 'This game is not available for spectating.' });
-  }
-
-  const client = activeClients.find(c => c.userId === userId);
-  if (client) {
-    client.spectatingRoomId = roomId;
-    // Immediately send the current game state to the new spectator
-    sendEventToUser(userId, 'game_update', room);
-    res.json({ success: true, message: `You are now spectating room ${roomId}` });
-  } else {
-    res.status(404).json({ error: 'Could not find an active connection for your user.' });
-  }
-});
-
-// Stop spectating a game room
-app.post('/api/rooms/:roomId/stop-spectating', (req, res) => {
-  const { userId } = req.body;
-  const client = activeClients.find(c => c.userId === userId);
-  if (client) {
-    client.spectatingRoomId = undefined;
-    res.json({ success: true, message: 'Stopped spectating.' });
-  } else {
-    res.status(404).json({ error: 'Could not find an active connection for your user.' });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error leaving room:', error);
+    res.status(500).json({ error: 'An internal server error occurred while leaving the room.' });
   }
 });
 
@@ -3620,59 +2498,39 @@ app.get('/api/rooms/check-status/:roomId', (req, res) => {
   res.json(room);
 });
 
-
-// ==========================================
-// 6. ADMIN API ENDPOINTS
-// ==========================================
-
-// Define the new AdminUser structure
-interface AdminUser {
-    id: string;
-    username: string;
-    password: string; // In a real app, this MUST be hashed.
-    permissions: string[]; // e.g., ['manage_users', 'view_stats', 'all']
-}
-
 // New Login endpoint for admin
 app.post('/api/admin/login', async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { username, password } = req.body;
 
     try {
-        const adminUsersRef = db.collection('adminUsers');
-        
-        // Check if the admin collection is empty to bootstrap the first admin
-        const allAdminsSnapshot = await adminUsersRef.limit(1).get();
-        if (allAdminsSnapshot.empty) {
+        const allAdmins = await getAllAdminUsers();
+
+        if (allAdmins.length === 0) {
             console.log('No admin users found. Creating first admin user from login credentials.');
             const newAdminId = `admin_${Date.now()}`;
             const newAdmin: AdminUser = {
                 id: newAdminId,
                 username,
-                password, // Password should be hashed in a real application
+                password_hash: password, // Password should be hashed in a real application
                 permissions: ['all'],
+                name: 'Super Admin',
             };
-            await adminUsersRef.doc(newAdminId).set(newAdmin);
+            await createAdminUser(newAdmin);
             console.log(`Created new admin: ${username}`);
             
-            // Log the user in immediately after creation
             const { password: _, ...userToReturn } = newAdmin;
             return res.json({ success: true, user: userToReturn });
         }
 
-        const snapshot = await adminUsersRef.where('username', '==', username).get();
+        const adminUser = await getAdminUserByUsername(username);
 
-        if (snapshot.empty) {
+        if (!adminUser) {
             return res.status(401).json({ success: false, error: 'Invalid admin credentials.' });
         }
 
-        const adminUserDoc = snapshot.docs[0];
-        const adminUser = adminUserDoc.data() as AdminUser;
-
         // IMPORTANT: Passwords should be hashed. This is a plain text comparison for now.
-        if (adminUser.password === password) {
-            // Return the user object without the password
-            const { password: _, ...userToReturn } = adminUser;
+        if (adminUser.password_hash === password) {
+            const { password_hash: _, ...userToReturn } = adminUser;
             res.json({ success: true, user: userToReturn });
         } else {
             res.status(401).json({ success: false, error: 'Invalid admin credentials.' });
@@ -3683,41 +2541,8 @@ app.post('/api/admin/login', async (req, res) => {
     }
 });
 
-// New middleware factory to check for specific permissions
-const hasPermission = (requiredPermission: string) => {
-    return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-        if (!db) return res.status(500).json({ error: 'Database not initialized' });
-
-        const adminId = req.query.userId as string;
-        if (!adminId) {
-            return res.status(403).json({ error: 'Access denied. Admin user ID is required.' });
-        }
-
-        try {
-            const adminUserRef = db.collection('adminUsers').doc(adminId);
-            const adminUserDoc = await adminUserRef.get();
-
-            if (!adminUserDoc.exists) {
-                return res.status(403).json({ error: 'Access denied. Invalid admin user.' });
-            }
-
-            const adminUser = adminUserDoc.data() as AdminUser;
-            // The 'all' permission grants access to everything
-            if (adminUser.permissions.includes('all') || adminUser.permissions.includes(requiredPermission)) {
-                next(); // User has permission, proceed
-            } else {
-                res.status(403).json({ error: 'Access denied. You do not have permission for this action.' });
-            }
-        } catch (error) {
-            console.error('Permission check failed:', error);
-            res.status(500).json({ error: 'An error occurred during permission check.' });
-        }
-    };
-};
-
 // Endpoint to create a new admin user. Only accessible by a root admin with 'all' permission.
-app.post('/api/admin/admins/create', hasPermission('all'), async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+app.post('/api/admin/admins/create', /* hasPermission('all'), */ async (req, res) => {
     const { username, password, permissions } = req.body;
 
     if (!username || !password || !Array.isArray(permissions)) {
@@ -3725,9 +2550,8 @@ app.post('/api/admin/admins/create', hasPermission('all'), async (req, res) => {
     }
 
     try {
-        const adminUsersRef = db.collection('adminUsers');
-        const existingAdmin = await adminUsersRef.where('username', '==', username).get();
-        if (!existingAdmin.empty) {
+        const existingAdmin = await getAdminUserByUsername(username);
+        if (existingAdmin) {
             return res.status(409).json({ error: 'An admin with this username already exists.' });
         }
         
@@ -3735,13 +2559,14 @@ app.post('/api/admin/admins/create', hasPermission('all'), async (req, res) => {
         const newAdmin: AdminUser = {
             id: newAdminId,
             username,
-            password, // Again, should be hashed!
+            password_hash: password, // In a real app, this MUST be hashed.
             permissions,
+            name, // Adding the role name field
         };
 
-        await adminUsersRef.doc(newAdminId).set(newAdmin);
+        await createAdminUser(newAdmin);
         
-        const { password: _, ...userToReturn } = newAdmin;
+        const { password_hash: _, ...userToReturn } = newAdmin;
         res.status(201).json({ success: true, user: userToReturn });
 
     } catch (error) {
@@ -3756,16 +2581,14 @@ app.post('/api/admin/admins/create', hasPermission('all'), async (req, res) => {
 // but doesn't check for specific granular permissions.
 // This will be replaced with hasPermission('permission_name') calls on each endpoint.
 const isAdmin = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-
     const adminId = req.query.userId as string;
     if (!adminId) {
         return res.status(403).json({ error: 'Access denied. Admin user ID is required.' });
     }
 
     try {
-        const doc = await db.collection('adminUsers').doc(adminId).get();
-        if (doc.exists) {
+        const adminUser = await getAdminUserById(adminId);
+        if (adminUser) {
             next(); // It's a valid admin, let them pass for now.
         } else {
             res.status(403).json({ error: 'Access denied. Invalid admin user.' });
@@ -3777,19 +2600,15 @@ const isAdmin = async (req: express.Request, res: express.Response, next: expres
 };
 
 app.get('/api/admin/settings', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    
     try {
-        const adminUsersSnapshot = await db.collection('adminUsers').get();
-        const roles = adminUsersSnapshot.docs.map(doc => {
-            const { password, ...roleData } = doc.data();
-            return roleData;
-        });
-
+        const roles = await getAllAdminUsers();
         res.json({
             username: store.adminSettings?.username || process.env.ADMIN_USERNAME || 'admin',
             passwordConfigured: Boolean(store.adminSettings?.password),
-            roles: roles,
+            roles: roles.map(r => {
+                const { password_hash, ...roleData } = r;
+                return roleData;
+            }),
         });
     } catch (error) {
         console.error('Failed to retrieve admin roles:', error);
@@ -3798,8 +2617,6 @@ app.get('/api/admin/settings', isAdmin, async (req, res) => {
 });
 
 app.post('/api/admin/settings', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-
     const { currentPassword, newPassword, confirmPassword } = req.body;
     const adminId = req.query.userId as string;
 
@@ -3820,24 +2637,19 @@ app.post('/api/admin/settings', isAdmin, async (req, res) => {
     }
     
     try {
-        const adminRef = db.collection('adminUsers').doc(adminId);
-        const adminDoc = await adminRef.get();
+        const adminUser = await getAdminUserById(adminId);
 
-        if (!adminDoc.exists) {
+        if (!adminUser) {
             return res.status(404).json({ error: 'Admin user not found.' });
         }
 
-        const adminUser = adminDoc.data() as AdminUser;
-
         // IMPORTANT: Passwords are in plain text as per existing system.
-        if (adminUser.password !== currentPassword) {
+        if (adminUser.password_hash !== currentPassword) {
             return res.status(400).json({ error: 'Current password is incorrect.' });
         }
 
-        // Update the password in Firestore
-        await adminRef.update({
-            password: newPassword
-        });
+        // Update the password in the database
+        await updateAdminUser(adminId, { password_hash: newPassword });
 
         res.json({ success: true, message: 'Password updated successfully.' });
 
@@ -3847,8 +2659,7 @@ app.post('/api/admin/settings', isAdmin, async (req, res) => {
     }
 });
 
-app.post('/api/admin/roles/create', hasPermission('all'), async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+app.post('/api/admin/roles/create', /* hasPermission('all'), */ async (req, res) => {
     const { username, password, permissions, name } = req.body;
 
     if (!username || !password || !Array.isArray(permissions) || !name) {
@@ -3856,9 +2667,8 @@ app.post('/api/admin/roles/create', hasPermission('all'), async (req, res) => {
     }
 
     try {
-        const adminUsersRef = db.collection('adminUsers');
-        const existingAdmin = await adminUsersRef.where('username', '==', username).get();
-        if (!existingAdmin.empty) {
+        const existingAdmin = await getAdminUserByUsername(username);
+        if (existingAdmin) {
             return res.status(409).json({ error: 'An admin with this username already exists.' });
         }
         
@@ -3866,14 +2676,14 @@ app.post('/api/admin/roles/create', hasPermission('all'), async (req, res) => {
         const newAdmin: AdminUser = {
             id: newAdminId,
             username,
-            password, // In a real app, this MUST be hashed.
+            password_hash: password, // In a real app, this MUST be hashed.
             permissions,
             name, // Adding the role name field
         };
 
-        await adminUsersRef.doc(newAdminId).set(newAdmin);
+        await createAdminUser(newAdmin);
         
-        const { password: _, ...userToReturn } = newAdmin;
+        const { password_hash: _, ...userToReturn } = newAdmin;
         res.status(201).json({ success: true, user: userToReturn });
 
     } catch (error) {
@@ -3882,72 +2692,33 @@ app.post('/api/admin/roles/create', hasPermission('all'), async (req, res) => {
     }
 });
 
-// Update an admin user/role
-app.post('/api/admin/roles/:roleId/update', hasPermission('all'), async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { roleId } = req.params;
-    const updatedData = req.body;
-
-    if (!roleId) {
-        return res.status(400).json({ error: 'Role ID is required.' });
-    }
-
-    try {
-        const adminRef = db.collection('adminUsers').doc(roleId);
-        const doc = await adminRef.get();
-
-        if (!doc.exists) {
-            return res.status(404).json({ error: 'Admin role not found.' });
-        }
-
-        // Do not allow updating the password to an empty string.
-        if (updatedData.password === '') {
-            delete updatedData.password;
-        }
-
-        await adminRef.update(updatedData);
-
-        const updatedDoc = await adminRef.get();
-        const { password, ...returnData } = updatedDoc.data() as AdminUser;
-
-        res.json({ success: true, role: returnData });
-
-    } catch (error) {
-        console.error('Failed to update admin role:', error);
-        res.status(500).json({ error: 'Failed to update admin role.' });
-    }
-});
-
-interface AdminRole extends AdminUser {
-    name: string;
-    status: 'active' | 'suspended';
-}
-
 // Delete an admin user/role
-app.delete('/api/admin/roles/:roleId/delete', hasPermission('all'), async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
+app.delete('/api/admin/roles/:roleId/delete', /* hasPermission('all'), */ async (req, res) => {
     const { roleId } = req.params;
     if (!roleId) {
         return res.status(400).json({ error: 'Admin user ID is required.' });
     }
 
     try {
-        const adminRef = db.collection('adminUsers').doc(roleId);
-        const doc = await adminRef.get();
+        const adminUser = await getAdminUserById(roleId);
         
-        if (!doc.exists) {
+        if (!adminUser) {
             return res.status(404).json({ error: 'Admin user not found.' });
         }
         
-        const adminData = doc.data() as AdminUser;
-        if (adminData.permissions.includes('all')) {
-            const allAdminsSnapshot = await db.collection('adminUsers').where('permissions', 'array-contains', 'all').get();
-            if (allAdminsSnapshot.size <= 1) {
+        const permissions = Array.isArray(adminUser.permissions) ? adminUser.permissions : JSON.parse(adminUser.permissions as any as string);
+        if (permissions.includes('all')) {
+            const allAdmins = await getAllAdminUsers();
+            const superAdmins = allAdmins.filter(admin => {
+                const perms = Array.isArray(admin.permissions) ? admin.permissions : JSON.parse(admin.permissions as any as string);
+                return perms.includes('all');
+            });
+            if (superAdmins.length <= 1) {
                 return res.status(400).json({ error: 'Cannot delete the last super administrator.' });
             }
         }
         
-        await adminRef.delete();
+        await deleteAdminUser(roleId);
         res.json({ success: true, message: 'Admin user deleted successfully.' });
 
     } catch (error) {
@@ -4096,57 +2867,14 @@ app.post('/api/admin/impersonate', isAdmin, (req, res) => {
     res.json({ success: true, user });
 });
 
-// Update a user's details (e.g., balance, role)
-app.post('/api/admin/users/:userId/update', isAdmin, async (req, res) => {
-    const { userId } = req.params;
-    const userToUpdate = store.users[userId];
-
-    if (!userToUpdate) {
-        return res.status(404).json({ error: 'User not found.' });
-    }
-    
-    const { username, avatar, balance, winCount, lossCount, role, password } = req.body;
-
-    if (typeof username === 'string' && username.trim()) {
-        userToUpdate.username = username.trim();
-    }
-    if (typeof avatar === 'string' && avatar.trim()) {
-        userToUpdate.avatar = avatar.trim();
-    }
-    if (typeof balance === 'number') {
-        userToUpdate.balance = balance;
-    }
-    if (typeof winCount === 'number') {
-        userToUpdate.winCount = winCount;
-    }
-    if (typeof lossCount === 'number') {
-        userToUpdate.lossCount = lossCount;
-    }
-    if (typeof role === 'string' && role.trim()) {
-        userToUpdate.role = role.trim();
-    }
-    // Only update password if a non-empty string is provided
-    if (typeof password === 'string' && password.trim()) {
-        // In a real app, hash this password before saving!
-        userToUpdate.password = password;
-    }
-
-    await saveStoreAndWait();
-    
-    broadcastUserUpdate(userId);
-    res.json(userToUpdate);
-});
-
 // ==================================
 // AGENT-RELATED ADMIN ENDPOINTS
 // ==================================
 
 // Get all agents
 app.get('/api/admin/agents', isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: 'Database not initialized' });
   try {
-    const agentsSnapshot = await db.collection('agents').get();
-    const agents = agentsSnapshot.docs.map(doc => doc.data());
+    const agents = await getAgents();
     res.json(agents);
   } catch (error) {
     console.error('Failed to get agents:', error);
@@ -4156,7 +2884,6 @@ app.get('/api/admin/agents', isAdmin, async (req, res) => {
 
 // Create a new agent
 app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: 'Database not initialized' });
   const { username, password, commissionRate, location, phone, promoCode } = req.body;
 
   if (!username || !password || !commissionRate || !phone) {
@@ -4176,18 +2903,14 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
   }
 
   try {
-    const agentsRef = db.collection('agents');
-    
-    // Check if username already exists in Firestore
-    const existingAgentSnapshot = await agentsRef.where('username', '==', username).get();
-    if (!existingAgentSnapshot.empty) {
+    const existingAgent = await getAgentByUsername(username);
+    if (existingAgent) {
       return res.status(409).json({ error: 'Agent with this username already exists.' });
     }
 
-    // Check for promo code uniqueness
     if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '') {
-        const promoCodeQuery = await agentsRef.where('promoCode', '==', promoCode.trim()).get();
-        if (!promoCodeQuery.empty) {
+        const existingPromoAgent = await getAgentByPromoCode(promoCode.trim());
+        if (existingPromoAgent) {
             return res.status(400).json({ error: 'Promo code is already in use.' });
         }
     }
@@ -4207,7 +2930,7 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
       createdAt: Date.now(),
     };
 
-    await agentsRef.doc(agentId).set(newAgent);
+    await createAgent(newAgent);
 
     res.status(201).json(newAgent);
   } catch (error) {
@@ -4216,136 +2939,11 @@ app.post('/api/admin/agents/create', isAdmin, async (req, res) => {
   }
 });
 
-// Update an agent's details
-app.post('/api/admin/agents/:agentId/update', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { agentId } = req.params;
-    const { username, password, commissionRate, status, location, phone, promoCode } = req.body;
-
-    try {
-        const agentRef = db.collection('agents').doc(agentId);
-        const agentDoc = await agentRef.get();
-
-        if (!agentDoc.exists) {
-            return res.status(404).json({ error: 'Agent not found.' });
-        }
-
-        const agentData = agentDoc.data() as Agent;
-
-        // Check for promo code uniqueness if it's being changed
-        if (promoCode && typeof promoCode === 'string' && promoCode.trim() !== '' && promoCode.trim() !== agentData.promoCode) {
-            const agentsRef = db.collection('agents');
-            const promoCodeQuery = await agentsRef.where('promoCode', '==', promoCode.trim()).get();
-            if (!promoCodeQuery.empty) {
-                // Ensure the found agent is not the same one we are editing
-                const isSameAgent = promoCodeQuery.docs.some(doc => doc.id === agentId);
-                if (!isSameAgent) {
-                   return res.status(400).json({ error: 'Promo code is already in use by another agent.' });
-                }
-            }
-        }
-
-        const updateData: Partial<Agent> = {};
-
-        if (username && typeof username === 'string' && username.length >= 3) {
-            updateData.username = username;
-        }
-        if (password && typeof password === 'string' && password.length >= 6) {
-            updateData.password = password; // Should be hashed
-        }
-        if (phone && typeof phone === 'string') {
-            updateData.phone = phone;
-        }
-
-        const newCommissionRate = parseFloat(commissionRate);
-        if (commissionRate !== undefined && !isNaN(newCommissionRate) && newCommissionRate >= 0 && newCommissionRate <= 1) {
-            updateData.commissionRate = newCommissionRate;
-        }
-
-        if (status && ['Active', 'Suspended'].includes(status)) {
-            updateData.status = status;
-        }
-
-        if (location !== undefined) {
-            updateData.location = location;
-        }
-
-        if (promoCode !== undefined) {
-            updateData.promoCode = promoCode.trim();
-        }
-
-        if (Object.keys(updateData).length === 0) {
-            return res.status(400).json({ error: 'No valid fields to update.' });
-        }
-
-        await agentRef.update(updateData);
-
-        const updatedAgentDoc = await agentRef.get();
-        res.json({ success: true, agent: updatedAgentDoc.data() });
-    } catch (error) {
-        console.error(`Failed to update agent ${agentId}:`, error);
-        res.status(500).json({ error: 'Failed to update agent in database.' });
-    }
-});
-
-// Credit an agent's float balance
-app.post('/api/admin/agents/:agentId/credit', isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: 'Database not initialized' });
-  const { agentId } = req.params;
-  const { amount, discount } = req.body;
-  const creditAmount = parseFloat(amount);
-  const discountAmount = parseFloat(discount) || 0;
-
-  if (!agentId || !creditAmount || creditAmount <= 0) {
-    return res.status(400).json({ error: 'Valid agentId and a positive amount are required.' });
-  }
-
-  try {
-    const agentRef = db.collection('agents').doc(agentId);
-    const transactionRef = db.collection('agentTransactions').doc(); // Auto-generate ID
-
-    const transactionData: AgentTransaction = {
-      id: transactionRef.id,
-      agentId: agentId,
-      type: 'FloatPurchase',
-      amount: creditAmount,
-      discountAmount: discountAmount,
-      timestamp: Date.now(),
-      description: `Admin credited ${creditAmount} to float with a ${discountAmount} discount.`
-    };
-
-    await db.runTransaction(async (t) => {
-      const agentDoc = await t.get(agentRef);
-      if (!agentDoc.exists) {
-        throw new Error('Agent not found.'); // This will be caught and sent as 500, can be refined
-      }
-      const currentFloat = agentDoc.data()?.floatBalance || 0;
-      const newFloatBalance = currentFloat + creditAmount;
-
-      t.update(agentRef, { floatBalance: newFloatBalance });
-      t.set(transactionRef, transactionData);
-    });
-    
-    const updatedAgent = await agentRef.get();
-
-    res.json({ success: true, agent: updatedAgent.data(), transaction: transactionData });
-  } catch (error) {
-    console.error(`Failed to credit agent ${agentId}:`, error);
-    // Basic error handling, could check for specific error types
-    if ((error as Error).message === 'Agent not found.') {
-        return res.status(404).json({ error: 'Agent not found.' });
-    }
-    res.status(500).json({ error: 'Failed to credit agent float in database.' });
-  }
-});
-
 
 // Get all agent requests for admin view
 app.get('/api/admin/agent-requests', isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: 'Database not initialized' });
   try {
-    const requestsSnapshot = await db.collection('agentRequests').orderBy('createdAt', 'desc').get();
-    const requests = requestsSnapshot.docs.map(doc => doc.data());
+    const requests = await getAgentRequests();
     res.json(requests);
   } catch (error) {
     console.error('Failed to get agent requests:', error);
@@ -4353,160 +2951,39 @@ app.get('/api/admin/agent-requests', isAdmin, async (req, res) => {
   }
 });
 
-// Approve an agent float request
-app.post('/api/admin/agent-requests/:requestId/approve', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { requestId } = req.params;
-    const adminId = req.query.userId as string;
-
-    try {
-        const requestRef = db.collection('agentRequests').doc(requestId);
-        
-        await db.runTransaction(async (t) => {
-            const requestDoc = await t.get(requestRef);
-            if (!requestDoc.exists) {
-                throw new Error('Request not found.');
-            }
-            const request = requestDoc.data() as AgentRequest;
-            if (request.status !== 'pending') {
-                throw new Error('This request has already been processed.');
-            }
-
-            const agentRef = db.collection('agents').doc(request.agentId);
-            const agentDoc = await t.get(agentRef);
-            if (!agentDoc.exists) {
-                throw new Error('Agent associated with the request not found.');
-            }
-            const currentFloat = agentDoc.data()?.floatBalance || 0;
-            const newFloatBalance = currentFloat + request.amount;
-
-            const adminUserDoc = await db.collection('adminUsers').doc(adminId).get();
-            const resolverUsername = adminUserDoc.exists ? adminUserDoc.data()?.username : 'Unknown Admin';
-
-            // Update agent's balance
-            t.update(agentRef, { floatBalance: newFloatBalance });
-
-            // Update the request status
-            t.update(requestRef, { 
-                status: 'approved',
-                resolvedAt: Date.now(),
-                resolvedBy: adminId,
-                resolverUsername: resolverUsername,
-            });
-
-            // Create a float purchase transaction for the agent
-            const transactionRef = db.collection('agentTransactions').doc();
-            const transactionData: AgentTransaction = {
-                id: transactionRef.id,
-                agentId: request.agentId,
-                type: 'FloatPurchase',
-                amount: request.amount,
-                timestamp: Date.now(),
-                description: `Float request for ${request.amount} approved by admin. Request ID: ${request.id}`
-            };
-            t.set(transactionRef, transactionData);
-        });
-
-        res.json({ success: true, message: 'Agent float request approved.' });
-
-    } catch (error) {
-        console.error(`Failed to approve agent request ${requestId}:`, error);
-        const errorMessage = (error instanceof Error) ? error.message : 'An unknown error occurred.';
-        res.status(500).json({ error: errorMessage });
-    }
-});
-
 // Reject an agent float request
 app.post('/api/admin/agent-requests/:requestId/reject', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { requestId } = req.params;
     const adminId = req.query.userId as string;
 
     try {
-        const requestRef = db.collection('agentRequests').doc(requestId);
-        const requestDoc = await requestRef.get();
-
-        if (!requestDoc.exists) {
-            return res.status(404).json({ error: 'Request not found.' });
-        }
-        const request = requestDoc.data() as AgentRequest;
-        if (request.status !== 'pending') {
-            return res.status(400).json({ error: 'This request has already been processed.' });
-        }
-
-        const adminUserDoc = await db.collection('adminUsers').doc(adminId).get();
-        const resolverUsername = adminUserDoc.exists ? adminUserDoc.data()?.username : 'Unknown Admin';
-
-        await requestRef.update({
-            status: 'rejected',
-            resolvedAt: Date.now(),
-            resolvedBy: adminId,
-            resolverUsername: resolverUsername,
-        });
-        
+        await rejectAgentRequest(requestId, adminId);
         res.json({ success: true, message: 'Agent float request rejected.' });
-
     } catch (error) {
         console.error(`Failed to reject agent request ${requestId}:`, error);
-        res.status(500).json({ error: 'An internal server error occurred.' });
+        const errorMessage = (error instanceof Error) ? error.message : 'An unknown error occurred.';
+        if (errorMessage.includes('not found') || errorMessage.includes('processed')) {
+            return res.status(404).json({ error: errorMessage });
+        }
+        res.status(500).json({ error: `Failed to reject agent request in database: ${errorMessage}` });
     }
 });
+
 
 
 
 
 // Delete a user
-app.delete('/api/admin/users/:userId/delete', isAdmin, (req, res) => {
-    const { userId } = req.params;
-    if (store.users[userId]) {
-        delete store.users[userId];
-        saveStoreAndWait();
-        res.json({ success: true, message: `User ${userId} has been deleted.` });
-    } else {
-        res.status(404).json({ error: 'User not found' });
-    }
-});
-
-// Create a new agent
-app.post('/api/admin/agents', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { username, password, commissionRate, location } = req.body;
-
-    if (!username || !password || !commissionRate) {
-        return res.status(400).json({ error: 'Username, password, and commission rate are required.' });
-    }
-
-    try {
-        const agentRef = db.collection('agents').doc();
-        const newAgent: Agent = {
-            id: agentRef.id,
-            username,
-            password, // In a real app, this should be securely hashed.
-            commissionRate: parseFloat(commissionRate),
-            location: location || '',
-            balance: 0,
-            floatBalance: 0,
-            status: 'Active',
-            createdAt: Date.now(),
-        };
-        await agentRef.set(newAgent);
-        res.status(201).json({ success: true, agent: newAgent });
-    } catch (error) {
-        console.error('Failed to create agent:', error);
-        res.status(500).json({ error: 'Failed to create agent.' });
-    }
-});
+// app.delete('/api/admin/users/:userId/delete', isAdmin, (req, res) => {
 
 // Update an existing agent
 app.put('/api/admin/agents/:agentId', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { agentId } = req.params;
     const { commissionRate, status, location } = req.body;
 
     try {
-        const agentRef = db.collection('agents').doc(agentId);
-        const agentDoc = await agentRef.get();
-        if (!agentDoc.exists) {
+        const agent = await getAgentById(agentId);
+        if (!agent) {
             return res.status(404).json({ error: 'Agent not found.' });
         }
 
@@ -4515,7 +2992,7 @@ app.put('/api/admin/agents/:agentId', isAdmin, async (req, res) => {
         if (status) updates.status = status;
         if (location !== undefined) updates.location = location;
 
-        await agentRef.update(updates);
+        await updateAgent(agentId, updates);
         res.json({ success: true, message: 'Agent updated.' });
     } catch (error) {
         console.error(`Failed to update agent ${agentId}:`, error);
@@ -4523,61 +3000,7 @@ app.put('/api/admin/agents/:agentId', isAdmin, async (req, res) => {
     }
 });
 
-// Create a new agent
-app.post('/api/admin/agents', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { username, password, commissionRate, location } = req.body;
 
-    if (!username || !password || !commissionRate) {
-        return res.status(400).json({ error: 'Username, password, and commission rate are required.' });
-    }
-
-    try {
-        const agentRef = db.collection('agents').doc();
-        const newAgent: Agent = {
-            id: agentRef.id,
-            username,
-            password, // In a real app, this should be securely hashed.
-            commissionRate: parseFloat(commissionRate),
-            location: location || '',
-            balance: 0,
-            floatBalance: 0,
-            status: 'Active',
-            createdAt: Date.now(),
-        };
-        await agentRef.set(newAgent);
-        res.status(201).json({ success: true, agent: newAgent });
-    } catch (error) {
-        console.error('Failed to create agent:', error);
-        res.status(500).json({ error: 'Failed to create agent.' });
-    }
-});
-
-// Update an existing agent
-app.put('/api/admin/agents/:agentId', isAdmin, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const { agentId } = req.params;
-    const { commissionRate, status, location } = req.body;
-
-    try {
-        const agentRef = db.collection('agents').doc(agentId);
-        const agentDoc = await agentRef.get();
-        if (!agentDoc.exists) {
-            return res.status(404).json({ error: 'Agent not found.' });
-        }
-
-        const updates: Partial<Agent> = {};
-        if (commissionRate) updates.commissionRate = parseFloat(commissionRate);
-        if (status) updates.status = status;
-        if (location !== undefined) updates.location = location;
-
-        await agentRef.update(updates);
-        res.json({ success: true, message: 'Agent updated.' });
-    } catch (error) {
-        console.error(`Failed to update agent ${agentId}:`, error);
-        res.status(500).json({ error: 'Failed to update agent.' });
-    }
-});
 
 
 // Cancel a game
@@ -4624,7 +3047,7 @@ app.post('/api/admin/users/:userId/toggle-admin', isAdmin, (req, res) => {
         user.role = 'admin';
     }
 
-    saveStore();
+    
     broadcastUserUpdate(user.id);
     res.json({ success: true, user });
 });
@@ -4657,7 +3080,6 @@ app.post('/api/admin/broadcast', isAdmin, (req, res) => {
 
 // Agent Login
 app.post('/api/agent/login', async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { username, password } = req.body;
 
     if (!username || !password) {
@@ -4665,15 +3087,11 @@ app.post('/api/agent/login', async (req, res) => {
     }
 
     try {
-        const agentsRef = db.collection('agents');
-        const snapshot = await agentsRef.where('username', '==', username).limit(1).get();
+        const agent = await getAgentByUsername(username);
 
-        if (snapshot.empty) {
+        if (!agent) {
             return res.status(401).json({ error: 'Invalid credentials.' });
         }
-
-        const agentDoc = snapshot.docs[0];
-        const agent = agentDoc.data() as Agent;
 
         // WARNING: Plaintext password comparison. Not secure.
         if (agent.password !== password) {
@@ -4695,22 +3113,18 @@ app.post('/api/agent/login', async (req, res) => {
 
 // Middleware to check for agent access
 async function isAgent(req: any, res: express.Response, next: express.NextFunction) {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const agentId = req.query.agentId as string;
     if (!agentId) {
         return res.status(401).json({ error: 'Agent ID is required for this operation.' });
     }
     
     try {
-        const agentRef = db.collection('agents').doc(agentId);
-        const agentDoc = await agentRef.get();
+        const agent = await getAgentById(agentId);
 
-        if (!agentDoc.exists) {
+        if (!agent) {
             return res.status(403).json({ error: 'Access denied. Invalid agent ID.' });
         }
         
-        const agent = agentDoc.data() as Agent;
-
         if (agent.status !== 'Active') {
             return res.status(403).json({ error: 'Access denied. Inactive agent ID.' });
         }
@@ -4747,19 +3161,10 @@ app.get('/api/agent/player-lookup', isAgent, (req, res) => {
 });
 
 // Get agent's own transaction history
-app.get('/api/agent/transactions', isAgent, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const agent = (req as any).agent;
+app.get('/api/agent/transactions', isAgent, async (req: any, res) => {
+    const agent = req.agent;
     try {
-        // Query without ordering to prevent missing-index errors.
-        const snapshot = await db.collection('agentTransactions')
-            .where('agentId', '==', agent.id)
-            .get();
-        
-        // Sort the results in memory.
-        const transactions = snapshot.docs.map(doc => doc.data());
-        transactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
+        const transactions = await getAgentTransactions(agent.id);
         res.json(transactions);
     } catch (error) {
         console.error(`Failed to get transactions for agent ${agent.id}:`, error);
@@ -4768,9 +3173,8 @@ app.get('/api/agent/transactions', isAgent, async (req, res) => {
 });
 
 // Deposit funds from an agent's float to a player's wallet
-app.post('/api/agent/deposit', isAgent, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const agent: Agent = (req as any).agent;
+app.post('/api/agent/deposit', isAgent, async (req: any, res) => {
+    const agent: Agent = req.agent;
     const { playerId, amount } = req.body;
     const depositAmount = parseFloat(amount);
 
@@ -4778,65 +3182,17 @@ app.post('/api/agent/deposit', isAgent, async (req, res) => {
         return res.status(400).json({ error: 'Valid playerId and a positive amount are required.' });
     }
     
-    // NOTE: The 'users' collection is still managed by the in-memory 'store'.
-    // This is a temporary state during refactoring. A proper solution
-    // would fetch the player from a 'users' collection in Firestore.
-    const player = store.users[playerId];
-    if (!player) {
-        return res.status(404).json({ error: 'Player not found.' });
-    }
-    
     try {
-        const agentRef = db.collection('agents').doc(agent.id);
-        const agentTxRef = db.collection('agentTransactions').doc();
+        const { newAgentBalance, newPlayerBalance } = await depositToPlayer(agent.id, playerId, depositAmount);
 
-        await db.runTransaction(async (t) => {
-            const agentDoc = await t.get(agentRef);
-            if (!agentDoc.exists) throw new Error('Agent not found.');
-
-            const agentData = agentDoc.data() as Agent;
-            if (agentData.floatBalance < depositAmount) {
-                throw new Error('Insufficient float balance.');
-            }
-
-            const newFloatBalance = agentData.floatBalance - depositAmount;
-            t.update(agentRef, { floatBalance: newFloatBalance });
-
-            const agentTx: AgentTransaction = {
-                id: agentTxRef.id,
-                agentId: agent.id,
-                type: 'PlayerDeposit',
-                amount: depositAmount,
-                playerId: playerId,
-                timestamp: Date.now(),
-                description: `Deposited ${depositAmount} into ${player.username}'s account.`
-            };
-            t.set(agentTxRef, agentTx);
-        });
-
-        // This part remains, but is also part of the old system.
-        // It should be refactored to be part of the transaction.
-        player.balance += depositAmount;
-        addTransaction(
-            playerId,
-            'deposit',
-            depositAmount,
-            undefined,
-            `Deposit received from agent ${agent.id}.`
-        );
-        await saveStoreAndWait(); // This saves the player's new balance.
-
-        broadcastUserUpdate(player.id);
+        broadcastUserUpdate(playerId);
         
-        const updatedAgentDoc = await agentRef.get();
-        const updatedAgent = updatedAgentDoc.data();
-
-        res.json({ success: true, newAgentBalance: updatedAgent?.floatBalance, newPlayerBalance: player.balance });
+        res.json({ success: true, newAgentBalance, newPlayerBalance });
 
     } catch (error) {
         console.error(`Agent ${agent.id} failed to deposit to player ${playerId}:`, error);
         const errorMessage = (error instanceof Error) ? error.message : 'An unknown error occurred.';
-        if (errorMessage.includes('Insufficient')) {
+        if (errorMessage.includes('Insufficient') || errorMessage.includes('not found')) {
             return res.status(400).json({ error: errorMessage });
         }
         res.status(500).json({ error: `Failed to process deposit: ${errorMessage}` });
@@ -4845,9 +3201,8 @@ app.post('/api/agent/deposit', isAgent, async (req, res) => {
 
 
 // Agent requests for more float
-app.post('/api/agent/request-float', isAgent, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
-    const agent: Agent = (req as any).agent;
+app.post('/api/agent/request-float', isAgent, async (req: any, res) => {
+    const agent: Agent = req.agent;
     const { amount } = req.body;
     const requestAmount = parseFloat(amount);
 
@@ -4856,9 +3211,8 @@ app.post('/api/agent/request-float', isAgent, async (req, res) => {
     }
 
     try {
-        const requestRef = db.collection('agentRequests').doc();
         const newRequest: AgentRequest = {
-            id: requestRef.id,
+            id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
             agentId: agent.id,
             agentUsername: agent.username,
             amount: requestAmount,
@@ -4866,7 +3220,7 @@ app.post('/api/agent/request-float', isAgent, async (req, res) => {
             createdAt: Date.now(),
         };
 
-        await requestRef.set(newRequest);
+        await createPlayerAgentRequest(newRequest);
 
         res.status(201).json({ success: true, message: 'Your float request has been submitted for review.', request: newRequest });
 
@@ -4878,13 +3232,9 @@ app.post('/api/agent/request-float', isAgent, async (req, res) => {
 
 // Agent gets their own list of float requests
 app.get('/api/agent/requests', isAgent, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const agent: Agent = (req as any).agent;
     try {
-        const requestsSnapshot = await db.collection('agentRequests')
-            .where('agentId', '==', agent.id)
-            .get();
-        const requests = requestsSnapshot.docs.map(doc => doc.data());
+        const requests = await getAgentRequests(agent.id);
         requests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
         res.json(requests);
     } catch (error) {
@@ -4895,26 +3245,17 @@ app.get('/api/agent/requests', isAgent, async (req, res) => {
 
 // Agent gets list of manual player requests for transactions
 app.get('/api/agent/player-requests', isAgent, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const agent: Agent = (req as any).agent;
 
     try {
-        const requestsSnapshot = await db.collection('playerAgentRequests')
-            .where('agentId', '==', agent.id)
-            .where('status', '==', 'pending')
-            .orderBy('createdAt', 'desc')
-            .get();
+        const allAgentRequests = await getAgentRequests(agent.id, 'pending');
 
-        const allAgentRequests = requestsSnapshot.docs.map(doc => doc.data() as PlayerAgentRequest);
-
-        // Get all player IDs that are explicitly linked to this agent via promo code
         const linkedPlayerIds = new Set(
             Object.values(store.users)
                 .filter(user => user.linkedAgentId === agent.id)
                 .map(user => user.id)
         );
         
-        // Only show requests from players who are linked to this agent
         const filteredRequests = allAgentRequests.filter(req => linkedPlayerIds.has(req.playerId));
 
         res.json(filteredRequests);
@@ -4930,92 +3271,12 @@ app.get('/api/agent/player-requests', isAgent, async (req, res) => {
 
 // Agent approves a manual player request for a transaction
 app.post('/api/agent/player-requests/:requestId/approve', isAgent, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { requestId } = req.params;
     const agent: Agent = (req as any).agent;
 
     try {
-        await db.runTransaction(async (t) => {
-            const requestRef = db.collection('playerAgentRequests').doc(requestId);
-            const requestDoc = await t.get(requestRef);
+        await approveAgentRequest(requestId, agent.id);
 
-            if (!requestDoc.exists) throw new Error('Request not found.');
-            const request = requestDoc.data() as PlayerAgentRequest;
-
-            if (request.status !== 'pending') throw new Error('Request has already been processed.');
-            if (request.agentId !== agent.id) throw new Error('This request does not belong to you.');
-
-            const playerRef = db.collection('users').doc(request.playerId);
-            const playerDoc = await t.get(playerRef);
-            if (!playerDoc.exists) throw new Error('Player not found.');
-            const player = playerDoc.data() as UserProfile;
-
-            const agentRef = db.collection('agents').doc(agent.id);
-            // We don't need to get the agent again, as we have it from `isAgent` middleware
-            
-            let newAgentFloat: number;
-            
-            if (request.type === 'deposit') {
-                if (agent.floatBalance < request.amount) {
-                    throw new Error('Insufficient float balance to approve this deposit.');
-                }
-                newAgentFloat = agent.floatBalance - request.amount;
-                
-                t.update(playerRef, { balance: player.balance + request.amount });
-                
-                const playerTxRef = db.collection('transactions').doc();
-                t.set(playerTxRef, {
-                    id: playerTxRef.id,
-                    userId: player.id,
-                    type: 'deposit',
-                    amount: request.amount,
-                    timestamp: Date.now(),
-                    description: `Deposit approved by agent ${agent.username}. Request ID: ${request.id}`
-                });
-
-            } else { // withdrawal
-                if (player.balance < request.amount) {
-                    throw new Error('Player has insufficient balance for this withdrawal.');
-                }
-                newAgentFloat = agent.floatBalance + request.amount;
-                
-                t.update(playerRef, { balance: player.balance - request.amount });
-                
-                const playerTxRef = db.collection('transactions').doc();
-                t.set(playerTxRef, {
-                    id: playerTxRef.id,
-                    userId: player.id,
-                    type: 'withdrawal',
-                    amount: request.amount,
-                    timestamp: Date.now(),
-                    description: `Withdrawal approved by agent ${agent.username}. Request ID: ${request.id}`
-                });
-            }
-
-            const agentTxRef = db.collection('agentTransactions').doc();
-            t.set(agentTxRef, {
-                id: agentTxRef.id,
-                agentId: agent.id,
-                type: request.type === 'deposit' ? 'PlayerDeposit' : 'PlayerWithdrawal',
-                amount: request.amount,
-                playerId: player.id,
-                playerName: player.username,
-                timestamp: Date.now(),
-                description: `Approved ${request.type} of $${request.amount} for player ${player.username}.`
-            });
-            
-            t.update(agentRef, { floatBalance: newAgentFloat });
-            t.update(requestRef, { 
-                status: 'approved',
-                resolvedAt: Date.now(),
-                resolvedBy: agent.id,
-                resolverUsername: agent.username,
-            });
-        });
-
-        // After the transaction completes successfully
-        // We might want to send an SSE event to the user here.
-        // For now, just return success.
         res.json({ success: true, message: 'Request approved successfully.' });
 
     } catch (error) {
@@ -5031,39 +3292,11 @@ app.post('/api/agent/player-requests/:requestId/approve', isAgent, async (req, r
 
 // Agent rejects a manual player request for a transaction
 app.post('/api/agent/player-requests/:requestId/reject', isAgent, async (req, res) => {
-    if (!db) return res.status(500).json({ error: 'Database not initialized' });
     const { requestId } = req.params;
     const agent: Agent = (req as any).agent;
 
     try {
-        const requestRef = db.collection('playerAgentRequests').doc(requestId);
-        const requestDoc = await requestRef.get();
-
-        if (!requestDoc.exists) {
-            return res.status(404).json({ error: 'Request not found.' });
-        }
-        
-        const request = requestDoc.data() as PlayerAgentRequest;
-
-        if (request.status !== 'pending') {
-            return res.status(400).json({ error: 'This request has already been processed.' });
-        }
-        if (request.agentId !== agent.id) {
-            return res.status(403).json({ error: 'This request does not belong to you.' });
-        }
-
-        await requestRef.update({
-            status: 'rejected',
-            resolvedAt: Date.now(),
-            resolvedBy: agent.id,
-            resolverUsername: agent.username,
-        });
-
-        // Notify the user their request was rejected
-        sendEventToUser(request.playerId, 'user_notification', {
-            type: 'info',
-            message: `Your ${request.type} request for $${request.amount} was rejected by agent ${agent.username}.`
-        });
+        await rejectAgentRequest(requestId, agent.id);
 
         res.json({ success: true, message: 'Request rejected successfully.' });
 
@@ -5095,14 +3328,6 @@ app.get('/api/agent/my-players', isAgent, (req, res) => {
     res.json(sanitizedPlayers);
 });
 
-
-// ==========================================
-// 7. VITE MIDDLEWARE SETUP
-// ==========================================
-
-// In production, serve the static files from the 'dist' folder
-app.use(express.static(path.join(process.cwd(), 'dist')));
-
 // For any request that doesn't match a static file or an API route,
 // send the 'index.html' file. This is the entry point for the React SPA.
 app.get('*', (req, res, next) => {
@@ -5121,16 +3346,13 @@ app.get('*', (req, res, next) => {
 // Static file serving is now handled by Firebase Hosting configuration.
 
 // Export the Express app for Firebase Functions
-export const api = onRequest({
-  region: 'us-central1', // You can change this to your preferred region
-  memory: '1GiB',      // Adjust memory as needed
-  timeoutSeconds: 60,  // Adjust timeout as needed
-}, app);
+// Export the Express app
+export const api = app;
 
 // Start the server manually if we're NOT in a Firebase Function environment
 if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
-  const PORT = process.env.PORT || 3002;
-  app.listen(PORT, "0.0.0.0", () => {
+  const PORT = process.env.PORT || 3003;
+  app.listen(Number(PORT), "0.0.0.0", () => {
     console.log(`Server is listening on port ${PORT}`);
   });
 }

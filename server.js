@@ -1,13 +1,1243 @@
+var __defProp = Object.defineProperty;
+var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+var __decorateClass = (decorators, target, key, kind) => {
+  var result = kind > 1 ? void 0 : kind ? __getOwnPropDesc(target, key) : target;
+  for (var i = decorators.length - 1, decorator; i >= 0; i--)
+    if (decorator = decorators[i])
+      result = (kind ? decorator(target, key, result) : decorator(result)) || result;
+  if (kind && result) __defProp(target, key, result);
+  return result;
+};
+
 // server.ts
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
 import path from "path";
 import fs from "fs";
-import { initializeApp, cert, getApp } from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
-import { getAuth } from "firebase-admin/auth";
-import { onRequest } from "firebase-functions/v2/https";
+
+// src/sequelize.ts
+import { Sequelize } from "sequelize-typescript";
+import dotenv from "dotenv";
+
+// src/models/UserProfile.ts
+import { Table as Table2, Column as Column2, Model as Model2, PrimaryKey as PrimaryKey2, Unique as Unique2, AllowNull as AllowNull2, DataType as DataType2, ForeignKey, BelongsTo } from "sequelize-typescript";
+
+// src/models/Agent.ts
+import { Table, Column, Model, PrimaryKey, Unique, AllowNull, DataType, HasMany } from "sequelize-typescript";
+var Agent = class extends Model {
+};
+__decorateClass([
+  PrimaryKey,
+  Column(DataType.STRING)
+], Agent.prototype, "id", 2);
+__decorateClass([
+  Unique,
+  AllowNull(false),
+  Column(DataType.STRING)
+], Agent.prototype, "username", 2);
+__decorateClass([
+  Unique,
+  AllowNull(false),
+  Column(DataType.STRING)
+], Agent.prototype, "phone", 2);
+__decorateClass([
+  AllowNull(false),
+  Column(DataType.STRING)
+], Agent.prototype, "password", 2);
+__decorateClass([
+  Unique,
+  Column(DataType.STRING)
+], Agent.prototype, "promo_code", 2);
+__decorateClass([
+  Column(DataType.STRING)
+], Agent.prototype, "location", 2);
+__decorateClass([
+  AllowNull(false),
+  Column(DataType.DECIMAL(5, 4))
+], Agent.prototype, "commission_rate", 2);
+__decorateClass([
+  AllowNull(false),
+  Column({
+    type: DataType.DECIMAL(10, 2),
+    defaultValue: 0
+  })
+], Agent.prototype, "balance", 2);
+__decorateClass([
+  Column(DataType.DECIMAL(10, 2))
+], Agent.prototype, "float_balance", 2);
+__decorateClass([
+  AllowNull(false),
+  Column({
+    type: DataType.ENUM("Active", "Suspended"),
+    defaultValue: "Active"
+  })
+], Agent.prototype, "status", 2);
+__decorateClass([
+  AllowNull(false),
+  Column(DataType.BIGINT)
+], Agent.prototype, "created_at", 2);
+__decorateClass([
+  HasMany(() => UserProfile)
+], Agent.prototype, "linked_users", 2);
+Agent = __decorateClass([
+  Table({
+    tableName: "agents",
+    timestamps: false
+    // We have createdAt as a BIGINT
+  })
+], Agent);
+
+// src/models/UserProfile.ts
+var UserProfile = class extends Model2 {
+  // Unix timestamp
+};
+__decorateClass([
+  PrimaryKey2,
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "id", 2);
+__decorateClass([
+  Unique2,
+  AllowNull2(false),
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "username", 2);
+__decorateClass([
+  Unique2,
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "email", 2);
+__decorateClass([
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "phone", 2);
+__decorateClass([
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "location", 2);
+__decorateClass([
+  AllowNull2(false),
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "avatar", 2);
+__decorateClass([
+  AllowNull2(false),
+  Column2({
+    type: DataType2.DECIMAL(10, 2),
+    defaultValue: 0
+  })
+], UserProfile.prototype, "balance", 2);
+__decorateClass([
+  AllowNull2(false),
+  Column2({
+    type: DataType2.INTEGER,
+    defaultValue: 0
+  })
+], UserProfile.prototype, "win_count", 2);
+__decorateClass([
+  AllowNull2(false),
+  Column2({
+    type: DataType2.INTEGER,
+    defaultValue: 0
+  })
+], UserProfile.prototype, "loss_count", 2);
+__decorateClass([
+  Column2({
+    type: DataType2.BOOLEAN,
+    defaultValue: false
+  })
+], UserProfile.prototype, "is_offline_preference", 2);
+__decorateClass([
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "vip_tier", 2);
+__decorateClass([
+  Column2(DataType2.BIGINT)
+], UserProfile.prototype, "vip_expires", 2);
+__decorateClass([
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "role", 2);
+__decorateClass([
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "password", 2);
+__decorateClass([
+  ForeignKey(() => Agent),
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "linked_agent_id", 2);
+__decorateClass([
+  BelongsTo(() => Agent)
+], UserProfile.prototype, "agent", 2);
+__decorateClass([
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "promo_code", 2);
+__decorateClass([
+  Unique2,
+  Column2(DataType2.STRING)
+], UserProfile.prototype, "firebase_uid", 2);
+__decorateClass([
+  AllowNull2(false),
+  Column2(DataType2.BIGINT)
+], UserProfile.prototype, "created_at", 2);
+UserProfile = __decorateClass([
+  Table2({
+    tableName: "user_profiles",
+    timestamps: false
+    // We have createdAt as a BIGINT
+  })
+], UserProfile);
+
+// src/models/WalletTransaction.ts
+import { Table as Table3, Column as Column3, Model as Model3, PrimaryKey as PrimaryKey3, AllowNull as AllowNull3, DataType as DataType3, ForeignKey as ForeignKey2, BelongsTo as BelongsTo2 } from "sequelize-typescript";
+var WalletTransaction = class extends Model3 {
+};
+__decorateClass([
+  PrimaryKey3,
+  Column3(DataType3.STRING)
+], WalletTransaction.prototype, "id", 2);
+__decorateClass([
+  ForeignKey2(() => UserProfile),
+  AllowNull3(false),
+  Column3(DataType3.STRING)
+], WalletTransaction.prototype, "user_id", 2);
+__decorateClass([
+  BelongsTo2(() => UserProfile)
+], WalletTransaction.prototype, "user", 2);
+__decorateClass([
+  AllowNull3(false),
+  Column3(DataType3.ENUM("deposit", "withdrawal", "bet_escrow_locked", "bet_escrow_refund", "win_payout", "app_commission", "refund"))
+], WalletTransaction.prototype, "type", 2);
+__decorateClass([
+  AllowNull3(false),
+  Column3(DataType3.DECIMAL(10, 2))
+], WalletTransaction.prototype, "amount", 2);
+__decorateClass([
+  AllowNull3(false),
+  Column3(DataType3.BIGINT)
+], WalletTransaction.prototype, "timestamp", 2);
+__decorateClass([
+  Column3(DataType3.STRING)
+], WalletTransaction.prototype, "match_id", 2);
+__decorateClass([
+  Column3(DataType3.TEXT)
+], WalletTransaction.prototype, "description", 2);
+WalletTransaction = __decorateClass([
+  Table3({
+    tableName: "wallet_transactions",
+    timestamps: false
+    // We have timestamp as a BIGINT
+  })
+], WalletTransaction);
+
+// src/models/AgentTransaction.ts
+import { Table as Table4, Column as Column4, Model as Model4, PrimaryKey as PrimaryKey4, DataType as DataType4 } from "sequelize-typescript";
+var AgentTransaction = class extends Model4 {
+};
+__decorateClass([
+  PrimaryKey4,
+  Column4(DataType4.STRING)
+], AgentTransaction.prototype, "id", 2);
+__decorateClass([
+  Column4(DataType4.STRING)
+], AgentTransaction.prototype, "agent_id", 2);
+__decorateClass([
+  Column4(DataType4.STRING)
+], AgentTransaction.prototype, "type", 2);
+__decorateClass([
+  Column4(DataType4.DECIMAL)
+], AgentTransaction.prototype, "amount", 2);
+__decorateClass([
+  Column4(DataType4.DECIMAL)
+], AgentTransaction.prototype, "discount_amount", 2);
+__decorateClass([
+  Column4(DataType4.STRING)
+], AgentTransaction.prototype, "player_id", 2);
+__decorateClass([
+  Column4(DataType4.STRING)
+], AgentTransaction.prototype, "player_name", 2);
+__decorateClass([
+  Column4(DataType4.BIGINT)
+], AgentTransaction.prototype, "timestamp", 2);
+__decorateClass([
+  Column4(DataType4.TEXT)
+], AgentTransaction.prototype, "description", 2);
+AgentTransaction = __decorateClass([
+  Table4({ tableName: "agent_transactions", timestamps: false })
+], AgentTransaction);
+
+// src/models/AgentRequest.ts
+import { Table as Table5, Column as Column5, Model as Model5, PrimaryKey as PrimaryKey5, DataType as DataType5 } from "sequelize-typescript";
+var AgentRequest = class extends Model5 {
+};
+__decorateClass([
+  PrimaryKey5,
+  Column5(DataType5.STRING)
+], AgentRequest.prototype, "id", 2);
+__decorateClass([
+  Column5(DataType5.STRING)
+], AgentRequest.prototype, "agent_id", 2);
+__decorateClass([
+  Column5(DataType5.STRING)
+], AgentRequest.prototype, "agent_username", 2);
+__decorateClass([
+  Column5(DataType5.DECIMAL)
+], AgentRequest.prototype, "amount", 2);
+__decorateClass([
+  Column5(DataType5.STRING)
+], AgentRequest.prototype, "status", 2);
+__decorateClass([
+  Column5(DataType5.BIGINT)
+], AgentRequest.prototype, "created_at", 2);
+__decorateClass([
+  Column5(DataType5.BIGINT)
+], AgentRequest.prototype, "resolved_at", 2);
+__decorateClass([
+  Column5(DataType5.STRING)
+], AgentRequest.prototype, "resolved_by", 2);
+__decorateClass([
+  Column5(DataType5.STRING)
+], AgentRequest.prototype, "resolver_username", 2);
+AgentRequest = __decorateClass([
+  Table5({ tableName: "agent_requests", timestamps: false })
+], AgentRequest);
+
+// src/models/PlayerAgentRequestModel.ts
+import { Table as Table6, Column as Column6, Model as Model6, PrimaryKey as PrimaryKey6, DataType as DataType6 } from "sequelize-typescript";
+var PlayerAgentRequestModel = class extends Model6 {
+};
+__decorateClass([
+  PrimaryKey6,
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "id", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "player_id", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "player_username", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "player_avatar", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "agent_id", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "player_phone", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "sender_phone", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "provider", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "type", 2);
+__decorateClass([
+  Column6(DataType6.DECIMAL)
+], PlayerAgentRequestModel.prototype, "amount", 2);
+__decorateClass([
+  Column6(DataType6.STRING)
+], PlayerAgentRequestModel.prototype, "status", 2);
+__decorateClass([
+  Column6(DataType6.BIGINT)
+], PlayerAgentRequestModel.prototype, "created_at", 2);
+PlayerAgentRequestModel = __decorateClass([
+  Table6({ tableName: "player_agent_requests", timestamps: false })
+], PlayerAgentRequestModel);
+
+// src/models/AdminUser.ts
+import { Table as Table7, Column as Column7, Model as Model7, PrimaryKey as PrimaryKey7, DataType as DataType7, Unique as Unique3 } from "sequelize-typescript";
+var AdminUser = class extends Model7 {
+};
+__decorateClass([
+  PrimaryKey7,
+  Column7(DataType7.STRING)
+], AdminUser.prototype, "id", 2);
+__decorateClass([
+  Unique3,
+  Column7(DataType7.STRING)
+], AdminUser.prototype, "username", 2);
+__decorateClass([
+  Column7(DataType7.STRING)
+], AdminUser.prototype, "password_hash", 2);
+__decorateClass([
+  Column7(DataType7.JSON)
+], AdminUser.prototype, "permissions", 2);
+AdminUser = __decorateClass([
+  Table7({ tableName: "admin_users", timestamps: false })
+], AdminUser);
+
+// src/models/MatchmakingModel.ts
+import { Table as Table8, Column as Column8, Model as Model8, PrimaryKey as PrimaryKey8, DataType as DataType8 } from "sequelize-typescript";
+var MatchmakingModel = class extends Model8 {
+};
+__decorateClass([
+  PrimaryKey8,
+  Column8(DataType8.STRING)
+], MatchmakingModel.prototype, "user_id", 2);
+__decorateClass([
+  Column8(DataType8.STRING)
+], MatchmakingModel.prototype, "username", 2);
+__decorateClass([
+  Column8(DataType8.STRING)
+], MatchmakingModel.prototype, "avatar", 2);
+__decorateClass([
+  Column8(DataType8.DECIMAL)
+], MatchmakingModel.prototype, "bet_amount", 2);
+__decorateClass([
+  Column8(DataType8.INTEGER)
+], MatchmakingModel.prototype, "capacity", 2);
+__decorateClass([
+  Column8(DataType8.STRING)
+], MatchmakingModel.prototype, "game_mode", 2);
+__decorateClass([
+  Column8(DataType8.STRING)
+], MatchmakingModel.prototype, "status", 2);
+__decorateClass([
+  Column8(DataType8.BIGINT)
+], MatchmakingModel.prototype, "timestamp", 2);
+MatchmakingModel = __decorateClass([
+  Table8({ tableName: "matchmaking", timestamps: false })
+], MatchmakingModel);
+
+// src/models/GameRoom.ts
+import { Table as Table10, Column as Column10, Model as Model10, PrimaryKey as PrimaryKey10, DataType as DataType10, HasMany as HasMany2 } from "sequelize-typescript";
+
+// src/models/LudoPlayer.ts
+import { Table as Table9, Column as Column9, Model as Model9, DataType as DataType9, ForeignKey as ForeignKey3, BelongsTo as BelongsTo3, PrimaryKey as PrimaryKey9 } from "sequelize-typescript";
+var LudoPlayer = class extends Model9 {
+};
+__decorateClass([
+  PrimaryKey9,
+  ForeignKey3(() => GameRoom),
+  Column9({
+    type: DataType9.STRING,
+    allowNull: false
+  })
+], LudoPlayer.prototype, "room_id", 2);
+__decorateClass([
+  PrimaryKey9,
+  ForeignKey3(() => UserProfile),
+  Column9({
+    type: DataType9.STRING,
+    allowNull: false
+  })
+], LudoPlayer.prototype, "user_id", 2);
+__decorateClass([
+  BelongsTo3(() => UserProfile)
+], LudoPlayer.prototype, "user", 2);
+__decorateClass([
+  BelongsTo3(() => GameRoom)
+], LudoPlayer.prototype, "gameRoom", 2);
+__decorateClass([
+  Column9({
+    type: DataType9.STRING,
+    allowNull: false
+  })
+], LudoPlayer.prototype, "username", 2);
+__decorateClass([
+  Column9({
+    type: DataType9.STRING,
+    allowNull: false
+  })
+], LudoPlayer.prototype, "avatar", 2);
+__decorateClass([
+  Column9({
+    type: DataType9.ENUM("red", "green", "yellow", "blue"),
+    allowNull: false
+  })
+], LudoPlayer.prototype, "color", 2);
+__decorateClass([
+  Column9({
+    type: DataType9.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  })
+], LudoPlayer.prototype, "is_host", 2);
+__decorateClass([
+  Column9({
+    type: DataType9.BOOLEAN,
+    allowNull: false,
+    defaultValue: false
+  })
+], LudoPlayer.prototype, "is_ready", 2);
+__decorateClass([
+  Column9({
+    type: DataType9.ENUM("online", "offline", "left"),
+    allowNull: false,
+    defaultValue: "online"
+  })
+], LudoPlayer.prototype, "status", 2);
+__decorateClass([
+  Column9({
+    type: DataType9.INTEGER,
+    allowNull: true
+  })
+], LudoPlayer.prototype, "inactivityTimer", 2);
+LudoPlayer = __decorateClass([
+  Table9({
+    tableName: "game_players",
+    timestamps: false
+  })
+], LudoPlayer);
+
+// src/models/GameRoom.ts
+var GameRoom = class extends Model10 {
+};
+__decorateClass([
+  PrimaryKey10,
+  Column10({
+    type: DataType10.STRING,
+    allowNull: false
+  })
+], GameRoom.prototype, "id", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.ENUM("waiting", "playing", "completed", "cancelled"),
+    allowNull: false
+  })
+], GameRoom.prototype, "status", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.DECIMAL(10, 2),
+    allowNull: false
+  })
+], GameRoom.prototype, "betAmount", 2);
+__decorateClass([
+  HasMany2(() => LudoPlayer)
+], GameRoom.prototype, "players", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.JSON,
+    allowNull: true
+  })
+], GameRoom.prototype, "spectators", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.JSON,
+    allowNull: false
+  })
+], GameRoom.prototype, "gameState", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.DATE,
+    allowNull: false
+  })
+], GameRoom.prototype, "createdAt", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.INTEGER,
+    allowNull: true
+  })
+], GameRoom.prototype, "capacity", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.ENUM("solo", "team"),
+    allowNull: true
+  })
+], GameRoom.prototype, "gameMode", 2);
+__decorateClass([
+  HasMany2(() => LudoPlayer)
+], GameRoom.prototype, "pendingPlayers", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.STRING,
+    allowNull: true
+  })
+], GameRoom.prototype, "rejectionReason", 2);
+__decorateClass([
+  Column10({
+    type: DataType10.JSON,
+    allowNull: true
+  })
+], GameRoom.prototype, "tournamentDetails", 2);
+GameRoom = __decorateClass([
+  Table10({
+    tableName: "game_rooms",
+    timestamps: true
+  })
+], GameRoom);
+
+// src/models/LudoToken.ts
+import { Table as Table12, Column as Column12, Model as Model12, PrimaryKey as PrimaryKey11, DataType as DataType12, ForeignKey as ForeignKey5, BelongsTo as BelongsTo5 } from "sequelize-typescript";
+
+// src/models/GameState.ts
+import { Table as Table11, Column as Column11, Model as Model11, DataType as DataType11, HasMany as HasMany3, ForeignKey as ForeignKey4, BelongsTo as BelongsTo4 } from "sequelize-typescript";
+var GameState = class extends Model11 {
+};
+__decorateClass([
+  ForeignKey4(() => GameRoom),
+  Column11({
+    type: DataType11.STRING,
+    allowNull: false,
+    primaryKey: true
+  })
+], GameState.prototype, "gameRoomId", 2);
+__decorateClass([
+  BelongsTo4(() => GameRoom)
+], GameState.prototype, "gameRoom", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.INTEGER,
+    allowNull: false
+  })
+], GameState.prototype, "turn", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.INTEGER,
+    allowNull: true
+  })
+], GameState.prototype, "diceRoll", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.INTEGER,
+    allowNull: true
+  })
+], GameState.prototype, "lastDiceRoll", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.BOOLEAN,
+    allowNull: false
+  })
+], GameState.prototype, "hasRolled", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.INTEGER,
+    allowNull: false
+  })
+], GameState.prototype, "turnTimer", 2);
+__decorateClass([
+  HasMany3(() => LudoToken)
+], GameState.prototype, "tokens", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.STRING,
+    allowNull: true
+  })
+], GameState.prototype, "winnerId", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.ENUM("forfeit", "inactivity", "all_tokens_home"),
+    allowNull: true
+  })
+], GameState.prototype, "completionReason", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.STRING,
+    allowNull: true
+  })
+], GameState.prototype, "endReasonText", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.DECIMAL(10, 2),
+    allowNull: false
+  })
+], GameState.prototype, "escrowBalance", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.JSON,
+    allowNull: false
+  })
+], GameState.prototype, "logs", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.JSON,
+    allowNull: false
+  })
+], GameState.prototype, "chat", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.DATE,
+    allowNull: false
+  })
+], GameState.prototype, "lastActivity", 2);
+__decorateClass([
+  Column11({
+    type: DataType11.INTEGER,
+    allowNull: true
+  })
+], GameState.prototype, "consecutiveSixes", 2);
+GameState = __decorateClass([
+  Table11({
+    tableName: "game_states",
+    timestamps: false
+  })
+], GameState);
+
+// src/models/LudoToken.ts
+var LudoToken = class extends Model12 {
+};
+__decorateClass([
+  PrimaryKey11,
+  Column12({
+    type: DataType12.STRING,
+    allowNull: false
+  })
+], LudoToken.prototype, "id", 2);
+__decorateClass([
+  ForeignKey5(() => GameState),
+  Column12({
+    type: DataType12.STRING,
+    allowNull: false
+  })
+], LudoToken.prototype, "gameStateId", 2);
+__decorateClass([
+  BelongsTo5(() => GameState)
+], LudoToken.prototype, "gameState", 2);
+__decorateClass([
+  ForeignKey5(() => UserProfile),
+  Column12({
+    type: DataType12.STRING,
+    allowNull: false
+  })
+], LudoToken.prototype, "ownerId", 2);
+__decorateClass([
+  BelongsTo5(() => UserProfile)
+], LudoToken.prototype, "owner", 2);
+__decorateClass([
+  Column12({
+    type: DataType12.ENUM("red", "green", "yellow", "blue"),
+    allowNull: false
+  })
+], LudoToken.prototype, "color", 2);
+__decorateClass([
+  Column12({
+    type: DataType12.INTEGER,
+    allowNull: false
+  })
+], LudoToken.prototype, "position", 2);
+LudoToken = __decorateClass([
+  Table12({
+    tableName: "ludo_tokens",
+    timestamps: false
+  })
+], LudoToken);
+
+// src/sequelize.ts
+dotenv.config();
+var sequelize = new Sequelize(
+  process.env.DB_NAME,
+  process.env.DB_USER,
+  process.env.DB_PASSWORD,
+  {
+    host: process.env.DB_HOST,
+    dialect: "mysql",
+    port: Number(process.env.DB_PORT || 3306),
+    logging: false,
+    // Set to console.log to see SQL queries
+    models: [
+      UserProfile,
+      Agent,
+      WalletTransaction,
+      AgentTransaction,
+      AgentRequest,
+      PlayerAgentRequestModel,
+      AdminUser,
+      MatchmakingModel,
+      GameRoom,
+      LudoPlayer,
+      LudoToken
+    ]
+  }
+);
+var sequelize_default = sequelize;
+
+// src/database.ts
+function mapToUserProfileType(user) {
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    phone: user.phone,
+    location: user.location,
+    avatar: user.avatar,
+    balance: typeof user.balance === "string" ? parseFloat(user.balance) : user.balance,
+    winCount: user.winCount,
+    lossCount: user.lossCount,
+    isOfflinePreference: user.isOfflinePreference,
+    vip: user.vipTier && user.vipExpires ? { tier: user.vipTier, expires: user.vipExpires } : void 0,
+    role: user.role,
+    password: user.password,
+    linkedAgentId: user.linkedAgentId,
+    promoCode: user.promoCode,
+    firebaseUid: user.firebaseUid,
+    createdAt: user.createdAt
+  };
+}
+function mapToAgentType(agent) {
+  return {
+    id: agent.id,
+    username: agent.username,
+    phone: agent.phone,
+    password: agent.password,
+    promoCode: agent.promoCode,
+    location: agent.location,
+    commissionRate: typeof agent.commissionRate === "string" ? parseFloat(agent.commissionRate) : agent.commissionRate,
+    balance: typeof agent.balance === "string" ? parseFloat(agent.balance) : agent.balance,
+    floatBalance: agent.floatBalance ? typeof agent.floatBalance === "string" ? parseFloat(agent.floatBalance) : agent.floatBalance : 0,
+    status: agent.status,
+    createdAt: agent.createdAt
+  };
+}
+async function getUserById(userId) {
+  const user = await UserProfile.findByPk(userId);
+  return user ? mapToUserProfileType(user) : null;
+}
+async function getUserByFirebaseUid(firebaseUid) {
+  const user = await UserProfile.findOne({ where: { firebaseUid } });
+  return user ? mapToUserProfileType(user) : null;
+}
+async function createUser(user) {
+  await UserProfile.create({
+    id: user.id,
+    firebaseUid: user.firebaseUid,
+    username: user.username,
+    email: user.email,
+    avatar: user.avatar,
+    balance: user.balance,
+    winCount: user.winCount,
+    lossCount: user.lossCount,
+    linkedAgentId: user.linkedAgentId,
+    promoCode: user.promoCode,
+    createdAt: user.createdAt,
+    isOfflinePreference: user.isOfflinePreference,
+    vipTier: user.vip?.tier,
+    vipExpires: user.vip?.expires,
+    role: user.role,
+    password: user.password
+  });
+}
+async function updateUser(userId, updates) {
+  const updateData = {};
+  for (const [key, value] of Object.entries(updates)) {
+    if (key === "vip") {
+      updateData.vipTier = value?.tier;
+      updateData.vipExpires = value?.expires;
+    } else if (key === "password") {
+      updateData.password = value;
+    } else {
+      const snakeCaseKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+      updateData[snakeCaseKey] = value;
+    }
+  }
+  if (Object.keys(updateData).length > 0) {
+    await UserProfile.update(updateData, { where: { id: userId } });
+  }
+}
+async function getAgentById(agentId) {
+  const agent = await Agent.findByPk(agentId);
+  return agent ? mapToAgentType(agent) : null;
+}
+async function createAgent(agent) {
+  await Agent.create({
+    id: agent.id,
+    username: agent.username,
+    password: agent.password,
+    // This should be a hash
+    phone: agent.phone,
+    location: agent.location,
+    commissionRate: agent.commissionRate,
+    promoCode: agent.promoCode,
+    balance: agent.balance,
+    floatBalance: agent.floatBalance,
+    status: agent.status,
+    createdAt: agent.createdAt
+  });
+}
+async function updateAgent(agentId, updates) {
+  const updateData = {};
+  for (const [key, value] of Object.entries(updates)) {
+    const snakeCaseKey = key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
+    updateData[snakeCaseKey] = value;
+  }
+  if (Object.keys(updateData).length > 0) {
+    await Agent.update(updateData, { where: { id: agentId } });
+  }
+}
+async function createTransaction(transaction) {
+  await WalletTransaction.create({
+    id: transaction.id,
+    userId: transaction.userId,
+    type: transaction.type,
+    amount: transaction.amount,
+    matchId: transaction.matchId,
+    description: transaction.description,
+    timestamp: transaction.timestamp
+  });
+}
+async function createPlayerAgentRequest(request) {
+  await PlayerAgentRequestModel.create({
+    id: request.id,
+    playerId: request.playerId,
+    playerUsername: request.playerUsername,
+    playerAvatar: request.playerAvatar,
+    agentId: request.agentId,
+    playerPhone: request.playerPhone,
+    senderPhone: request.senderPhone,
+    provider: request.provider,
+    type: request.type,
+    amount: request.amount,
+    status: request.status,
+    createdAt: request.createdAt
+  });
+}
+async function getAdminUserByUsername(username) {
+  const admin = await AdminUser.findOne({ where: { username } });
+  return admin ? admin.get({ plain: true }) : null;
+}
+async function getAgentByPromoCode(promoCode) {
+  const agent = await Agent.findOne({ where: { promoCode } });
+  return agent ? mapToAgentType(agent) : null;
+}
+async function linkAgentToPlayer(agentId, playerId) {
+  await UserProfile.update(
+    { linkedAgentId: agentId },
+    { where: { id: playerId } }
+  );
+}
+async function getTransactionsByUserId(userId) {
+  const transactions = await WalletTransaction.findAll({
+    where: { userId },
+    order: [["timestamp", "DESC"]],
+    limit: 100
+  });
+  return transactions.map((t) => ({
+    id: t.id,
+    userId: t.userId,
+    type: t.type,
+    amount: typeof t.amount === "string" ? parseFloat(t.amount) : t.amount,
+    timestamp: t.timestamp,
+    matchId: t.matchId,
+    description: t.description
+  }));
+}
+async function getAgents() {
+  const agents = await Agent.findAll();
+  return agents.map(mapToAgentType);
+}
+async function addUserToMatchmakingQueue(matchmaking) {
+  await MatchmakingModel.upsert({
+    userId: matchmaking.userId,
+    username: matchmaking.username,
+    avatar: matchmaking.avatar,
+    betAmount: matchmaking.betAmount,
+    capacity: matchmaking.capacity,
+    gameMode: matchmaking.gameMode,
+    status: matchmaking.status,
+    timestamp: matchmaking.timestamp
+  });
+}
+async function removeUsersFromMatchmakingQueue(userIds) {
+  if (userIds.length === 0) return;
+  await MatchmakingModel.destroy({ where: { userId: userIds } });
+}
+async function createAdminUser(adminUser) {
+  await AdminUser.create({
+    id: adminUser.id,
+    username: adminUser.username,
+    passwordHash: adminUser.password,
+    // Assuming password is a hash
+    permissions: adminUser.permissions
+  });
+}
+async function getAllAdminUsers() {
+  const admins = await AdminUser.findAll();
+  return admins.map((admin) => admin.get({ plain: true }));
+}
+async function getAdminUserById(adminId) {
+  const admin = await AdminUser.findByPk(adminId);
+  return admin ? admin.get({ plain: true }) : null;
+}
+async function updateAdminUser(adminId, updates) {
+  const updateData = {};
+  if (updates.password) {
+    updateData.passwordHash = updates.password;
+  }
+  if (updates.permissions) {
+    updateData.permissions = updates.permissions;
+  }
+  if (Object.keys(updateData).length > 0) {
+    await AdminUser.update(updateData, { where: { id: adminId } });
+  }
+}
+async function deleteAdminUser(adminId) {
+  await AdminUser.destroy({ where: { id: adminId } });
+}
+async function getAgentByUsername(username) {
+  const agent = await Agent.findOne({ where: { username } });
+  return agent ? mapToAgentType(agent) : null;
+}
+async function getAgentRequests() {
+  const requests = await AgentRequest.findAll({ order: [["createdAt", "DESC"]] });
+  return requests.map((r) => r.get({ plain: true }));
+}
+async function approveAgentRequest(requestId, adminId) {
+  await sequelize_default.transaction(async (t) => {
+    const request = await AgentRequest.findByPk(requestId, { transaction: t, lock: true });
+    if (!request) throw new Error("Request not found.");
+    if (request.status !== "pending") throw new Error("This request has already been processed.");
+    const agent = await Agent.findByPk(request.agentId, { transaction: t, lock: true });
+    if (!agent) throw new Error("Agent associated with the request not found.");
+    const admin = await AdminUser.findByPk(adminId, { transaction: t });
+    const resolverUsername = admin ? admin.username : "Unknown Admin";
+    const currentFloat = agent.floatBalance ? typeof agent.floatBalance === "string" ? parseFloat(agent.floatBalance) : agent.floatBalance : 0;
+    const requestAmount = typeof request.amount === "string" ? parseFloat(request.amount) : request.amount;
+    const newFloatBalance = currentFloat + requestAmount;
+    await agent.update({ floatBalance: newFloatBalance }, { transaction: t });
+    await request.update({
+      status: "approved",
+      resolvedAt: Date.now(),
+      resolvedBy: adminId,
+      resolverUsername
+    }, { transaction: t });
+    await AgentTransaction.create({
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      agentId: request.agentId,
+      type: "FloatPurchase",
+      amount: request.amount,
+      timestamp: Date.now(),
+      description: `Float request for ${request.amount} approved by admin. Request ID: ${request.id}`
+    }, { transaction: t });
+  });
+}
+async function rejectAgentRequest(requestId, adminId) {
+  const admin = await AdminUser.findByPk(adminId);
+  const resolverUsername = admin ? admin.username : "Unknown Admin";
+  await AgentRequest.update({
+    status: "rejected",
+    resolvedAt: Date.now(),
+    resolvedBy: adminId,
+    resolverUsername
+  }, { where: { id: requestId, status: "pending" } });
+}
+async function getAgentTransactions(agentId) {
+  const transactions = await AgentTransaction.findAll({
+    where: { agentId },
+    order: [["timestamp", "DESC"]]
+  });
+  return transactions.map((t) => t.get({ plain: true }));
+}
+async function depositToPlayer(agentId, playerId, amount) {
+  return await sequelize_default.transaction(async (t) => {
+    const agent = await Agent.findByPk(agentId, { transaction: t, lock: true });
+    if (!agent) throw new Error("Agent not found.");
+    const agentFloat = agent.floatBalance ? typeof agent.floatBalance === "string" ? parseFloat(agent.floatBalance) : agent.floatBalance : 0;
+    if (agentFloat < amount) throw new Error("Insufficient float balance.");
+    const player = await UserProfile.findByPk(playerId, { transaction: t, lock: true });
+    if (!player) throw new Error("Player not found.");
+    const playerBalance = typeof player.balance === "string" ? parseFloat(player.balance) : player.balance;
+    const newAgentBalance = agentFloat - amount;
+    const newPlayerBalance = playerBalance + amount;
+    await agent.update({ floatBalance: newAgentBalance }, { transaction: t });
+    await player.update({ balance: newPlayerBalance }, { transaction: t });
+    await AgentTransaction.create({
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      agentId,
+      type: "PlayerDeposit",
+      amount,
+      playerId,
+      playerName: player.username,
+      timestamp: Date.now(),
+      description: `Deposited ${amount} into ${player.username}'s account.`
+    }, { transaction: t });
+    await WalletTransaction.create({
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userId: playerId,
+      type: "deposit",
+      amount,
+      timestamp: Date.now(),
+      description: `Deposit received from agent ${agent.username}.`
+    }, { transaction: t });
+    return { newAgentBalance, newPlayerBalance };
+  });
+}
+function mapToLudoPlayerType(player) {
+  return {
+    userId: player.userId,
+    username: player.username,
+    avatar: player.avatar,
+    color: player.color,
+    isHost: player.isHost,
+    isReady: player.isReady,
+    status: player.status
+  };
+}
+function mapToGameRoomType(room) {
+  return {
+    id: room.id,
+    status: room.status,
+    betAmount: typeof room.betAmount === "string" ? parseFloat(room.betAmount) : room.betAmount,
+    capacity: room.capacity,
+    gameMode: room.gameMode,
+    players: room.players ? room.players.map(mapToLudoPlayerType) : [],
+    createdAt: room.createdAt,
+    gameState: room.gameState
+    // Assuming direct mapping for now
+  };
+}
+async function getRoomById(roomId) {
+  const room = await GameRoom.findByPk(roomId, {
+    include: [{ model: LudoPlayer, include: [UserProfile] }]
+  });
+  if (!room) {
+    return null;
+  }
+  return mapToGameRoomType(room);
+}
+async function startGame(roomId, hostId) {
+  return sequelize_default.transaction(async (t) => {
+    const room = await GameRoom.findByPk(roomId, {
+      include: [{ model: LudoPlayer, include: [UserProfile] }],
+      transaction: t,
+      lock: true
+    });
+    if (!room) throw new Error("Room not found.");
+    if (room.status !== "waiting") throw new Error("Game has already started.");
+    const host = room.players?.find((p) => p.userId === hostId);
+    if (!host || !host.isHost) throw new Error("Only the host can start the game.");
+    if (!room.players || room.players.length < 2) throw new Error("At least 2 players are required to start.");
+    const bet = typeof room.betAmount === "string" ? parseFloat(room.betAmount) : room.betAmount;
+    let totalEscrow = 0;
+    for (const player of room.players) {
+      if (player.userId.startsWith("bot_")) {
+        totalEscrow += bet;
+        continue;
+      }
+      if (!player.user) throw new Error(`User profile not found for player ${player.username}`);
+      const balance = typeof player.user.balance === "string" ? parseFloat(player.user.balance) : player.user.balance;
+      if (balance < bet) {
+        throw new Error(`Player ${player.username} has insufficient balance.`);
+      }
+      await player.user.update({ balance: balance - bet }, { transaction: t });
+      totalEscrow += bet;
+    }
+    const initialTokens = [];
+    const tokenCreations = room.players.map((player) => {
+      return [0, 1, 2, 3].map((i) => {
+        const tokenId = `token_${player.color}_${i}`;
+        initialTokens.push({ id: tokenId, ownerId: player.userId, color: player.color, position: -1 });
+        return LudoToken.create({
+          id: tokenId,
+          roomId,
+          ownerId: player.userId,
+          color: player.color,
+          position: -1
+          // Home Base
+        }, { transaction: t });
+      });
+    }).flat();
+    await Promise.all(tokenCreations);
+    const newGameState = {
+      ...room.gameState,
+      tokens: initialTokens,
+      escrowBalance: totalEscrow,
+      turn: 0,
+      turnTimer: 30,
+      logs: [
+        ...room.gameState.logs,
+        { id: `log_${Date.now()}`, timestamp: Date.now(), text: `\u2694\uFE0F The game has started! Bet: $${bet}. Total pot: $${totalEscrow}` }
+      ]
+    };
+    await room.update({ status: "playing", gameState: newGameState }, { transaction: t });
+    const finalRoom = await getRoomById(roomId);
+    if (!finalRoom) throw new Error("Could not retrieve final room state.");
+    return finalRoom;
+  });
+}
+async function removePlayerFromRoom(roomId, userId) {
+  const room = await GameRoom.findByPk(roomId, { include: [LudoPlayer] });
+  if (!room) throw new Error("Room not found.");
+  const playerToRemove = room.players?.find((p) => p.userId === userId);
+  if (!playerToRemove) throw new Error("Player not found in this room.");
+  if (room.status === "waiting") {
+    await LudoPlayer.destroy({ where: { roomId, userId } });
+    const remainingPlayers = room.players?.filter((p) => p.userId !== userId) || [];
+    if (remainingPlayers.length === 0) {
+      await GameRoom.destroy({ where: { id: roomId } });
+      return null;
+    }
+    if (playerToRemove.isHost) {
+      const newHost = remainingPlayers[0];
+      await LudoPlayer.update({ isHost: true }, { where: { roomId, userId: newHost.userId } });
+    }
+  } else if (room.status === "playing") {
+    await LudoPlayer.update({ status: "left" }, { where: { roomId, userId } });
+    const activePlayers = room.players?.filter((p) => p.userId !== userId && p.status !== "left") || [];
+    if (activePlayers.length === 1) {
+      const winner = activePlayers[0];
+      await GameRoom.update({ status: "completed", winner_id: winner.userId }, { where: { id: roomId } });
+    }
+  }
+  return await getRoomById(roomId);
+}
+
+// src/utils.ts
+var START_OFFSETS = {
+  green: 0,
+  yellow: 13,
+  blue: 26,
+  red: 39
+};
+var SAFE_GLOBAL_SQUARES = [0, 8, 13, 21, 26, 34, 39, 47];
+var HOME_ENTRY_POSITIONS = {
+  green: 50,
+  yellow: 11,
+  blue: 24,
+  red: 37
+};
+function getGlobalPosition(color, relativePos) {
+  if (relativePos < 0 || relativePos > 50) return null;
+  const offset = START_OFFSETS[color];
+  return (offset + relativePos) % 52;
+}
+function isBotPlayer(userId) {
+  return userId.startsWith("bot_") || userId.startsWith("sim_");
+}
+function addLog(room, text) {
+  const log = {
+    id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+    timestamp: Date.now(),
+    text
+  };
+  room.gameState.logs.push(log);
+  if (room.gameState.logs.length > 50) {
+    room.gameState.logs.shift();
+  }
+}
+async function moveTokenLogic(room, tokenId, roll) {
+  const gs = room.gameState;
+  const token = gs.tokens.find((t) => t.id === tokenId);
+  if (!token) return;
+  let nextPos = token.position + roll;
+  if (token.position === -1 && roll === 6) {
+    nextPos = 0;
+  }
+  const homeEntry = HOME_ENTRY_POSITIONS[token.color];
+  if (token.position <= homeEntry && nextPos > homeEntry) {
+    nextPos = 50 + (nextPos - homeEntry);
+  }
+  if (nextPos > 56) {
+    return;
+  }
+  token.position = nextPos;
+  const globalPos = getGlobalPosition(token.color, nextPos);
+  if (globalPos !== null && !SAFE_GLOBAL_SQUARES.includes(globalPos)) {
+    gs.tokens.forEach((t) => {
+      if (t.color !== token.color && t.position >= 0 && t.position <= 50) {
+        const opGlobal = getGlobalPosition(t.color, t.position);
+        if (opGlobal === globalPos) {
+          t.position = -1;
+          addLog(room, `\u2694\uFE0F ${room.players.find((p) => p.userId === token.ownerId)?.username} captured ${room.players.find((p) => p.userId === t.ownerId)?.username}'s token!`);
+        }
+      }
+    });
+  }
+  const playerTokens = gs.tokens.filter((t) => t.color === token.color);
+  if (playerTokens.every((t) => t.position === 56)) {
+    gs.winnerId = token.ownerId;
+    room.status = "completed";
+    addLog(room, `\u{1F389} ${room.players.find((p) => p.userId === token.ownerId)?.username} has won the game!`);
+  } else {
+    if (roll !== 6) {
+    }
+  }
+}
+
+// server.ts
 var VIP_TIERS = {
   gold: {
     name: "Gold VIP",
@@ -26,7 +1256,6 @@ var VIP_TIERS = {
     features: ["All Gold features", "Unique animated avatars", "5% Rake Discount", "Early access to new game modes"]
   }
 };
-var RAKE_PERCENTAGE = 0.1;
 var app = express();
 var configuredAllowedOrigins = [
   process.env.VITE_APP_URL,
@@ -55,100 +1284,9 @@ app.use(cors({
   credentials: true
 }));
 var PORT = Number(process.env.PORT) || 3002;
-var DB_FILE = path.join(process.cwd(), "db_store.json");
+var DB_FILE = path.join(process.cwd(), "_store.json");
 app.use(express.json());
 app.use(express.static(path.join(process.cwd(), "public")));
-var db = null;
-var auth = null;
-function getFirebaseServiceAccount() {
-  const envValue = process.env.FIREBASE_SERVICE_ACCOUNT || process.env.FIREBASE_ADMIN_CREDENTIALS;
-  if (envValue) {
-    try {
-      let normalizedEnvValue = envValue.trim().replace(/\n/g, "\\n");
-      const parsed = JSON.parse(normalizedEnvValue);
-      if (parsed && parsed.project_id && parsed.private_key) {
-        return parsed;
-      }
-      console.warn(
-        "FIREBASE_SERVICE_ACCOUNT was set but did not contain project_id/private_key."
-      );
-    } catch (error) {
-      console.error(
-        "Failed to parse FIREBASE_SERVICE_ACCOUNT env JSON:",
-        error
-      );
-    }
-  }
-  const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH ? process.env.FIREBASE_SERVICE_ACCOUNT_PATH : path.join(process.cwd(), "firebase-admin-key.json");
-  if (!fs.existsSync(serviceAccountPath)) {
-    return null;
-  }
-  try {
-    const serviceAccountFile = fs.readFileSync(serviceAccountPath, "utf8");
-    return JSON.parse(serviceAccountFile);
-  } catch (error) {
-    console.error(
-      "Failed to read Firebase service account JSON file:",
-      error
-    );
-    return null;
-  }
-}
-if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
-  try {
-    initializeApp();
-    db = getFirestore();
-    auth = getAuth();
-    console.log("Firebase Admin SDK initialized in Cloud Function environment.");
-  } catch (err) {
-    console.error("Critical: Failed to initialize Firebase Admin SDK in function environment:", err);
-  }
-} else {
-  if (process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY) {
-    try {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n");
-      try {
-        getApp();
-      } catch (error) {
-        initializeApp({
-          credential: cert({
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey
-          }),
-          databaseURL: `https://${process.env.FIREBASE_PROJECT_ID}.firebaseio.com`
-        });
-      }
-      db = getFirestore();
-      auth = getAuth();
-      console.log("Firebase Admin SDK initialized with separate environment variables (PROJECT_ID, CLIENT_EMAIL, PRIVATE_KEY).");
-    } catch (err) {
-      console.error("Failed to initialize Firebase Admin SDK with separate environment variables:", err);
-    }
-  } else {
-    const serviceAccount = getFirebaseServiceAccount();
-    if (serviceAccount) {
-      try {
-        serviceAccount.private_key = (serviceAccount.private_key || "").replace(/\\n/g, "\n");
-        try {
-          getApp();
-        } catch (error) {
-          initializeApp({
-            credential: cert(serviceAccount),
-            databaseURL: `https://${serviceAccount.project_id}.firebaseio.com`
-          });
-        }
-        db = getFirestore();
-        auth = getAuth();
-        console.log("Firebase Admin SDK initialized successfully for local development (using FIREBASE_SERVICE_ACCOUNT variable or file).");
-      } catch (err) {
-        console.error("Failed to initialize Firebase Admin SDK with local credentials (using FIREBASE_SERVICE_ACCOUNT variable or file):", err);
-      }
-    } else {
-      console.log("No Firebase Admin credentials configured for local development. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY or FIREBASE_SERVICE_ACCOUNT or firebase-admin-key.json.");
-    }
-  }
-}
 var DEFAULT_PAYMENT_PROVIDERS = {
   evc: { enabled: false },
   edahab: { enabled: false },
@@ -185,170 +1323,25 @@ var store = {
   agentTransactions: [],
   tournaments: {}
 };
-function loadStore() {
-  try {
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, "utf8");
-      const parsed = JSON.parse(raw);
-      store.users = parsed.users || {};
-      store.transactions = parsed.transactions || [];
-      store.rooms = parsed.rooms || {};
-      store.matchmakingQueues = parsed.matchmakingQueues || {
-        0: [],
-        1: [],
-        5: [],
-        10: [],
-        25: [],
-        50: []
-      };
-      store.houseRevenue = parsed.houseRevenue || 0;
-      store.pendingManualTransactions = parsed.pendingManualTransactions || [];
-      store.paymentProviders = {
-        ...DEFAULT_PAYMENT_PROVIDERS,
-        ...parsed.paymentProviders || {}
-      };
-      store.agentFloatInstructions = parsed.agentFloatInstructions || "";
-      store.tournaments = parsed.tournaments || {};
-      const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
-      store.adminSettings = {
-        username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
-        password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || "password",
-        roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES
-      };
-      store.agents = parsed.agents || {};
-      store.agentTransactions = parsed.agentTransactions || [];
-      console.log("Database loaded successfully from disk.");
-    } else {
-      saveStoreAndWait();
-    }
-  } catch (error) {
-    console.error("Failed to load database. Starting fresh.", error);
-  }
-}
-async function loadStoreFromFirestore() {
-  if (!db) {
-    loadStore();
-    return;
-  }
-  try {
-    console.log("Fetching latest state from Firebase Firestore...");
-    const storeRef = db.collection("ludo_store").doc("main");
-    const docSnap = await storeRef.get();
-    if (docSnap.exists) {
-      const payload = docSnap.data();
-      if (payload && payload.data) {
-        const parsed = JSON.parse(payload.data);
-        store.users = parsed.users || {};
-        store.transactions = parsed.transactions || [];
-        store.rooms = parsed.rooms || {};
-        store.matchmakingQueues = parsed.matchmakingQueues || {
-          0: [],
-          1: [],
-          5: [],
-          10: [],
-          25: [],
-          50: []
-        };
-        store.houseRevenue = parsed.houseRevenue || 0;
-        store.pendingManualTransactions = parsed.pendingManualTransactions || [];
-        store.paymentProviders = {
-          ...DEFAULT_PAYMENT_PROVIDERS,
-          ...parsed.paymentProviders || {}
-        };
-        store.agentFloatInstructions = parsed.agentFloatInstructions || "";
-        const persistedRoles = Array.isArray(parsed.adminSettings?.roles) ? parsed.adminSettings.roles : [];
-        store.adminSettings = {
-          username: parsed.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
-          password: parsed.adminSettings?.password || process.env.ADMIN_PASSWORD || "password",
-          roles: persistedRoles.length ? persistedRoles : DEFAULT_ADMIN_ROLES
-        };
-        store.agents = parsed.agents || {};
-        store.agentTransactions = parsed.agentTransactions || [];
-        store.tournaments = parsed.tournaments || {};
-        console.log("Database loaded successfully from Firebase Firestore.");
-        if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
-          fs.writeFileSync(DB_FILE, payload.data, "utf8");
-        }
-        return;
-      }
-    }
-    console.log("No existing state in Firestore. Loading from local store fallback...");
-    loadStore();
-  } catch (err) {
-    console.error("Failed to load store from Firestore:", err);
-    loadStore();
-  }
-}
-async function syncToFirestore() {
-  if (!db) {
-    const errorMsg = "Firestore not initialized. Cannot sync.";
-    console.error(errorMsg);
-    return { success: false, error: errorMsg };
-  }
-  try {
-    const storeRef = db.collection("ludo_store").doc("main");
-    const storeToSync = JSON.parse(JSON.stringify(store));
-    if (storeToSync.transactions && storeToSync.transactions.length > 5e3) {
-      console.log(`Trimming transactions from ${storeToSync.transactions.length} to 5000 for Firestore sync.`);
-      storeToSync.transactions = storeToSync.transactions.slice(-5e3);
-    }
-    if (storeToSync.agentTransactions && storeToSync.agentTransactions.length > 5e3) {
-      console.log(`Trimming agentTransactions from ${storeToSync.agentTransactions.length} to 5000 for Firestore sync.`);
-      storeToSync.agentTransactions = storeToSync.agentTransactions.slice(-5e3);
-    }
-    const serialized = JSON.stringify(storeToSync);
-    if (serialized.length > 1048487) {
-      const errorMsg = `Data store is too large to sync to Firestore, even after trimming. Size: ${serialized.length}`;
-      console.error(errorMsg);
-      if (storeToSync.transactions && storeToSync.transactions.length > 1e3 || storeToSync.agentTransactions && storeToSync.agentTransactions.length > 1e3) {
-        if (storeToSync.transactions && storeToSync.transactions.length > 1e3) {
-          storeToSync.transactions = storeToSync.transactions.slice(-1e3);
-        }
-        if (storeToSync.agentTransactions && storeToSync.agentTransactions.length > 1e3) {
-          storeToSync.agentTransactions = storeToSync.agentTransactions.slice(-1e3);
-        }
-        const serialized2 = JSON.stringify(storeToSync);
-        if (serialized2.length < 1048487) {
-          await storeRef.set({ data: serialized2, updatedAt: Date.now() });
-          console.log("Successfully synchronized store to Firebase Firestore with aggressive trimming.");
-          return { success: true };
-        } else {
-          console.error("Data store is too large to sync to Firestore, even with aggressive trimming.");
-          return { success: false, error: "Data store is too large to sync to Firestore, even with aggressive trimming." };
-        }
-      }
-      return { success: false, error: errorMsg };
-    }
-    await storeRef.set({ data: serialized, updatedAt: Date.now() });
-    console.log("Successfully synchronized store to Firebase Firestore.");
-    return { success: true };
-  } catch (err) {
-    console.error("Failed to sync store to Firestore:", err);
-    return { success: false, error: err.message || "An unknown error occurred during Firestore sync." };
-  }
-}
-function saveStore() {
-  if (process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR) {
-    return;
-  }
-  try {
-    fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
-  } catch (error) {
-    console.error("Failed to write database to disk.", error);
-  }
-}
 async function saveStoreAndWait() {
   try {
     if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
       fs.writeFileSync(DB_FILE, JSON.stringify(store, null, 2), "utf8");
     }
-    return await syncToFirestore();
+    return { success: true };
   } catch (error) {
-    console.error("Failed to write database to disk or sync to Firestore.", error);
+    console.error("Failed to write database to disk.", error);
     return { success: false, error: error.message };
   }
 }
-loadStoreFromFirestore();
+(async () => {
+  try {
+    await sequelize_default.sync();
+    console.log("All models were synchronized successfully.");
+  } catch (error) {
+    console.error("An error occurred while synchronizing the models:", error);
+  }
+})();
 function purgeSimulatedUsers() {
   let changed = false;
   Object.keys(store.users).forEach((id) => {
@@ -358,7 +1351,7 @@ function purgeSimulatedUsers() {
     }
   });
   if (changed) {
-    saveStore();
+    saveStoreAndWait();
   }
 }
 purgeSimulatedUsers();
@@ -409,7 +1402,8 @@ function broadcastToRoom(roomId, eventName, data) {
         return {
           id: user.id,
           username: user.username,
-          avatar: user.avatar
+          avatar: user.avatar,
+          createdAt: user.createdAt
         };
       }
       return null;
@@ -448,7 +1442,9 @@ function removeSSEClient(res) {
           player.status = "offline";
           addLog(activeRoom, `\u{1F50C} ${player.username} has disconnected. They have time to reconnect before being forfeited.`);
           broadcastToRoom(activeRoom.id, "game_update", activeRoom);
-          saveStore();
+          (async () => {
+            await saveStoreAndWait();
+          })();
         }
       }
       let changed = false;
@@ -459,11 +1455,6 @@ function removeSSEClient(res) {
       }
       if (changed) {
         saveStoreAndWait();
-      }
-      if (db) {
-        db.collection("matchmaking").doc(client.userId).delete().catch((err) => {
-          console.error("Failed to delete matchmaking record from Firestore on disconnect:", err);
-        });
       }
     }
     broadcastToAll("online_players_updated", {});
@@ -486,19 +1477,19 @@ function cleanupMatchmakingQueues() {
     }
   }
   if (changed) {
-    saveStore();
+    saveStoreAndWait();
   }
 }
-var START_OFFSETS = {
+var START_OFFSETS2 = {
   green: 0,
   yellow: 13,
   blue: 26,
   red: 39
 };
-var SAFE_GLOBAL_SQUARES = [0, 8, 13, 21, 26, 34, 39, 47];
-function getGlobalPosition(color, relativePos) {
+var SAFE_GLOBAL_SQUARES2 = [0, 8, 13, 21, 26, 34, 39, 47];
+function getGlobalPosition2(color, relativePos) {
   if (relativePos < 0 || relativePos > 50) return null;
-  const offset = START_OFFSETS[color];
+  const offset = START_OFFSETS2[color];
   return (offset + relativePos) % 52;
 }
 function createInitialTokens(userId, color) {
@@ -553,30 +1544,8 @@ async function addTransaction(userId, type, amount, matchId, description = "") {
     matchId,
     description
   };
-  if (db) {
-    try {
-      await db.collection("transactions").doc(tx.id).set(tx);
-    } catch (error) {
-      console.error("CRITICAL: Failed to save transaction to Firestore!", tx, error);
-    }
-  }
   store.transactions.unshift(tx);
-  saveStore();
   return tx;
-}
-function addLog(room, text) {
-  const log = {
-    id: `log_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-    timestamp: Date.now(),
-    text
-  };
-  room.gameState.logs.push(log);
-  if (room.gameState.logs.length > 50) {
-    room.gameState.logs.shift();
-  }
-}
-function isBotPlayer(userId) {
-  return userId.startsWith("bot_") || userId.startsWith("user_sim_");
 }
 function executeBotTurnIfActive(room) {
   const activePlayer = room.players[room.gameState.turn];
@@ -600,11 +1569,11 @@ function executeBotTurnIfActive(room) {
         let selectedToken = validTokens[0];
         for (const token of validTokens) {
           const nextRelative = token.position === -1 ? 0 : token.position + d;
-          const globalPos = getGlobalPosition(token.color, nextRelative);
-          if (globalPos !== null && !SAFE_GLOBAL_SQUARES.includes(globalPos)) {
+          const globalPos = getGlobalPosition2(token.color, nextRelative);
+          if (globalPos !== null && !SAFE_GLOBAL_SQUARES2.includes(globalPos)) {
             const hasOpponent = room.gameState.tokens.some((t) => {
               if (t.color === token.color || t.position < 0 || t.position > 50) return false;
-              const opGlobal = getGlobalPosition(t.color, t.position);
+              const opGlobal = getGlobalPosition2(t.color, t.position);
               return opGlobal === globalPos;
             });
             if (hasOpponent) {
@@ -626,258 +1595,6 @@ function executeBotTurnIfActive(room) {
     }
   }, 400);
 }
-async function moveTokenLogic(room, tokenId, diceValue) {
-  const gs = room.gameState;
-  const token = gs.tokens.find((t) => t.id === tokenId);
-  if (!token) return;
-  const activePlayer = room.players[gs.turn];
-  const oldPos = token.position;
-  let newPos = oldPos;
-  const RELATIVE_HOME_ENTRY_SQUARE = 51;
-  const MAIN_TRACK_LENGTH = 52;
-  if (oldPos === -1 && diceValue === 6) {
-    newPos = 0;
-    addLog(room, `${activePlayer.username} moved token out of base!`);
-  } else if (oldPos >= 0) {
-    if (oldPos < RELATIVE_HOME_ENTRY_SQUARE) {
-      const theoreticalNewPos = oldPos + diceValue;
-      if (oldPos >= RELATIVE_HOME_ENTRY_SQUARE - 6 && oldPos < RELATIVE_HOME_ENTRY_SQUARE && theoreticalNewPos >= RELATIVE_HOME_ENTRY_SQUARE) {
-        newPos = theoreticalNewPos;
-      } else {
-        newPos = theoreticalNewPos;
-        if (newPos >= MAIN_TRACK_LENGTH) {
-          newPos = newPos % MAIN_TRACK_LENGTH;
-        }
-      }
-    } else {
-      newPos = oldPos + diceValue;
-    }
-  }
-  if (newPos > 56) {
-    newPos = oldPos;
-    addLog(room, `${activePlayer.username}'s token overshot the final home square and could not move.`);
-  }
-  token.position = newPos;
-  if (oldPos !== newPos) {
-    addLog(room, `${activePlayer.username} moved token by ${diceValue} spaces (from ${oldPos === -1 ? "base" : oldPos} to ${newPos}).`);
-  }
-  let bonusTurn = diceValue === 6;
-  const finalGlobal = getGlobalPosition(token.color, token.position);
-  if (finalGlobal !== null && !SAFE_GLOBAL_SQUARES.includes(finalGlobal)) {
-    const opponentsAtSquare = gs.tokens.filter((t) => {
-      if (t.color === token.color) return false;
-      if (room.gameMode === "team") {
-        const isAlly = token.color === "red" && t.color === "yellow" || token.color === "yellow" && t.color === "red" || token.color === "green" && t.color === "blue" || token.color === "blue" && t.color === "green";
-        if (isAlly) return false;
-      }
-      if (t.position < 0 || t.position >= RELATIVE_HOME_ENTRY_SQUARE) return false;
-      const otherGlobal = getGlobalPosition(t.color, t.position);
-      return otherGlobal === finalGlobal;
-    });
-    if (opponentsAtSquare.length > 0) {
-      opponentsAtSquare.forEach((opToken) => {
-        opToken.position = -1;
-        const opUser = store.users[opToken.ownerId] || { username: "Opponent" };
-        addLog(room, `\u{1F4A5} CUT! ${activePlayer.username} cut ${opUser.username}'s token back to base!`);
-      });
-      bonusTurn = true;
-    }
-  }
-  if (token.position === 56) {
-    addLog(room, `\u{1F389} Token finished! ${activePlayer.username} has safely brought a token home!`);
-    bonusTurn = true;
-  }
-  const playerTokens = gs.tokens.filter((t) => t.color === token.color);
-  const allFinished = playerTokens.every((t) => t.position === 56);
-  if (allFinished) {
-    room.status = "completed";
-    gs.winnerId = activePlayer.userId;
-    if (room.tournamentDetails) {
-      addLog(room, `\u{1F3C6} ${activePlayer.username} has won the tournament match!`);
-      await handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, activePlayer.userId);
-      gs.escrowBalance = 0;
-      return;
-    }
-    if (room.gameMode === "team") {
-      const isRedYellow = token.color === "red" || token.color === "yellow";
-      const winningColors = isRedYellow ? ["red", "yellow"] : ["green", "blue"];
-      const winningTeammates = room.players.filter((p) => winningColors.includes(p.color));
-      const winningNames = winningTeammates.map((p) => p.username).join(" & ");
-      addLog(room, `\u{1F3C6} CHAMPIONS! Team ${winningNames} has finished all tokens and WON the game!`);
-      if (room.betAmount > 0) {
-        const share = gs.escrowBalance / 2;
-        for (const p of winningTeammates) {
-          if (!isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.balance += share;
-              user.winCount += 1;
-              await addTransaction(p.userId, "win_payout", share, room.id, `Team Win payout for match ${room.id}.`);
-              broadcastUserUpdate(p.userId);
-            }
-          }
-        }
-        room.players.forEach((p) => {
-          if (!winningColors.includes(p.color) && !isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.lossCount += 1;
-              broadcastUserUpdate(p.userId);
-            }
-          }
-        });
-      }
-    } else {
-      addLog(room, `\u{1F3C6} CHAMPION! ${activePlayer.username} has finished all 4 tokens and WON the game!`);
-      if (room.betAmount > 0) {
-        const winnerProfile = store.users[activePlayer.userId];
-        if (winnerProfile) {
-          let effectiveRakePercentage = RAKE_PERCENTAGE;
-          if (winnerProfile.vip && winnerProfile.vip.expires > Date.now()) {
-            const vipTier = VIP_TIERS[winnerProfile.vip.tier];
-            if (vipTier) {
-              effectiveRakePercentage = Math.max(0, RAKE_PERCENTAGE - vipTier.rakeDiscount);
-            }
-          }
-          const rakeAmount = gs.escrowBalance * effectiveRakePercentage;
-          const payoutAmount = gs.escrowBalance - rakeAmount;
-          winnerProfile.balance += payoutAmount;
-          winnerProfile.winCount += 1;
-          await addTransaction(
-            activePlayer.userId,
-            "win_payout",
-            payoutAmount,
-            room.id,
-            `Payout for winning match ${room.id} with $${room.betAmount} bet (Rake: $${rakeAmount.toFixed(2)}).`
-          );
-          broadcastUserUpdate(activePlayer.userId);
-          store.houseRevenue += rakeAmount;
-          await addTransaction(
-            "house",
-            // A special ID for house transactions
-            "app_commission",
-            rakeAmount,
-            room.id,
-            `Rake from match ${room.id} (${(effectiveRakePercentage * 100).toFixed(0)}%).`
-          );
-        }
-        room.players.forEach((p) => {
-          if (p.userId !== activePlayer.userId && !isBotPlayer(p.userId)) {
-            const user = store.users[p.userId];
-            if (user) {
-              user.lossCount += 1;
-              broadcastUserUpdate(p.userId);
-            }
-          }
-        });
-      }
-    }
-    gs.escrowBalance = 0;
-  } else {
-    gs.diceRoll = null;
-    gs.hasRolled = false;
-    if (bonusTurn) {
-      addLog(room, `\u{1F3B2} Bonus roll! ${activePlayer.username} gets to roll again.`);
-      gs.turnTimer = 30;
-    } else {
-      advanceTurn(room);
-    }
-  }
-  saveStore();
-}
-async function handleInactivityForfeit(room, inactivePlayer) {
-  if (room.status !== "playing") return;
-  addLog(room, `\u23F1\uFE0F ${inactivePlayer.username} has been forfeited due to inactivity.`);
-  inactivePlayer.status = "left";
-  const activePlayers = room.players.filter((pl) => pl.status !== "left");
-  if (activePlayers.length === 1) {
-    const winner = activePlayers[0];
-    room.status = "completed";
-    room.gameState.winnerId = winner.userId;
-    if (room.tournamentDetails) {
-      addLog(room, `\u{1F3C6} ${winner.username} has won the tournament match by forfeit!`);
-      await handleTournamentMatchWin(room.tournamentDetails.tournamentId, room.tournamentDetails.matchId, winner.userId);
-      room.gameState.escrowBalance = 0;
-    } else {
-      const totalPayout = room.gameState.escrowBalance;
-      addLog(room, `\u{1F3C6} Game Over! ${winner.username} wins by forfeit and takes the pot of $${totalPayout.toFixed(2)}!`);
-      if (room.betAmount > 0 && totalPayout > 0) {
-        const winnerProfile = store.users[winner.userId];
-        if (winnerProfile && !isBotPlayer(winnerProfile.id)) {
-          let effectiveRakePercentage = RAKE_PERCENTAGE;
-          if (winnerProfile.vip && winnerProfile.vip.expires > Date.now()) {
-            const vipTier = VIP_TIERS[winnerProfile.vip.tier];
-            if (vipTier) {
-              effectiveRakePercentage = Math.max(0, RAKE_PERCENTAGE - vipTier.rakeDiscount);
-            }
-          }
-          const rakeAmount = totalPayout * effectiveRakePercentage;
-          const payoutAmount = totalPayout - rakeAmount;
-          winnerProfile.balance += payoutAmount;
-          winnerProfile.winCount += 1;
-          await addTransaction(winner.userId, "win_payout", payoutAmount, room.id, `Win by opponent inactivity forfeit (Rake: $${rakeAmount.toFixed(2)}).`);
-          broadcastUserUpdate(winner.userId);
-          store.houseRevenue += rakeAmount;
-          await addTransaction(
-            "house",
-            // A special ID for house transactions
-            "app_commission",
-            rakeAmount,
-            room.id,
-            `Rake from forfeit match ${room.id} (${(effectiveRakePercentage * 100).toFixed(0)}%).`
-          );
-        }
-      }
-      room.gameState.escrowBalance = 0;
-    }
-  }
-  await saveStoreAndWait();
-  broadcastToRoom(room.id, "game_update", room);
-}
-setInterval(async () => {
-  let changed = false;
-  for (const roomId of Object.keys(store.rooms)) {
-    const room = store.rooms[roomId];
-    if (room.status === "playing") {
-      const gs = room.gameState;
-      const activePlayer = room.players[gs.turn];
-      if (activePlayer && activePlayer.inactivityTimer && !isBotPlayer(activePlayer.userId)) {
-        activePlayer.inactivityTimer -= 1;
-        changed = true;
-        if (activePlayer.inactivityTimer > 0 && activePlayer.inactivityTimer % 60 === 0) {
-          const minutesLeft = activePlayer.inactivityTimer / 60;
-          const warningMsg = `Waqtigaagu wuu sii dhamaanayaa! Waxaa kuu harsan ${minutesLeft} daqiiqo. (Your time is running out! ${minutesLeft} minutes left.)`;
-          sendEventToUser(activePlayer.userId, "inactivity_warning", { message: warningMsg });
-          addLog(room, `\u23F1\uFE0F Digniin: ${activePlayer.username} waxaa u harsan ${minutesLeft} daqiiqo. (Warning: ${activePlayer.username} has ${minutesLeft} minutes left.)`);
-        }
-        if (activePlayer.inactivityTimer <= 0) {
-          await handleInactivityForfeit(room, activePlayer);
-          continue;
-        }
-      }
-      if (gs.turnTimer > 0) {
-        gs.turnTimer -= 1;
-        changed = true;
-        if (gs.turnTimer === 0) {
-          addLog(room, `\u23F1\uFE0F Waqtiga 30-ka ilbiriqsi wuu dhamaaday ${activePlayer.username}. Ganaaxa daahitaanka ayaa bilaabanaya.`);
-          broadcastToRoom(room.id, "game_update", room);
-        }
-      }
-    }
-  }
-  if (changed) {
-    Object.keys(store.rooms).forEach((roomId) => {
-      const room = store.rooms[roomId];
-      if (room.status === "playing") {
-        broadcastToRoom(roomId, "timer_tick", {
-          turn: room.gameState.turn,
-          turnTimer: room.gameState.turnTimer,
-          inactivityTimer: room.players[room.gameState.turn]?.inactivityTimer
-        });
-      }
-    });
-  }
-}, 1e3);
 setInterval(() => {
   activeClients.forEach((client) => {
     try {
@@ -893,31 +1610,24 @@ setInterval(() => {
     }
   });
 }, 1e4);
-setInterval(() => {
+setInterval(async () => {
   cleanupMatchmakingQueues();
-  Object.keys(store.matchmakingQueues).forEach((queueKey) => {
+  for (const queueKey of Object.keys(store.matchmakingQueues)) {
     const queueUserIds = store.matchmakingQueues[queueKey];
-    if (!queueUserIds || queueUserIds.length === 0) return;
+    if (!queueUserIds || queueUserIds.length === 0) continue;
     const parts = queueKey.split("_");
     const bet = parseFloat(parts[0]) || 0;
     const cap = parseInt(parts[1]) || 2;
     const mode = parts[2] === "team" ? "team" : "solo";
     const firstUserId = queueUserIds[0];
     const firstUser = store.users[firstUserId];
-    if (!firstUser) return;
+    if (!firstUser) continue;
     const joinedAt = firstUser.seekingJoinedAt || Date.now();
     const waitTimeMs = Date.now() - joinedAt;
     if (waitTimeMs >= 42e4) {
       console.log(`Matchmaking timeout for queue ${queueKey}. Auto-filling remaining seats with bots...`);
       const realPlayers = queueUserIds.map((id) => store.users[id]).filter(Boolean);
       store.matchmakingQueues[queueKey] = [];
-      if (db) {
-        realPlayers.forEach((p) => {
-          db.collection("matchmaking").doc(p.id).delete().catch((err) => {
-            console.error("Failed to delete matchmaking record from Firestore on auto-fill:", err);
-          });
-        });
-      }
       const matchedList = [...realPlayers];
       const botAvatars = ["\u{1F916}", "\u{1F98A}", "\u26A1", "\u{1F451}"];
       const botNames = ["Dhili Master AI", "SomaliLudoBot", "LudoPro AI", "DesertFox AI", "NomadLudo AI"];
@@ -932,78 +1642,29 @@ setInterval(() => {
           balance: 100
         });
       }
-      const room = startMatchedRoom(matchedList, bet, cap, mode);
+      const room = await startMatchedRoom(matchedList, bet, cap, mode);
       realPlayers.forEach((p) => {
         sendEventToUser(p.id, "matchmaker_success", { roomId: room.id, room });
         broadcastToAll("matchmaker_seeking_cancelled", { senderId: p.id });
       });
       broadcastToAll("online_players_updated", {});
-      saveStoreAndWait();
+      await saveStoreAndWait();
     }
-  });
+  }
 }, 2e3);
-var authMiddleware = async (req, res, next) => {
-  const userId = req.headers["x-user-id"];
-  if (!userId) {
-    return res.status(401).json({ error: "Unauthorized: User ID is required." });
-  }
-  const user = store.users[userId];
-  if (!user) {
-    return res.status(401).json({ error: "Unauthorized: User not found." });
-  }
-  req.user = user;
-  next();
-};
-var verifyFirebaseToken = async (req, res, next) => {
-  if (!auth) {
-    return res.status(500).json({ error: "Firebase Admin not configured on server." });
-  }
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    return res.status(403).json({ error: "Unauthorized: No token provided." });
-  }
-  const idToken = authHeader.split("Bearer ")[1];
-  try {
-    const decodedToken = await auth.verifyIdToken(idToken);
-    req.user = decodedToken;
-    next();
-  } catch (error) {
-    console.error("Error verifying Firebase ID token:", error);
-    res.status(403).json({ error: "Unauthorized: Invalid token." });
-  }
-};
-var checkVipStatus = (req, res, next) => {
-  req.isVip = false;
-  req.vipRakeDiscount = 0;
-  if (req.user && req.user.uid) {
-    const user = Object.values(store.users).find((u) => u.firebaseUid === req.user.uid);
-    if (user && user.vip && user.vip.expires > Date.now()) {
-      req.isVip = true;
-      const vipTier = VIP_TIERS[user.vip.tier];
-      if (vipTier) {
-        req.vipRakeDiscount = vipTier.rakeDiscount;
-      }
-    }
-  }
-  next();
-};
 app.get("/api/debug/firebase", async (req, res) => {
-  if (!db) {
+  if (true) {
     return res.json({
       initialized: false,
-      error: "Firebase Firestore db object is null. Check if firebase-admin-key.json exists."
+      error: "Firebase Firestore  object is null. Check if firebase-admin-key.json exists."
     });
   }
   try {
-    const testRef = db.collection("ludo_store").doc("debug_test");
-    await testRef.set({ test: true, timestamp: Date.now() });
-    const snap = await testRef.get();
-    const data = snap.exists ? snap.data() : null;
     return res.json({
       initialized: true,
-      writeAndReadSuccess: data?.test === true,
-      data,
-      projectId: getApp().options.projectId
+      writeAndReadSuccess: false,
+      data: null,
+      projectId: "N/A"
     });
   } catch (err) {
     return res.json({
@@ -1045,7 +1706,6 @@ app.get("/api/updates", (req, res) => {
       player.inactivityTimer = 300;
       addLog(activeRoom, `\u{1F7E2} ${player.username} has reconnected! Welcome back.`);
       broadcastToRoom(activeRoom.id, "game_update", activeRoom);
-      saveStore();
     }
   }
   res.write(`event: init
@@ -1085,24 +1745,15 @@ data: ${JSON.stringify(seekingData)}
     removeSSEClient(res);
   });
 });
-app.post("/api/auth/login", verifyFirebaseToken, checkVipStatus, async (req, res) => {
+app.post("/api/auth/login", async (req, res) => {
   const { username, email, avatar, promoCode } = req.body;
   const firebaseUid = req.user.uid;
-  if (!db || !auth) {
-    return res.status(500).json({ error: "Database not initialized" });
-  }
-  const userRef = db.collection("users").doc(firebaseUid);
+  const firebaseUser = req.user;
   try {
-    const userDoc = await userRef.get();
-    if (userDoc.exists) {
-      const userData = userDoc.data();
-      if (userData && userData.id && !store.users[userData.id]) {
-        console.log(`Syncing returning user ${userData.id} to local store.`);
-        store.users[userData.id] = userData;
-      }
-      return res.json(userData);
+    let user = await getUserByFirebaseUid(firebaseUid);
+    if (user) {
+      return res.json(user);
     }
-    const firebaseUser = await auth.getUser(firebaseUid);
     let finalUsername = username;
     if (!finalUsername && firebaseUser.displayName) {
       finalUsername = firebaseUser.displayName;
@@ -1115,14 +1766,12 @@ app.post("/api/auth/login", verifyFirebaseToken, checkVipStatus, async (req, res
     }
     const cleanUsername = finalUsername.trim().substring(0, 20);
     let linkedAgentId = void 0;
-    let agent = void 0;
+    let agent = null;
     if (promoCode && typeof promoCode === "string" && promoCode.trim() !== "") {
-      const agentsRef = db.collection("agents");
-      const agentSnapshot = await agentsRef.where("promoCode", "==", promoCode.trim()).limit(1).get();
-      if (agentSnapshot.empty) {
+      agent = await getAgentByPromoCode(promoCode.trim());
+      if (!agent) {
         return res.status(400).json({ error: "Invalid or expired promo code." });
       }
-      agent = agentSnapshot.docs[0].data();
       linkedAgentId = agent.id;
     }
     const newId = firebaseUid;
@@ -1138,20 +1787,12 @@ app.post("/api/auth/login", verifyFirebaseToken, checkVipStatus, async (req, res
       lossCount: 0,
       linkedAgentId,
       promoCode,
-      // Explicitly save the promo code used
       createdAt: Date.now()
     };
-    await userRef.set(newUser);
-    store.users[newId] = newUser;
+    await createUser(newUser);
     addTransaction(newId, "deposit", 10, void 0, "Welcome signup bonus.");
-    await saveStoreAndWait();
     if (agent && linkedAgentId) {
-      const agentPlayersRef = db.collection("agents").doc(linkedAgentId).collection("players").doc(newId);
-      await agentPlayersRef.set({
-        playerId: newId,
-        username: newUser.username,
-        joinedAt: Date.now()
-      });
+      await linkAgentToPlayer(linkedAgentId, newId);
     }
     res.status(201).json(newUser);
   } catch (error) {
@@ -1163,35 +1804,25 @@ app.get("/api/users/:userId", async (req, res, next) => {
   if (req.params.userId === "online" || req.params.userId === "leaderboard") {
     return next();
   }
-  if (!db) {
-    const user = store.users[req.params.userId];
+  try {
+    const user = await getUserById(req.params.userId);
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
-    return res.json(user);
-  }
-  try {
-    const userRef = db.collection("users").doc(req.params.userId);
-    const doc = await userRef.get();
-    if (!doc.exists) {
-      return res.status(404).json({ error: "User not found" });
-    }
-    res.json(doc.data());
+    res.json(user);
   } catch (error) {
-    console.error("Failed to get user from Firestore:", error);
+    console.error("Failed to get user from database:", error);
     res.status(500).json({ error: "Failed to retrieve user." });
   }
 });
-app.post("/api/users/:userId/update", verifyFirebaseToken, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
+app.post("/api/users/:userId/update", async (req, res) => {
   const userIdToUpdate = req.params.userId;
   if (req.user.uid !== userIdToUpdate) {
     return res.status(403).json({ error: "You are not authorized to update this profile." });
   }
-  const userRef = db.collection("users").doc(userIdToUpdate);
   try {
-    const userDoc = await userRef.get();
-    if (!userDoc.exists) {
+    const user = await getUserById(userIdToUpdate);
+    if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
     const { username, avatar, isOfflinePreference } = req.body;
@@ -1200,16 +1831,9 @@ app.post("/api/users/:userId/update", verifyFirebaseToken, async (req, res) => {
     if (avatar) updateData.avatar = avatar;
     if (typeof isOfflinePreference === "boolean") updateData.isOfflinePreference = isOfflinePreference;
     if (Object.keys(updateData).length > 0) {
-      await userRef.update(updateData);
+      await updateUser(userIdToUpdate, updateData);
     }
-    const updatedUserDoc = await userRef.get();
-    const updatedUser = updatedUserDoc.data();
-    if (store.users[userIdToUpdate]) {
-      store.users[userIdToUpdate] = { ...store.users[userIdToUpdate], ...updatedUser };
-    } else {
-      store.users[userIdToUpdate] = updatedUser;
-    }
-    await saveStoreAndWait();
+    const updatedUser = await getUserById(userIdToUpdate);
     broadcastUserUpdate(userIdToUpdate);
     res.json(updatedUser);
   } catch (error) {
@@ -1217,35 +1841,53 @@ app.post("/api/users/:userId/update", verifyFirebaseToken, async (req, res) => {
     res.status(500).json({ error: "An internal server error occurred." });
   }
 });
-app.post("/api/users/:userId/status", (req, res) => {
-  const user = store.users[req.params.userId];
-  if (!user) {
-    return res.status(404).json({ error: "User not found" });
-  }
+app.post("/api/users/:userId/status", async (req, res) => {
+  const { userId } = req.params;
   const { isOffline } = req.body;
-  user.isOfflinePreference = !!isOffline;
-  saveStore();
-  broadcastUserUpdate(user.id);
-  res.json({ success: true, isOfflinePreference: user.isOfflinePreference, user });
+  try {
+    const user = await getUserById(userId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    const isOfflinePreference = !!isOffline;
+    await updateUser(userId, { isOfflinePreference });
+    const updatedUser = await getUserById(userId);
+    broadcastUserUpdate(userId);
+    res.json({ success: true, isOfflinePreference, user: updatedUser });
+  } catch (error) {
+    console.error("Error updating user status:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
+  }
 });
 app.post("/api/wallet/deposit", async (req, res) => {
   const { userId, amount } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: "User not found" });
   const depAmt = parseFloat(amount);
   if (isNaN(depAmt) || depAmt <= 0) {
     return res.status(400).json({ error: "Invalid deposit amount" });
   }
-  user.balance += depAmt;
-  await addTransaction(userId, "deposit", depAmt, void 0, `Deposited funds via Simulated Net Banking.`);
-  broadcastUserUpdate(userId);
-  await saveStoreAndWait();
-  res.json({ success: true, balance: user.balance });
+  try {
+    const user = await getUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const newBalance = user.balance + depAmt;
+    await updateUser(userId, { balance: newBalance });
+    const tx = {
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userId,
+      type: "deposit",
+      amount: depAmt,
+      timestamp: Date.now(),
+      description: `Deposited funds via Simulated Net Banking.`
+    };
+    await createTransaction(tx);
+    broadcastUserUpdate(userId);
+    res.json({ success: true, balance: newBalance });
+  } catch (error) {
+    console.error("Error during deposit:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
+  }
 });
 app.post("/api/wallet/withdraw", async (req, res) => {
   const { userId, amount } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: "User not found" });
   const withAmt = parseFloat(amount);
   if (isNaN(withAmt) || withAmt <= 0) {
     return res.status(400).json({ error: "Invalid withdrawal amount" });
@@ -1253,14 +1895,29 @@ app.post("/api/wallet/withdraw", async (req, res) => {
   if (withAmt < 20) {
     return res.status(400).json({ error: "Minimum withdrawal amount is $20" });
   }
-  if (user.balance < withAmt) {
-    return res.status(400).json({ error: "Insufficient funds" });
+  try {
+    const user = await getUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    if (user.balance < withAmt) {
+      return res.status(400).json({ error: "Insufficient funds" });
+    }
+    const newBalance = user.balance - withAmt;
+    await updateUser(userId, { balance: newBalance });
+    const tx = {
+      id: `tx_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      userId,
+      type: "withdrawal",
+      amount: withAmt,
+      timestamp: Date.now(),
+      description: `Withdrawn funds to bank account.`
+    };
+    await createTransaction(tx);
+    broadcastUserUpdate(userId);
+    res.json({ success: true, balance: newBalance });
+  } catch (error) {
+    console.error("Error during withdrawal:", error);
+    res.status(500).json({ error: "An internal server error occurred." });
   }
-  user.balance -= withAmt;
-  await addTransaction(userId, "withdrawal", withAmt, void 0, `Withdrawn funds to bank account.`);
-  broadcastUserUpdate(userId);
-  await saveStoreAndWait();
-  res.json({ success: true, balance: user.balance });
 });
 app.post("/api/wallet/request-manual-confirmation", async (req, res) => {
   const { userId, agentId, amount, phone, senderPhone, provider, transactionType } = req.body;
@@ -1279,17 +1936,6 @@ app.post("/api/wallet/request-manual-confirmation", async (req, res) => {
   }
   if (transactionType === "deposit" && !senderPhone) {
     return res.status(400).json({ error: "Sender phone number is required for deposit requests." });
-  }
-  if (db) {
-    try {
-      const agentDoc = await db.collection("agents").doc(agentId).get();
-      if (!agentDoc.exists) {
-        return res.status(404).json({ error: "The selected agent does not exist." });
-      }
-    } catch (err) {
-      console.error("Failed to verify agent for manual transaction request:", err);
-      return res.status(500).json({ error: "Could not verify the selected agent." });
-    }
   }
   const newRequest = {
     id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
@@ -1310,21 +1956,13 @@ app.post("/api/wallet/request-manual-confirmation", async (req, res) => {
   await saveStoreAndWait();
   res.json({ success: true, message: "Your request has been submitted for review." });
 });
-app.get("/api/wallet/transactions/:userId", verifyFirebaseToken, async (req, res) => {
-  if (!db) {
-    const txs = store.transactions.filter((t) => t.userId === req.params.userId);
-    return res.json(txs);
-  }
+app.get("/api/wallet/transactions/:userId", async (req, res) => {
   const userId = req.params.userId;
   if (req.user.uid !== userId) {
     return res.status(403).json({ error: "You are not authorized to view these transactions." });
   }
   try {
-    const snapshot = await db.collection("transactions").where("userId", "==", userId).orderBy("timestamp", "desc").limit(100).get();
-    if (snapshot.empty) {
-      return res.json([]);
-    }
-    const transactions = snapshot.docs.map((doc) => doc.data());
+    const transactions = await getTransactionsByUserId(userId);
     res.json(transactions);
   } catch (error) {
     console.error(`Failed to get transactions for user ${userId}:`, error);
@@ -1377,7 +2015,7 @@ app.post("/api/wallet/process-api-payment", async (req, res) => {
   }
   return res.status(400).json({ error: "Unsupported transaction type." });
 });
-app.post("/api/vip/subscribe", verifyFirebaseToken, async (req, res) => {
+app.post("/api/vip/subscribe", async (req, res) => {
   const { tier } = req.body;
   const firebaseUid = req.user.uid;
   const user = Object.values(store.users).find((u) => u.firebaseUid === firebaseUid);
@@ -1415,7 +2053,7 @@ app.get("/api/tournaments/:id", (req, res) => {
   }
   res.json(tournament);
 });
-app.post("/api/tournaments/:id/register", verifyFirebaseToken, async (req, res) => {
+app.post("/api/tournaments/:id/register", async (req, res) => {
   const { id } = req.params;
   const firebaseUid = req.user.uid;
   const user = Object.values(store.users).find((u) => u.firebaseUid === firebaseUid);
@@ -1441,71 +2079,39 @@ app.post("/api/tournaments/:id/register", verifyFirebaseToken, async (req, res) 
   user.balance -= tournament.entryFee;
   await addTransaction(user.id, "bet_escrow_locked", tournament.entryFee, id, `Tournament entry fee for "${tournament.name}".`);
   tournament.players.push({
-    userId: user.id,
+    id: user.id,
     username: user.username,
-    avatar: user.avatar
+    avatar: user.avatar,
+    createdAt: user.createdAt
   });
   await saveStoreAndWait();
   broadcastUserUpdate(user.id);
   broadcastToAll("tournament_update", tournament);
   res.json({ success: true, tournament, message: `Successfully registered for ${tournament.name}!` });
 });
-async function handleTournamentMatchWin(tournamentId, matchId, winnerId) {
-  const tournament = store.tournaments[tournamentId];
-  if (!tournament) return;
-  const match = tournament.matches.find((m) => m.id === matchId);
-  if (!match) return;
-  match.winnerId = winnerId;
-  match.status = "completed";
-  const allMatchesInRoundComplete = tournament.matches.filter((m) => m.round === tournament.currentRound).every((m) => m.status === "completed");
-  if (allMatchesInRoundComplete) {
-    const winners = tournament.matches.filter((m) => m.round === tournament.currentRound).map((m) => m.winnerId).filter((id) => id !== null).map((id) => tournament.players.find((p) => p.userId === id)).filter((p) => p !== void 0);
-    if (winners.length === 1) {
-      tournament.winnerId = winners[0].userId;
-      tournament.status = "completed";
-      tournament.endDate = Date.now();
-      const winnerUser = store.users[winners[0].userId];
-      if (winnerUser) {
-        winnerUser.balance += tournament.prizePool;
-        await addTransaction(winnerUser.id, "win_payout", tournament.prizePool, tournament.id, `Tournament "${tournament.name}" prize.`);
-        broadcastUserUpdate(winnerUser.id);
-      }
-      broadcastToAll("tournament_ended", tournament);
-    } else {
-      tournament.currentRound++;
-      const nextRoundMatches = [];
-      for (let i = 0; i < winners.length; i += 2) {
-        const nextMatch = {
-          id: `tm_${tournament.id}_r${tournament.currentRound}_${i / 2}`,
-          tournamentId: tournament.id,
-          round: tournament.currentRound,
-          player1: winners[i],
-          player2: winners[i + 1] || null,
-          winnerId: winners[i + 1] ? null : winners[i].userId,
-          roomId: null,
-          status: winners[i + 1] ? "pending" : "completed"
-        };
-        nextRoundMatches.push(nextMatch);
-      }
-      tournament.matches.push(...nextRoundMatches);
-      for (const nextMatch of nextRoundMatches) {
-        if (nextMatch.status === "pending" && nextMatch.player1 && nextMatch.player2) {
-          const room = await startMatchedRoom(
-            [nextMatch.player1, nextMatch.player2],
-            0,
-            2,
-            "solo"
-          );
-          nextMatch.roomId = room.id;
-          nextMatch.status = "in_progress";
-          room.tournamentDetails = { tournamentId: tournament.id, matchId: nextMatch.id };
-        }
-      }
-      broadcastToAll("tournament_update", tournament);
-    }
+app.get("/api/admin/tournaments", isAdmin, (req, res) => {
+  res.json(Object.values(store.tournaments));
+});
+app.post("/api/admin/tournaments/create", isAdmin, async (req, res) => {
+  const { name: name2, entryFee, prizePool, maxPlayers, startDate } = req.body;
+  if (!name2 || !entryFee || !prizePool || !maxPlayers || !startDate) {
+    return res.status(400).json({ error: "Missing required fields" });
   }
+  const newTournament = {
+    id: `tourney_${Date.now()}`,
+    name: name2,
+    entryFee,
+    prizePool,
+    maxPlayers,
+    startDate: new Date(startDate).getTime(),
+    status: "registration_open",
+    players: [],
+    rounds: []
+  };
+  store.tournaments[newTournament.id] = newTournament;
   await saveStoreAndWait();
-}
+  res.status(201).json(newTournament);
+});
 function createTournamentBracket(tournament) {
   const players = [...tournament.players];
   for (let i = players.length - 1; i > 0; i--) {
@@ -1520,9 +2126,7 @@ function createTournamentBracket(tournament) {
       round: 1,
       player1: players[i],
       player2: players[i + 1] || null,
-      // Handle odd number of players (give a bye)
       winnerId: players[i + 1] ? null : players[i].userId,
-      // If bye, player1 is winner
       roomId: null,
       status: players[i + 1] ? "pending" : "completed"
     };
@@ -1573,24 +2177,6 @@ app.get("/api/rooms/active", (req, res) => {
   }));
   res.json(activeGames);
 });
-app.post("/api/rooms/:roomId/spectate", (req, res) => {
-  const { roomId } = req.params;
-  const { userId } = req.body;
-  if (!userId) {
-    return res.status(400).json({ error: "User ID is required." });
-  }
-  const room = store.rooms[roomId];
-  if (!room) {
-    return res.status(404).json({ error: "Room not found." });
-  }
-  const client = activeClients.find((c) => c.userId === userId);
-  if (client) {
-    client.spectatingRoomId = roomId;
-    console.log(`User ${userId} is now spectating room ${roomId}`);
-  }
-  broadcastToRoom(roomId, "game_update", room);
-  res.json({ success: true, message: "Spectating started." });
-});
 app.post("/api/rooms/:roomId/stop-spectating", (req, res) => {
   const { roomId } = req.params;
   const { userId } = req.body;
@@ -1613,133 +2199,63 @@ app.post("/api/rooms/:roomId/stop-spectating", (req, res) => {
   broadcastToRoom(roomId, "game_update", room);
   res.json({ success: true, message: "Stopped spectating." });
 });
-app.post("/api/rooms/create", (req, res) => {
-  const { userId, betAmount, capacity, gameMode } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: "User not found" });
-  const bet = parseFloat(betAmount);
-  if (user.balance < bet) {
-    return res.status(400).json({ error: "Insufficient wallet balance for this bet amount." });
-  }
-  const selectedMode = gameMode === "team" ? "team" : "solo";
-  const selectedCapacity = selectedMode === "team" ? 4 : parseInt(capacity) || 2;
-  const roomId = Math.random().toString(36).substring(2, 7).toUpperCase();
-  const newPlayer = {
-    userId: user.id,
-    username: user.username,
-    avatar: user.avatar,
-    color: selectedCapacity === 2 && selectedMode === "solo" ? "green" : "red",
-    // Host is Green for 2-player solo, Red for others
-    isHost: true,
-    isReady: true,
-    status: "online",
-    winCount: user.winCount,
-    lossCount: user.lossCount,
-    balance: user.balance
-  };
-  const newRoom = {
-    id: roomId,
-    status: "waiting",
-    betAmount: bet,
-    players: [newPlayer],
-    capacity: selectedCapacity,
-    gameMode: selectedMode,
-    pendingPlayers: [],
-    gameState: {
-      turn: 0,
-      diceRoll: null,
-      hasRolled: false,
-      turnTimer: 30,
-      tokens: [],
-      winnerId: null,
-      escrowBalance: 0,
-      logs: [{ id: "1", timestamp: Date.now(), text: `Room created by ${user.username}. Code: ${roomId} (${selectedMode === "team" ? "Team 2v2" : "Solo " + selectedCapacity + "P"})` }],
-      chat: [],
-      lastActivity: Date.now()
-    },
-    createdAt: Date.now()
-  };
-  store.rooms[roomId] = newRoom;
-  saveStore();
-  res.json(newRoom);
-});
-app.post("/api/rooms/join", (req, res) => {
+app.post("/api/rooms/join", async (req, res) => {
   const { userId, roomCode } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: "User not found" });
-  const code = (roomCode || "").trim().toUpperCase();
-  const room = store.rooms[code];
-  if (!room) {
-    return res.status(404).json({ error: "Room code not found." });
-  }
-  if (room.players.some((p) => p.userId === userId)) {
-    return res.json(room);
-  }
-  if (room.pendingPlayers && room.pendingPlayers.some((p) => p.userId === userId)) {
-    return res.json(room);
-  }
-  if (room.status !== "waiting") {
-    return res.status(400).json({ error: "Match has already started or been completed." });
-  }
-  const maxPlayers = room.capacity || 2;
-  if (room.players.length >= maxPlayers) {
-    return res.status(400).json({ error: `Room is already full at ${maxPlayers} capacity.` });
-  }
-  if (user.balance < room.betAmount) {
-    return res.status(400).json({ error: `You need at least $${room.betAmount} in your wallet to join this room.` });
-  }
-  const newPendingPlayer = {
-    userId: user.id,
-    username: user.username,
-    avatar: user.avatar,
-    color: "green",
-    // Assign color on host approval
-    isHost: false,
-    isReady: false,
-    status: "online",
-    winCount: user.winCount || 0,
-    lossCount: user.lossCount || 0,
-    balance: user.balance || 0
-  };
-  if (!room.pendingPlayers) room.pendingPlayers = [];
-  room.pendingPlayers.push(newPendingPlayer);
-  addLog(room, `\u{1F514} Challenger ${user.username} is requesting to join the match. Waiting for host approval!`);
-  saveStore();
-  broadcastToRoom(room.id, "game_update", room);
-  res.json(room);
-});
-app.get("/api/rooms/:roomId", (req, res) => {
-  const { roomId } = req.params;
-  const room = store.rooms[roomId];
-  if (!room) {
-    return res.status(404).json({ error: "Room not found." });
-  }
-  res.json(room);
-});
-app.get("/api/agents", async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const playerLocation = req.query.location;
   try {
-    const agentsSnapshot = await db.collection("agents").where("status", "==", "Active").get();
-    const activeAgents = agentsSnapshot.docs.map((doc) => {
-      const { password, ...agentData } = doc.data();
-      return agentData;
-    });
-    if (playerLocation) {
-      const localAgents = activeAgents.filter((agent) => agent.location && agent.location.toLowerCase() === playerLocation.toLowerCase());
-      const otherAgents = activeAgents.filter((agent) => !agent.location || agent.location.toLowerCase() !== playerLocation.toLowerCase());
-      res.json([...localAgents, ...otherAgents]);
-    } else {
-      res.json(activeAgents);
+    const user = await getUserById(userId);
+    if (!user) return res.status(404).json({ error: "User not found" });
+    const code = (roomCode || "").trim().toUpperCase();
+    const room = await getRoomById(code);
+    if (!room) {
+      return res.status(404).json({ error: "Room code not found." });
     }
+    if (room.players.some((p) => p.userId === userId)) {
+      return res.json(room);
+    }
+    if (room.status !== "waiting") {
+      return res.status(400).json({ error: "Match has already started or been completed." });
+    }
+    if (room.players.length >= room.capacity) {
+      return res.status(400).json({ error: `Room is already full at ${room.capacity} capacity.` });
+    }
+    if (user.balance < room.betAmount) {
+      return res.status(400).json({ error: `You need at least $${room.betAmount} in your wallet to join this room.` });
+    }
+    const host = room.players.find((p) => p.isHost);
+    if (!host) {
+      return res.status(500).json({ error: "Could not find the host for this room." });
+    }
+    const pendingPlayer = {
+      id: user.id,
+      username: user.username,
+      avatar: user.avatar,
+      createdAt: user.createdAt
+    };
+    sendEventToUser(host.userId, "join_request", pendingPlayer);
+    res.json({ status: "pending_approval", message: "Your request to join has been sent to the host." });
   } catch (error) {
-    console.error("Failed to get active agents:", error);
-    res.status(500).json({ error: "Failed to retrieve active agents." });
+    console.error("Error joining room:", error);
+    res.status(500).json({ error: "An internal server error occurred while trying to join the room." });
   }
 });
-app.post("/api/request-to-agent", authMiddleware, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const player = req.user;
+app.get("/api/rooms/:roomId", async (req, res) => {
+  const { roomId } = req.params;
+  try {
+    const room = await getRoomById(roomId);
+    if (!room) {
+      return res.status(404).json({ error: "Room not found." });
+    }
+    res.json(room);
+  } catch (error) {
+    console.error(`Error fetching room ${roomId}:`, error);
+    res.status(500).json({ error: "An internal server error occurred while fetching the room." });
+  }
+});
+app.post("/api/request-to-agent", async (req, res) => {
+  const player = await getUserById(req.user.uid);
+  if (!player) {
+    return res.status(404).json({ error: "Player not found" });
+  }
   const { agentId, amount, type, playerPhone, provider } = req.body;
   const requestAmount = parseFloat(amount);
   if (player.linkedAgentId && player.linkedAgentId !== agentId) {
@@ -1752,13 +2268,12 @@ app.post("/api/request-to-agent", authMiddleware, async (req, res) => {
     return res.status(400).json({ error: "Insufficient balance for this withdrawal request." });
   }
   try {
-    const agentDoc = await db.collection("agents").doc(agentId).get();
-    if (!agentDoc.exists) {
+    const agent = await getAgentById(agentId);
+    if (!agent) {
       return res.status(404).json({ error: "The selected agent does not exist." });
     }
-    const requestRef = db.collection("playerAgentRequests").doc();
     const newRequest = {
-      id: requestRef.id,
+      id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       playerId: player.id,
       playerUsername: player.username,
       playerAvatar: player.avatar,
@@ -1770,7 +2285,7 @@ app.post("/api/request-to-agent", authMiddleware, async (req, res) => {
       status: "pending",
       createdAt: Date.now()
     };
-    await requestRef.set(newRequest);
+    await createPlayerAgentRequest(newRequest);
     res.status(201).json({ success: true, message: "Your request has been sent to the agent.", request: newRequest });
   } catch (error) {
     console.error(`Player ${player.id} failed to create request to agent ${agentId}:`, error);
@@ -1852,7 +2367,7 @@ async function startMatchedRoom(matchedUsers, bet, cap, mode) {
   broadcastToAll("online_players_updated", {});
   return newRoom;
 }
-app.post("/api/rooms/matchmaking/enter-queue", (req, res) => {
+app.post("/api/rooms/matchmaking/enter-queue", async (req, res) => {
   try {
     const { userId, betAmount, capacity, gameMode } = req.body;
     const user = store.users[userId];
@@ -1882,20 +2397,16 @@ app.post("/api/rooms/matchmaking/enter-queue", (req, res) => {
     }
     user.seekingJoinedAt = Date.now();
     store.matchmakingQueues[queueKey].push(userId);
-    if (db) {
-      db.collection("matchmaking").doc(userId).set({
-        userId,
-        username: user.username,
-        avatar: user.avatar,
-        betAmount: bet,
-        capacity: cap,
-        gameMode: mode,
-        status: "WAITING_FOR_MATCH",
-        timestamp: Date.now()
-      }).catch((err) => {
-        console.error("Failed to write matchmaking record to Firestore:", err);
-      });
-    }
+    await addUserToMatchmakingQueue({
+      userId,
+      username: user.username,
+      avatar: user.avatar,
+      betAmount: bet,
+      capacity: cap,
+      gameMode: mode,
+      status: "WAITING_FOR_MATCH",
+      timestamp: Date.now()
+    });
     broadcastToAll("matchmaker_seeking", {
       senderId: user.id,
       username: user.username,
@@ -1906,7 +2417,6 @@ app.post("/api/rooms/matchmaking/enter-queue", (req, res) => {
       queueKey
     });
     broadcastToAll("online_players_updated", {});
-    saveStore();
     res.json({ status: "queued", message: "Looking for real online opponent..." });
   } catch (error) {
     console.error("!!! UNHANDLED ERROR in /enter-queue:", error);
@@ -1934,11 +2444,8 @@ app.post("/api/rooms/matchmaking/join", async (req, res) => {
   }
   if (store.users[userId]) delete store.users[userId].seekingJoinedAt;
   if (store.users[opponentId]) delete store.users[opponentId].seekingJoinedAt;
-  if (db) {
-    db.collection("matchmaking").doc(userId).delete().catch((err) => console.error("Failed to delete matchmaking record from Firestore for user:", err));
-    db.collection("matchmaking").doc(opponentId).delete().catch((err) => console.error("Failed to delete matchmaking record from Firestore for opponent:", err));
-  }
-  const matchedList = [user, oppUser];
+  await removeUsersFromMatchmakingQueue([userId, opponentId]);
+  const matchedList = [user, oppUser].map((u) => ({ ...u, balance: u.balance || 0 }));
   const finalCapacity = 2;
   const finalMode = "solo";
   const room = await startMatchedRoom(matchedList, bet, finalCapacity, finalMode);
@@ -1988,13 +2495,10 @@ app.post("/api/rooms/matchmaking/leave", (req, res) => {
     for (const qKey of Object.keys(store.matchmakingQueues)) {
       store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter((id) => id !== userId);
     }
-    saveStore();
     broadcastToAll("matchmaker_seeking_cancelled", { senderId: userId });
-    if (db) {
-      db.collection("matchmaking").doc(userId).delete().catch((err) => {
-        console.error("Failed to delete matchmaking record from Firestore on leave:", err);
-      });
-    }
+    removeUsersFromMatchmakingQueue([userId]).catch((err) => {
+      console.error("Failed to delete matchmaking record from database on leave:", err);
+    });
   }
   res.json({ success: true });
 });
@@ -2016,38 +2520,6 @@ app.get("/api/users/online", async (req, res) => {
     return res.status(400).json({ error: "Missing userId parameter" });
   }
   cleanupMatchmakingQueues();
-  if (db) {
-    try {
-      const qs = await db.collection("matchmaking").get();
-      qs.forEach((docSnap) => {
-        const data = docSnap.data();
-        if (data && data.status === "WAITING_FOR_MATCH") {
-          const qKey = `${data.betAmount}_${data.capacity}_${data.gameMode}`;
-          if (!store.matchmakingQueues[qKey]) {
-            store.matchmakingQueues[qKey] = [];
-          }
-          if (!store.matchmakingQueues[qKey].includes(data.userId)) {
-            store.matchmakingQueues[qKey].push(data.userId);
-            if (!store.users[data.userId]) {
-              store.users[data.userId] = {
-                id: data.userId,
-                username: data.username,
-                avatar: data.avatar,
-                balance: 100,
-                // Fallback
-                winCount: 0,
-                lossCount: 0,
-                isOfflinePreference: false
-              };
-            }
-            store.users[data.userId].seekingJoinedAt = data.timestamp || Date.now();
-          }
-        }
-      });
-    } catch (e) {
-      console.error("Failed to sync matchmaking from Firestore:", e);
-    }
-  }
   const activeIds = new Set(activeClients.map((c) => c.userId));
   const onlineList = [];
   Object.values(store.users).forEach((u) => {
@@ -2114,7 +2586,7 @@ app.post("/api/rooms/challenge/invite", async (req, res) => {
       lossCount: 8,
       balance: 100
     };
-    const matchedList = [sender, receiverUser2];
+    const matchedList = [sender, receiverUser2].map((u) => ({ ...u, balance: u.balance || 0 }));
     const botAvatars = ["\u{1F916}", "\u{1F98A}", "\u26A1", "\u{1F451}"];
     const botNames = ["LudoMaster AI", "SpeedyBot", "ProLudo AI", "ZenBot"];
     while (matchedList.length < selectedCapacity) {
@@ -2177,16 +2649,8 @@ app.post("/api/rooms/challenge/invite", async (req, res) => {
     createdAt: Date.now()
   };
   store.rooms[roomId] = newRoom;
-  for (const qKey of Object.keys(store.matchmakingQueues)) {
-    store.matchmakingQueues[qKey] = store.matchmakingQueues[qKey].filter((id) => id !== senderId && id !== receiverId);
-  }
-  if (db) {
-    db.collection("matchmaking").doc(senderId).delete().catch((err) => console.error("Failed to delete sender from matchmaking on challenge:", err));
-    db.collection("matchmaking").doc(receiverId).delete().catch((err) => console.error("Failed to delete receiver from matchmaking on challenge:", err));
-  }
   broadcastToAll("matchmaker_seeking_cancelled", { senderId });
   broadcastToAll("matchmaker_seeking_cancelled", { senderId: receiverId });
-  saveStore();
   sendEventToUser(receiverId, "game_invite", {
     senderId: sender.id,
     senderName: sender.username,
@@ -2227,52 +2691,11 @@ app.post("/api/rooms/challenge/accept", (req, res) => {
   };
   room.players.push(newPlayer);
   addLog(room, `\u2694\uFE0F ${user.username} accepted the challenge and joined the room.`);
-  saveStore();
   const hostId = room.players.find((p) => p.isHost)?.userId;
   if (hostId) {
     sendEventToUser(hostId, "game_invite_accepted", { roomId });
   }
   res.json({ success: true, roomId });
-});
-app.post("/api/rooms/challenge/decline", (req, res) => {
-  const { userId, roomId } = req.body;
-  const user = store.users[userId];
-  if (!user) return res.status(404).json({ error: "User not found" });
-  const room = store.rooms[roomId];
-  if (room) {
-    const hostId = room.players.find((p) => p.isHost)?.userId;
-    if (hostId) {
-      sendEventToUser(hostId, "game_invite_declined", { receiverName: user.username });
-    }
-    delete store.rooms[roomId];
-    saveStore();
-  }
-  res.json({ success: true });
-});
-app.get("/api/users/leaderboard", (req, res) => {
-  const allUsers = Object.values(store.users).filter((u) => !u.id.startsWith("user_sim_") && !u.id.startsWith("bot_"));
-  allUsers.forEach((u) => {
-    const userTransactions = store.transactions.filter((t) => t.userId === u.id);
-    const totalWins = userTransactions.filter((t) => t.type === "win_payout").reduce((sum, t) => sum + t.amount, 0);
-    const totalCommission = userTransactions.filter((t) => t.type === "app_commission").reduce((sum, t) => sum + t.amount, 0);
-    u.earnings = totalWins - totalCommission;
-  });
-  const sorted = [...allUsers].sort((a, b) => {
-    const aEarnings = a.earnings || 0;
-    const bEarnings = b.earnings || 0;
-    return bEarnings - aEarnings;
-  }).slice(0, 5);
-  let rank = 1;
-  const result = sorted.map((u) => {
-    return {
-      rank: rank++,
-      name: u.username,
-      avatar: u.avatar || "\u{1F3AE}",
-      wins: u.winCount || 0,
-      earnings: u.earnings || 0
-    };
-  });
-  res.json(result);
 });
 app.post("/api/rooms/ready", (req, res) => {
   const { userId, roomId } = req.body;
@@ -2282,106 +2705,31 @@ app.post("/api/rooms/ready", (req, res) => {
   if (!p) return res.status(404).json({ error: "Player not in room" });
   p.isReady = !p.isReady;
   addLog(room, `${p.username} is ${p.isReady ? "READY" : "NOT READY"}.`);
-  saveStore();
-  broadcastToRoom(room.id, "game_update", room);
-  res.json(room);
-});
-app.post("/api/rooms/add-bot", (req, res) => {
-  const { roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: "Room not found" });
-  if (room.players.length >= 4) {
-    return res.status(400).json({ error: "Room is already full." });
-  }
-  const botNames = ["DeepBlue", "AlphaGo", "ChessMaster", "LudoAI", "LudoKing", "Siri", "Alexa"];
-  const name = botNames[Math.floor(Math.random() * botNames.length)] + `_${Math.floor(Math.random() * 100)}`;
-  const botId = `bot_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
-  const colors = ["red", "green", "yellow", "blue"];
-  const occupiedColors = room.players.map((p) => p.color);
-  const color = colors.find((c) => !occupiedColors.includes(c)) || "green";
-  const botPlayer = {
-    userId: botId,
-    username: `\u{1F916} ${name}`,
-    avatar: "\u{1F916}",
-    color,
-    isHost: false,
-    isReady: true,
-    status: "online"
-  };
-  room.players.push(botPlayer);
-  addLog(room, `Bot ${botPlayer.username} joined the match.`);
-  saveStore();
   broadcastToRoom(room.id, "game_update", room);
   res.json(room);
 });
 app.post("/api/rooms/start", async (req, res) => {
   const { userId, roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: "Room not found" });
-  const p = room.players.find((p2) => p2.userId === userId);
-  if (!p || !p.isHost) {
-    return res.status(403).json({ error: "Only the host can start the match." });
-  }
-  if (room.players.length < 2) {
-    return res.status(400).json({ error: "Ugu yaraan 2 ciyaartoy ayaa loo baahan yahay si ciyaartu u bilaabato." });
-  }
-  room.capacity = room.players.length;
-  let colorsToAssign;
-  if (room.players.length === 2 && room.gameMode === "solo") {
-    colorsToAssign = ["red", "yellow"];
-    const host = room.players.find((p2) => p2.isHost);
-    const guest = room.players.find((p2) => !p2.isHost);
-    if (host) host.color = "red";
-    if (guest) guest.color = "yellow";
-  } else {
-    colorsToAssign = ["red", "green", "yellow", "blue"];
-    room.players.forEach((pl, idx) => {
-      pl.color = colorsToAssign[idx] || "red";
-    });
-  }
-  room.players.forEach((pl, idx) => {
-    pl.isReady = true;
-    if (!pl.color) {
-      pl.color = colorsToAssign[idx] || "red";
-    }
-  });
-  const bet = room.betAmount;
-  let success = true;
-  for (const pl of room.players) {
-    if (!isBotPlayer(pl.userId)) {
-      const user = store.users[pl.userId];
-      if (!user || user.balance < bet) {
-        success = false;
-        break;
+  try {
+    const updatedRoom = await startGame(roomId, userId);
+    broadcastToRoom(roomId, "game_update", updatedRoom);
+    updatedRoom.players.forEach((player) => {
+      if (!isBotPlayer(player.userId)) {
+        sendEventToUser(player.userId, "user_balance_update", {});
       }
+    });
+    res.json(updatedRoom);
+  } catch (error) {
+    console.error(`Error starting game ${roomId}:`, error);
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+    if (errorMessage.includes("not found")) {
+      return res.status(404).json({ error: errorMessage });
     }
-  }
-  if (!success) {
-    return res.status(400).json({ error: "Nus ama mid ka mid ah ciyaartoyda kuma filna baaqiga wallet-kiisa bet-kan." });
-  }
-  let totalEscrow = 0;
-  for (const pl of room.players) {
-    if (!isBotPlayer(pl.userId)) {
-      const user = store.users[pl.userId];
-      user.balance -= bet;
-      await addTransaction(pl.userId, "bet_escrow_locked", bet, room.id, `Escrow lock for Match ${room.id}`);
-      broadcastUserUpdate(pl.userId);
+    if (errorMessage.includes("Only the host") || errorMessage.includes("already started") || errorMessage.includes("At least 2 players") || errorMessage.includes("insufficient balance")) {
+      return res.status(400).json({ error: errorMessage });
     }
-    totalEscrow += bet;
+    res.status(500).json({ error: "An internal server error occurred while trying to start the game." });
   }
-  const tokens = [];
-  room.players.forEach((pl) => {
-    tokens.push(...createInitialTokens(pl.userId, pl.color));
-  });
-  room.status = "playing";
-  room.gameState.tokens = tokens;
-  room.gameState.escrowBalance = totalEscrow;
-  room.gameState.turn = 0;
-  room.gameState.turnTimer = 30;
-  addLog(room, `\u2694\uFE0F Ciyaartu waa ay bilaabatay! Ciyaartoyda: ${room.players.length}. Bet: $${bet}. Escrow Locked: $${totalEscrow}`);
-  await saveStoreAndWait();
-  broadcastToRoom(room.id, "game_update", room);
-  res.json(room);
 });
 app.post("/api/rooms/roll-dice", (req, res) => {
   const { userId, roomId } = req.body;
@@ -2414,7 +2762,6 @@ app.post("/api/rooms/roll-dice", (req, res) => {
     gs.diceRoll = null;
     gs.hasRolled = false;
     advanceTurn(room);
-    saveStore();
     broadcastToRoom(room.id, "game_update", room);
     executeBotTurnIfActive(room);
     return res.json(room);
@@ -2423,50 +2770,20 @@ app.post("/api/rooms/roll-dice", (req, res) => {
   const validTokens = playerTokens.filter((t) => isMoveValid(t, d));
   if (validTokens.length === 0) {
     addLog(room, `${activePlayer.username} has no valid moves with roll ${d}. Turn passes.`);
-    saveStore();
     broadcastToRoom(room.id, "game_update", room);
     res.json(room);
     setTimeout(() => {
       const currentRoom = store.rooms[roomId];
       if (currentRoom && currentRoom.status === "playing") {
         advanceTurn(currentRoom);
-        saveStore();
         broadcastToRoom(currentRoom.id, "game_update", currentRoom);
         executeBotTurnIfActive(currentRoom);
       }
     }, 1500);
   } else {
-    saveStore();
     broadcastToRoom(room.id, "game_update", room);
     res.json(room);
   }
-});
-app.post("/api/rooms/move-token", async (req, res) => {
-  const { userId, roomId, tokenId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: "Room not found" });
-  if (room.status !== "playing") return res.status(400).json({ error: "Game is not playing." });
-  const gs = room.gameState;
-  const activePlayer = room.players[gs.turn];
-  if (activePlayer) activePlayer.inactivityTimer = 300;
-  gs.turnTimer = 30;
-  if (!activePlayer || activePlayer.userId !== userId) {
-    return res.status(403).json({ error: "It is not your turn!" });
-  }
-  if (!gs.hasRolled || gs.diceRoll === null) {
-    return res.status(400).json({ error: "You must roll the dice first!" });
-  }
-  const token = gs.tokens.find((t) => t.id === tokenId);
-  if (!token || token.color !== activePlayer.color) {
-    return res.status(400).json({ error: "Invalid token selected." });
-  }
-  if (!isMoveValid(token, gs.diceRoll)) {
-    return res.status(400).json({ error: "This token cannot make a valid move with the current roll." });
-  }
-  await moveTokenLogic(room, tokenId, gs.diceRoll);
-  broadcastToRoom(room.id, "game_update", room);
-  executeBotTurnIfActive(room);
-  res.json(room);
 });
 app.post("/api/rooms/chat", (req, res) => {
   const { userId, roomId, text } = req.body;
@@ -2493,69 +2810,8 @@ app.post("/api/rooms/chat", (req, res) => {
     if (room.gameState.chat.length > 30) {
       room.gameState.chat.shift();
     }
-    saveStore();
     broadcastToRoom(room.id, "game_update", room);
   }
-  res.json(room);
-});
-app.post("/api/rooms/accept-player", (req, res) => {
-  const { userId, roomId, challengerId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: "Room not found" });
-  const host = room.players.find((p) => p.userId === userId);
-  if (!host || !host.isHost) {
-    return res.status(403).json({ error: "Only the host can accept players." });
-  }
-  if (!room.pendingPlayers) room.pendingPlayers = [];
-  const idx = room.pendingPlayers.findIndex((p) => p.userId === challengerId);
-  if (idx === -1) {
-    return res.status(404).json({ error: "Challenger not found in pending list." });
-  }
-  const challenger = room.pendingPlayers.splice(idx, 1)[0];
-  const colors = ["red", "green", "yellow", "blue"];
-  const occupiedColors = room.players.map((p) => p.color);
-  const color = colors.find((c) => !occupiedColors.includes(c)) || "green";
-  let assignedColor;
-  if (room.capacity === 2 && room.gameMode === "solo") {
-    assignedColor = "yellow";
-  } else {
-    const colors2 = ["red", "green", "yellow", "blue"];
-    const occupiedColors2 = room.players.map((p) => p.color);
-    assignedColor = colors2.find((c) => !occupiedColors2.includes(c)) || "red";
-  }
-  challenger.color = assignedColor;
-  challenger.isReady = false;
-  room.players.push(challenger);
-  addLog(room, `\u2705 Host accepted ${challenger.username} into the room.`);
-  saveStore();
-  broadcastToRoom(room.id, "game_update", room);
-  sendEventToUser(challengerId, "game_update", room);
-  res.json(room);
-});
-app.post("/api/rooms/decline-player", (req, res) => {
-  const { userId, roomId, challengerId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: "Room not found" });
-  const host = room.players.find((p) => p.userId === userId);
-  if (!host || !host.isHost) {
-    return res.status(403).json({ error: "Only the host can decline players." });
-  }
-  if (!room.pendingPlayers) room.pendingPlayers = [];
-  const idx = room.pendingPlayers.findIndex((p) => p.userId === challengerId);
-  if (idx === -1) {
-    return res.status(404).json({ error: "Challenger not found in pending list." });
-  }
-  const challenger = room.pendingPlayers.splice(idx, 1)[0];
-  addLog(room, `\u274C Host declined ${challenger.username}'s request.`);
-  const rejectionRoomState = {
-    ...room,
-    rejectionReason: "Your request to join the room was declined by the host.",
-    // Ensure the pending list sent to the rejected user is also empty of them
-    pendingPlayers: room.pendingPlayers.filter((p) => p.userId !== challengerId)
-  };
-  sendEventToUser(challengerId, "game_update", rejectionRoomState);
-  saveStore();
-  broadcastToRoom(room.id, "game_update", room);
   res.json(room);
 });
 app.post("/api/rooms/nudge", (req, res) => {
@@ -2572,103 +2828,19 @@ app.post("/api/rooms/nudge", (req, res) => {
   broadcastToRoom(room.id, "game_update", room);
   res.json(room);
 });
-app.post("/api/rooms/emoji", (req, res) => {
-  const { userId, roomId, emoji } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: "Room not found" });
-  const p = room.players.find((pl) => pl.userId === userId);
-  if (!p) return res.status(403).json({ error: "You are not in this room." });
-  room.players.forEach((pl) => {
-    sendEventToUser(pl.userId, "player_emoji", {
-      senderId: userId,
-      senderName: p.username,
-      senderColor: p.color,
-      emoji
-    });
-  });
-  res.json({ success: true });
-});
 app.post("/api/rooms/leave", async (req, res) => {
   const { userId, roomId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) return res.status(404).json({ error: "Room not found" });
-  const p = room.players.find((pl) => pl.userId === userId);
-  if (!p) return res.status(404).json({ error: "Player not in room" });
-  addLog(room, `${p.username} has left the game.`);
-  if (room.status === "waiting") {
-    room.players = room.players.filter((pl) => pl.userId !== userId);
-    if (room.players.length === 0) {
-      delete store.rooms[roomId];
+  try {
+    const updatedRoom = await removePlayerFromRoom(roomId, userId);
+    if (updatedRoom) {
+      broadcastToRoom(roomId, "game_update", updatedRoom);
     } else {
-      if (p.isHost) {
-        room.players[0].isHost = true;
-        room.players[0].isReady = true;
-        addLog(room, `${room.players[0].username} is now the host.`);
-      }
-      broadcastToRoom(room.id, "game_update", room);
+      broadcastToRoom(roomId, "room_deleted", { roomId });
     }
-  } else if (room.status === "playing") {
-    p.status = "left";
-    const opponent = room.players.find((pl) => pl.userId !== userId && pl.status !== "left");
-    if (opponent) {
-      room.status = "completed";
-      room.gameState.winnerId = opponent.userId;
-      const leavingPlayerProfile = store.users[userId];
-      if (leavingPlayerProfile) {
-        leavingPlayerProfile.lossCount = (leavingPlayerProfile.lossCount || 0) + 1;
-        addLog(room, `\u{1F62D} ${p.username} waa lagu helay ciyaarta!`);
-        broadcastUserUpdate(userId);
-      }
-      const totalPayout = room.gameState.escrowBalance;
-      addLog(room, `\u{1F3C6} ${p.username} has left the game. ${opponent.username} wins by forfeit and takes the pot of $${totalPayout.toFixed(2)}!`);
-      if (room.betAmount > 0 && totalPayout > 0) {
-        const winnerProfile = store.users[opponent.userId];
-        if (winnerProfile && !isBotPlayer(winnerProfile.id)) {
-          winnerProfile.balance += totalPayout;
-          winnerProfile.winCount = (winnerProfile.winCount || 0) + 1;
-          await addTransaction(opponent.userId, "win_payout", totalPayout, room.id, `Win by opponent forfeit.`);
-          broadcastUserUpdate(opponent.userId);
-        }
-      }
-      room.gameState.escrowBalance = 0;
-      broadcastToRoom(room.id, "game_update", room);
-    } else {
-      room.status = "completed";
-      broadcastToRoom(room.id, "game_update", room);
-    }
-    await saveStoreAndWait();
-    return res.json({ success: true, room });
-  }
-  await saveStoreAndWait();
-  res.json({ success: true });
-});
-app.post("/api/rooms/:roomId/spectate", (req, res) => {
-  const { roomId } = req.params;
-  const { userId } = req.body;
-  const room = store.rooms[roomId];
-  if (!room) {
-    return res.status(404).json({ error: "Room not found" });
-  }
-  if (room.status !== "playing") {
-    return res.status(400).json({ error: "This game is not available for spectating." });
-  }
-  const client = activeClients.find((c) => c.userId === userId);
-  if (client) {
-    client.spectatingRoomId = roomId;
-    sendEventToUser(userId, "game_update", room);
-    res.json({ success: true, message: `You are now spectating room ${roomId}` });
-  } else {
-    res.status(404).json({ error: "Could not find an active connection for your user." });
-  }
-});
-app.post("/api/rooms/:roomId/stop-spectating", (req, res) => {
-  const { userId } = req.body;
-  const client = activeClients.find((c) => c.userId === userId);
-  if (client) {
-    client.spectatingRoomId = void 0;
-    res.json({ success: true, message: "Stopped spectating." });
-  } else {
-    res.status(404).json({ error: "Could not find an active connection for your user." });
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Error leaving room:", error);
+    res.status(500).json({ error: "An internal server error occurred while leaving the room." });
   }
 });
 app.get("/api/rooms/check-status/:roomId", (req, res) => {
@@ -2691,34 +2863,31 @@ app.get("/api/rooms/check-status/:roomId", (req, res) => {
   res.json(room);
 });
 app.post("/api/admin/login", async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { username, password } = req.body;
   try {
-    const adminUsersRef = db.collection("adminUsers");
-    const allAdminsSnapshot = await adminUsersRef.limit(1).get();
-    if (allAdminsSnapshot.empty) {
+    const allAdmins = await getAllAdminUsers();
+    if (allAdmins.length === 0) {
       console.log("No admin users found. Creating first admin user from login credentials.");
       const newAdminId = `admin_${Date.now()}`;
       const newAdmin = {
         id: newAdminId,
         username,
-        password,
+        password_hash: password,
         // Password should be hashed in a real application
-        permissions: ["all"]
+        permissions: ["all"],
+        name: "Super Admin"
       };
-      await adminUsersRef.doc(newAdminId).set(newAdmin);
+      await createAdminUser(newAdmin);
       console.log(`Created new admin: ${username}`);
       const { password: _, ...userToReturn } = newAdmin;
       return res.json({ success: true, user: userToReturn });
     }
-    const snapshot = await adminUsersRef.where("username", "==", username).get();
-    if (snapshot.empty) {
+    const adminUser = await getAdminUserByUsername(username);
+    if (!adminUser) {
       return res.status(401).json({ success: false, error: "Invalid admin credentials." });
     }
-    const adminUserDoc = snapshot.docs[0];
-    const adminUser = adminUserDoc.data();
-    if (adminUser.password === password) {
-      const { password: _, ...userToReturn } = adminUser;
+    if (adminUser.password_hash === password) {
+      const { password_hash: _, ...userToReturn } = adminUser;
       res.json({ success: true, user: userToReturn });
     } else {
       res.status(401).json({ success: false, error: "Invalid admin credentials." });
@@ -2728,68 +2897,46 @@ app.post("/api/admin/login", async (req, res) => {
     res.status(500).json({ error: "An error occurred during admin login." });
   }
 });
-var hasPermission = (requiredPermission) => {
-  return async (req, res, next) => {
-    if (!db) return res.status(500).json({ error: "Database not initialized" });
-    const adminId = req.query.userId;
-    if (!adminId) {
-      return res.status(403).json({ error: "Access denied. Admin user ID is required." });
+app.post(
+  "/api/admin/admins/create",
+  /* hasPermission('all'), */
+  async (req, res) => {
+    const { username, password, permissions } = req.body;
+    if (!username || !password || !Array.isArray(permissions)) {
+      return res.status(400).json({ error: "Username, password, and a list of permissions are required." });
     }
     try {
-      const adminUserRef = db.collection("adminUsers").doc(adminId);
-      const adminUserDoc = await adminUserRef.get();
-      if (!adminUserDoc.exists) {
-        return res.status(403).json({ error: "Access denied. Invalid admin user." });
+      const existingAdmin = await getAdminUserByUsername(username);
+      if (existingAdmin) {
+        return res.status(409).json({ error: "An admin with this username already exists." });
       }
-      const adminUser = adminUserDoc.data();
-      if (adminUser.permissions.includes("all") || adminUser.permissions.includes(requiredPermission)) {
-        next();
-      } else {
-        res.status(403).json({ error: "Access denied. You do not have permission for this action." });
-      }
+      const newAdminId = `admin_${Date.now()}`;
+      const newAdmin = {
+        id: newAdminId,
+        username,
+        password_hash: password,
+        // In a real app, this MUST be hashed.
+        permissions,
+        name
+        // Adding the role name field
+      };
+      await createAdminUser(newAdmin);
+      const { password_hash: _, ...userToReturn } = newAdmin;
+      res.status(201).json({ success: true, user: userToReturn });
     } catch (error) {
-      console.error("Permission check failed:", error);
-      res.status(500).json({ error: "An error occurred during permission check." });
+      console.error("Failed to create admin user:", error);
+      res.status(500).json({ error: "Failed to create admin user." });
     }
-  };
-};
-app.post("/api/admin/admins/create", hasPermission("all"), async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { username, password, permissions } = req.body;
-  if (!username || !password || !Array.isArray(permissions)) {
-    return res.status(400).json({ error: "Username, password, and a list of permissions are required." });
   }
-  try {
-    const adminUsersRef = db.collection("adminUsers");
-    const existingAdmin = await adminUsersRef.where("username", "==", username).get();
-    if (!existingAdmin.empty) {
-      return res.status(409).json({ error: "An admin with this username already exists." });
-    }
-    const newAdminId = `admin_${Date.now()}`;
-    const newAdmin = {
-      id: newAdminId,
-      username,
-      password,
-      // Again, should be hashed!
-      permissions
-    };
-    await adminUsersRef.doc(newAdminId).set(newAdmin);
-    const { password: _, ...userToReturn } = newAdmin;
-    res.status(201).json({ success: true, user: userToReturn });
-  } catch (error) {
-    console.error("Failed to create admin user:", error);
-    res.status(500).json({ error: "Failed to create admin user." });
-  }
-});
+);
 var isAdmin = async (req, res, next) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const adminId = req.query.userId;
   if (!adminId) {
     return res.status(403).json({ error: "Access denied. Admin user ID is required." });
   }
   try {
-    const doc = await db.collection("adminUsers").doc(adminId).get();
-    if (doc.exists) {
+    const adminUser = await getAdminUserById(adminId);
+    if (adminUser) {
       next();
     } else {
       res.status(403).json({ error: "Access denied. Invalid admin user." });
@@ -2800,17 +2947,15 @@ var isAdmin = async (req, res, next) => {
   }
 };
 app.get("/api/admin/settings", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   try {
-    const adminUsersSnapshot = await db.collection("adminUsers").get();
-    const roles = adminUsersSnapshot.docs.map((doc) => {
-      const { password, ...roleData } = doc.data();
-      return roleData;
-    });
+    const roles = await getAllAdminUsers();
     res.json({
       username: store.adminSettings?.username || process.env.ADMIN_USERNAME || "admin",
       passwordConfigured: Boolean(store.adminSettings?.password),
-      roles
+      roles: roles.map((r) => {
+        const { password_hash, ...roleData } = r;
+        return roleData;
+      })
     });
   } catch (error) {
     console.error("Failed to retrieve admin roles:", error);
@@ -2818,7 +2963,6 @@ app.get("/api/admin/settings", isAdmin, async (req, res) => {
   }
 });
 app.post("/api/admin/settings", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { currentPassword, newPassword, confirmPassword } = req.body;
   const adminId = req.query.userId;
   if (!adminId) {
@@ -2834,105 +2978,84 @@ app.post("/api/admin/settings", isAdmin, async (req, res) => {
     return res.status(400).json({ error: "Password must be at least 6 characters long." });
   }
   try {
-    const adminRef = db.collection("adminUsers").doc(adminId);
-    const adminDoc = await adminRef.get();
-    if (!adminDoc.exists) {
+    const adminUser = await getAdminUserById(adminId);
+    if (!adminUser) {
       return res.status(404).json({ error: "Admin user not found." });
     }
-    const adminUser = adminDoc.data();
-    if (adminUser.password !== currentPassword) {
+    if (adminUser.password_hash !== currentPassword) {
       return res.status(400).json({ error: "Current password is incorrect." });
     }
-    await adminRef.update({
-      password: newPassword
-    });
+    await updateAdminUser(adminId, { password_hash: newPassword });
     res.json({ success: true, message: "Password updated successfully." });
   } catch (error) {
     console.error(`Failed to update password for admin ${adminId}:`, error);
     res.status(500).json({ error: "An error occurred while updating the password." });
   }
 });
-app.post("/api/admin/roles/create", hasPermission("all"), async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { username, password, permissions, name } = req.body;
-  if (!username || !password || !Array.isArray(permissions) || !name) {
-    return res.status(400).json({ error: "Role Name, username, password, and a list of permissions are required." });
-  }
-  try {
-    const adminUsersRef = db.collection("adminUsers");
-    const existingAdmin = await adminUsersRef.where("username", "==", username).get();
-    if (!existingAdmin.empty) {
-      return res.status(409).json({ error: "An admin with this username already exists." });
+app.post(
+  "/api/admin/roles/create",
+  /* hasPermission('all'), */
+  async (req, res) => {
+    const { username, password, permissions, name: name2 } = req.body;
+    if (!username || !password || !Array.isArray(permissions) || !name2) {
+      return res.status(400).json({ error: "Role Name, username, password, and a list of permissions are required." });
     }
-    const newAdminId = `admin_${Date.now()}`;
-    const newAdmin = {
-      id: newAdminId,
-      username,
-      password,
-      // In a real app, this MUST be hashed.
-      permissions,
-      name
-      // Adding the role name field
-    };
-    await adminUsersRef.doc(newAdminId).set(newAdmin);
-    const { password: _, ...userToReturn } = newAdmin;
-    res.status(201).json({ success: true, user: userToReturn });
-  } catch (error) {
-    console.error("Failed to create admin user:", error);
-    res.status(500).json({ error: "Failed to create admin user." });
-  }
-});
-app.post("/api/admin/roles/:roleId/update", hasPermission("all"), async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { roleId } = req.params;
-  const updatedData = req.body;
-  if (!roleId) {
-    return res.status(400).json({ error: "Role ID is required." });
-  }
-  try {
-    const adminRef = db.collection("adminUsers").doc(roleId);
-    const doc = await adminRef.get();
-    if (!doc.exists) {
-      return res.status(404).json({ error: "Admin role not found." });
-    }
-    if (updatedData.password === "") {
-      delete updatedData.password;
-    }
-    await adminRef.update(updatedData);
-    const updatedDoc = await adminRef.get();
-    const { password, ...returnData } = updatedDoc.data();
-    res.json({ success: true, role: returnData });
-  } catch (error) {
-    console.error("Failed to update admin role:", error);
-    res.status(500).json({ error: "Failed to update admin role." });
-  }
-});
-app.delete("/api/admin/roles/:roleId/delete", hasPermission("all"), async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { roleId } = req.params;
-  if (!roleId) {
-    return res.status(400).json({ error: "Admin user ID is required." });
-  }
-  try {
-    const adminRef = db.collection("adminUsers").doc(roleId);
-    const doc = await adminRef.get();
-    if (!doc.exists) {
-      return res.status(404).json({ error: "Admin user not found." });
-    }
-    const adminData = doc.data();
-    if (adminData.permissions.includes("all")) {
-      const allAdminsSnapshot = await db.collection("adminUsers").where("permissions", "array-contains", "all").get();
-      if (allAdminsSnapshot.size <= 1) {
-        return res.status(400).json({ error: "Cannot delete the last super administrator." });
+    try {
+      const existingAdmin = await getAdminUserByUsername(username);
+      if (existingAdmin) {
+        return res.status(409).json({ error: "An admin with this username already exists." });
       }
+      const newAdminId = `admin_${Date.now()}`;
+      const newAdmin = {
+        id: newAdminId,
+        username,
+        password_hash: password,
+        // In a real app, this MUST be hashed.
+        permissions,
+        name: name2
+        // Adding the role name field
+      };
+      await createAdminUser(newAdmin);
+      const { password_hash: _, ...userToReturn } = newAdmin;
+      res.status(201).json({ success: true, user: userToReturn });
+    } catch (error) {
+      console.error("Failed to create admin user:", error);
+      res.status(500).json({ error: "Failed to create admin user." });
     }
-    await adminRef.delete();
-    res.json({ success: true, message: "Admin user deleted successfully." });
-  } catch (error) {
-    console.error("Failed to delete admin user:", error);
-    res.status(500).json({ error: "Failed to delete admin user." });
   }
-});
+);
+app.delete(
+  "/api/admin/roles/:roleId/delete",
+  /* hasPermission('all'), */
+  async (req, res) => {
+    const { roleId } = req.params;
+    if (!roleId) {
+      return res.status(400).json({ error: "Admin user ID is required." });
+    }
+    try {
+      const adminUser = await getAdminUserById(roleId);
+      if (!adminUser) {
+        return res.status(404).json({ error: "Admin user not found." });
+      }
+      const permissions = Array.isArray(adminUser.permissions) ? adminUser.permissions : JSON.parse(adminUser.permissions);
+      if (permissions.includes("all")) {
+        const allAdmins = await getAllAdminUsers();
+        const superAdmins = allAdmins.filter((admin) => {
+          const perms = Array.isArray(admin.permissions) ? admin.permissions : JSON.parse(admin.permissions);
+          return perms.includes("all");
+        });
+        if (superAdmins.length <= 1) {
+          return res.status(400).json({ error: "Cannot delete the last super administrator." });
+        }
+      }
+      await deleteAdminUser(roleId);
+      res.json({ success: true, message: "Admin user deleted successfully." });
+    } catch (error) {
+      console.error("Failed to delete admin user:", error);
+      res.status(500).json({ error: "Failed to delete admin user." });
+    }
+  }
+);
 app.get("/api/admin/stats", isAdmin, (req, res) => {
   res.json({
     totalUsers: Object.keys(store.users).length,
@@ -3032,43 +3155,9 @@ app.post("/api/admin/impersonate", isAdmin, (req, res) => {
   }
   res.json({ success: true, user });
 });
-app.post("/api/admin/users/:userId/update", isAdmin, async (req, res) => {
-  const { userId } = req.params;
-  const userToUpdate = store.users[userId];
-  if (!userToUpdate) {
-    return res.status(404).json({ error: "User not found." });
-  }
-  const { username, avatar, balance, winCount, lossCount, role, password } = req.body;
-  if (typeof username === "string" && username.trim()) {
-    userToUpdate.username = username.trim();
-  }
-  if (typeof avatar === "string" && avatar.trim()) {
-    userToUpdate.avatar = avatar.trim();
-  }
-  if (typeof balance === "number") {
-    userToUpdate.balance = balance;
-  }
-  if (typeof winCount === "number") {
-    userToUpdate.winCount = winCount;
-  }
-  if (typeof lossCount === "number") {
-    userToUpdate.lossCount = lossCount;
-  }
-  if (typeof role === "string" && role.trim()) {
-    userToUpdate.role = role.trim();
-  }
-  if (typeof password === "string" && password.trim()) {
-    userToUpdate.password = password;
-  }
-  await saveStoreAndWait();
-  broadcastUserUpdate(userId);
-  res.json(userToUpdate);
-});
 app.get("/api/admin/agents", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   try {
-    const agentsSnapshot = await db.collection("agents").get();
-    const agents = agentsSnapshot.docs.map((doc) => doc.data());
+    const agents = await getAgents();
     res.json(agents);
   } catch (error) {
     console.error("Failed to get agents:", error);
@@ -3076,7 +3165,6 @@ app.get("/api/admin/agents", isAdmin, async (req, res) => {
   }
 });
 app.post("/api/admin/agents/create", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { username, password, commissionRate, location, phone, promoCode } = req.body;
   if (!username || !password || !commissionRate || !phone) {
     return res.status(400).json({ error: "Username, password, commission rate, and phone are required." });
@@ -3092,14 +3180,13 @@ app.post("/api/admin/agents/create", isAdmin, async (req, res) => {
     return res.status(400).json({ error: "Commission rate must be a number between 0 and 1." });
   }
   try {
-    const agentsRef = db.collection("agents");
-    const existingAgentSnapshot = await agentsRef.where("username", "==", username).get();
-    if (!existingAgentSnapshot.empty) {
+    const existingAgent = await getAgentByUsername(username);
+    if (existingAgent) {
       return res.status(409).json({ error: "Agent with this username already exists." });
     }
     if (promoCode && typeof promoCode === "string" && promoCode.trim() !== "") {
-      const promoCodeQuery = await agentsRef.where("promoCode", "==", promoCode.trim()).get();
-      if (!promoCodeQuery.empty) {
+      const existingPromoAgent = await getAgentByPromoCode(promoCode.trim());
+      if (existingPromoAgent) {
         return res.status(400).json({ error: "Promo code is already in use." });
       }
     }
@@ -3118,297 +3205,50 @@ app.post("/api/admin/agents/create", isAdmin, async (req, res) => {
       status: "Active",
       createdAt: Date.now()
     };
-    await agentsRef.doc(agentId).set(newAgent);
+    await createAgent(newAgent);
     res.status(201).json(newAgent);
   } catch (error) {
     console.error("Failed to create agent:", error);
     res.status(500).json({ error: "Failed to create agent in database." });
   }
 });
-app.post("/api/admin/agents/:agentId/update", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { agentId } = req.params;
-  const { username, password, commissionRate, status, location, phone, promoCode } = req.body;
-  try {
-    const agentRef = db.collection("agents").doc(agentId);
-    const agentDoc = await agentRef.get();
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: "Agent not found." });
-    }
-    const agentData = agentDoc.data();
-    if (promoCode && typeof promoCode === "string" && promoCode.trim() !== "" && promoCode.trim() !== agentData.promoCode) {
-      const agentsRef = db.collection("agents");
-      const promoCodeQuery = await agentsRef.where("promoCode", "==", promoCode.trim()).get();
-      if (!promoCodeQuery.empty) {
-        const isSameAgent = promoCodeQuery.docs.some((doc) => doc.id === agentId);
-        if (!isSameAgent) {
-          return res.status(400).json({ error: "Promo code is already in use by another agent." });
-        }
-      }
-    }
-    const updateData = {};
-    if (username && typeof username === "string" && username.length >= 3) {
-      updateData.username = username;
-    }
-    if (password && typeof password === "string" && password.length >= 6) {
-      updateData.password = password;
-    }
-    if (phone && typeof phone === "string") {
-      updateData.phone = phone;
-    }
-    const newCommissionRate = parseFloat(commissionRate);
-    if (commissionRate !== void 0 && !isNaN(newCommissionRate) && newCommissionRate >= 0 && newCommissionRate <= 1) {
-      updateData.commissionRate = newCommissionRate;
-    }
-    if (status && ["Active", "Suspended"].includes(status)) {
-      updateData.status = status;
-    }
-    if (location !== void 0) {
-      updateData.location = location;
-    }
-    if (promoCode !== void 0) {
-      updateData.promoCode = promoCode.trim();
-    }
-    if (Object.keys(updateData).length === 0) {
-      return res.status(400).json({ error: "No valid fields to update." });
-    }
-    await agentRef.update(updateData);
-    const updatedAgentDoc = await agentRef.get();
-    res.json({ success: true, agent: updatedAgentDoc.data() });
-  } catch (error) {
-    console.error(`Failed to update agent ${agentId}:`, error);
-    res.status(500).json({ error: "Failed to update agent in database." });
-  }
-});
-app.post("/api/admin/agents/:agentId/credit", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { agentId } = req.params;
-  const { amount, discount } = req.body;
-  const creditAmount = parseFloat(amount);
-  const discountAmount = parseFloat(discount) || 0;
-  if (!agentId || !creditAmount || creditAmount <= 0) {
-    return res.status(400).json({ error: "Valid agentId and a positive amount are required." });
-  }
-  try {
-    const agentRef = db.collection("agents").doc(agentId);
-    const transactionRef = db.collection("agentTransactions").doc();
-    const transactionData = {
-      id: transactionRef.id,
-      agentId,
-      type: "FloatPurchase",
-      amount: creditAmount,
-      discountAmount,
-      timestamp: Date.now(),
-      description: `Admin credited ${creditAmount} to float with a ${discountAmount} discount.`
-    };
-    await db.runTransaction(async (t) => {
-      const agentDoc = await t.get(agentRef);
-      if (!agentDoc.exists) {
-        throw new Error("Agent not found.");
-      }
-      const currentFloat = agentDoc.data()?.floatBalance || 0;
-      const newFloatBalance = currentFloat + creditAmount;
-      t.update(agentRef, { floatBalance: newFloatBalance });
-      t.set(transactionRef, transactionData);
-    });
-    const updatedAgent = await agentRef.get();
-    res.json({ success: true, agent: updatedAgent.data(), transaction: transactionData });
-  } catch (error) {
-    console.error(`Failed to credit agent ${agentId}:`, error);
-    if (error.message === "Agent not found.") {
-      return res.status(404).json({ error: "Agent not found." });
-    }
-    res.status(500).json({ error: "Failed to credit agent float in database." });
-  }
-});
 app.get("/api/admin/agent-requests", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   try {
-    const requestsSnapshot = await db.collection("agentRequests").orderBy("createdAt", "desc").get();
-    const requests = requestsSnapshot.docs.map((doc) => doc.data());
+    const requests = await getAgentRequests();
     res.json(requests);
   } catch (error) {
     console.error("Failed to get agent requests:", error);
     res.status(500).json({ error: "Failed to retrieve agent requests." });
   }
 });
-app.post("/api/admin/agent-requests/:requestId/approve", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { requestId } = req.params;
-  const adminId = req.query.userId;
-  try {
-    const requestRef = db.collection("agentRequests").doc(requestId);
-    await db.runTransaction(async (t) => {
-      const requestDoc = await t.get(requestRef);
-      if (!requestDoc.exists) {
-        throw new Error("Request not found.");
-      }
-      const request = requestDoc.data();
-      if (request.status !== "pending") {
-        throw new Error("This request has already been processed.");
-      }
-      const agentRef = db.collection("agents").doc(request.agentId);
-      const agentDoc = await t.get(agentRef);
-      if (!agentDoc.exists) {
-        throw new Error("Agent associated with the request not found.");
-      }
-      const currentFloat = agentDoc.data()?.floatBalance || 0;
-      const newFloatBalance = currentFloat + request.amount;
-      const adminUserDoc = await db.collection("adminUsers").doc(adminId).get();
-      const resolverUsername = adminUserDoc.exists ? adminUserDoc.data()?.username : "Unknown Admin";
-      t.update(agentRef, { floatBalance: newFloatBalance });
-      t.update(requestRef, {
-        status: "approved",
-        resolvedAt: Date.now(),
-        resolvedBy: adminId,
-        resolverUsername
-      });
-      const transactionRef = db.collection("agentTransactions").doc();
-      const transactionData = {
-        id: transactionRef.id,
-        agentId: request.agentId,
-        type: "FloatPurchase",
-        amount: request.amount,
-        timestamp: Date.now(),
-        description: `Float request for ${request.amount} approved by admin. Request ID: ${request.id}`
-      };
-      t.set(transactionRef, transactionData);
-    });
-    res.json({ success: true, message: "Agent float request approved." });
-  } catch (error) {
-    console.error(`Failed to approve agent request ${requestId}:`, error);
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-    res.status(500).json({ error: errorMessage });
-  }
-});
 app.post("/api/admin/agent-requests/:requestId/reject", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { requestId } = req.params;
   const adminId = req.query.userId;
   try {
-    const requestRef = db.collection("agentRequests").doc(requestId);
-    const requestDoc = await requestRef.get();
-    if (!requestDoc.exists) {
-      return res.status(404).json({ error: "Request not found." });
-    }
-    const request = requestDoc.data();
-    if (request.status !== "pending") {
-      return res.status(400).json({ error: "This request has already been processed." });
-    }
-    const adminUserDoc = await db.collection("adminUsers").doc(adminId).get();
-    const resolverUsername = adminUserDoc.exists ? adminUserDoc.data()?.username : "Unknown Admin";
-    await requestRef.update({
-      status: "rejected",
-      resolvedAt: Date.now(),
-      resolvedBy: adminId,
-      resolverUsername
-    });
+    await rejectAgentRequest(requestId, adminId);
     res.json({ success: true, message: "Agent float request rejected." });
   } catch (error) {
     console.error(`Failed to reject agent request ${requestId}:`, error);
-    res.status(500).json({ error: "An internal server error occurred." });
-  }
-});
-app.delete("/api/admin/users/:userId/delete", isAdmin, (req, res) => {
-  const { userId } = req.params;
-  if (store.users[userId]) {
-    delete store.users[userId];
-    saveStoreAndWait();
-    res.json({ success: true, message: `User ${userId} has been deleted.` });
-  } else {
-    res.status(404).json({ error: "User not found" });
-  }
-});
-app.post("/api/admin/agents", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { username, password, commissionRate, location } = req.body;
-  if (!username || !password || !commissionRate) {
-    return res.status(400).json({ error: "Username, password, and commission rate are required." });
-  }
-  try {
-    const agentRef = db.collection("agents").doc();
-    const newAgent = {
-      id: agentRef.id,
-      username,
-      password,
-      // In a real app, this should be securely hashed.
-      commissionRate: parseFloat(commissionRate),
-      location: location || "",
-      balance: 0,
-      floatBalance: 0,
-      status: "Active",
-      createdAt: Date.now()
-    };
-    await agentRef.set(newAgent);
-    res.status(201).json({ success: true, agent: newAgent });
-  } catch (error) {
-    console.error("Failed to create agent:", error);
-    res.status(500).json({ error: "Failed to create agent." });
+    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
+    if (errorMessage.includes("not found") || errorMessage.includes("processed")) {
+      return res.status(404).json({ error: errorMessage });
+    }
+    res.status(500).json({ error: `Failed to reject agent request in database: ${errorMessage}` });
   }
 });
 app.put("/api/admin/agents/:agentId", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { agentId } = req.params;
   const { commissionRate, status, location } = req.body;
   try {
-    const agentRef = db.collection("agents").doc(agentId);
-    const agentDoc = await agentRef.get();
-    if (!agentDoc.exists) {
+    const agent = await getAgentById(agentId);
+    if (!agent) {
       return res.status(404).json({ error: "Agent not found." });
     }
     const updates = {};
     if (commissionRate) updates.commissionRate = parseFloat(commissionRate);
     if (status) updates.status = status;
     if (location !== void 0) updates.location = location;
-    await agentRef.update(updates);
-    res.json({ success: true, message: "Agent updated." });
-  } catch (error) {
-    console.error(`Failed to update agent ${agentId}:`, error);
-    res.status(500).json({ error: "Failed to update agent." });
-  }
-});
-app.post("/api/admin/agents", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { username, password, commissionRate, location } = req.body;
-  if (!username || !password || !commissionRate) {
-    return res.status(400).json({ error: "Username, password, and commission rate are required." });
-  }
-  try {
-    const agentRef = db.collection("agents").doc();
-    const newAgent = {
-      id: agentRef.id,
-      username,
-      password,
-      // In a real app, this should be securely hashed.
-      commissionRate: parseFloat(commissionRate),
-      location: location || "",
-      balance: 0,
-      floatBalance: 0,
-      status: "Active",
-      createdAt: Date.now()
-    };
-    await agentRef.set(newAgent);
-    res.status(201).json({ success: true, agent: newAgent });
-  } catch (error) {
-    console.error("Failed to create agent:", error);
-    res.status(500).json({ error: "Failed to create agent." });
-  }
-});
-app.put("/api/admin/agents/:agentId", isAdmin, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
-  const { agentId } = req.params;
-  const { commissionRate, status, location } = req.body;
-  try {
-    const agentRef = db.collection("agents").doc(agentId);
-    const agentDoc = await agentRef.get();
-    if (!agentDoc.exists) {
-      return res.status(404).json({ error: "Agent not found." });
-    }
-    const updates = {};
-    if (commissionRate) updates.commissionRate = parseFloat(commissionRate);
-    if (status) updates.status = status;
-    if (location !== void 0) updates.location = location;
-    await agentRef.update(updates);
+    await updateAgent(agentId, updates);
     res.json({ success: true, message: "Agent updated." });
   } catch (error) {
     console.error(`Failed to update agent ${agentId}:`, error);
@@ -3450,7 +3290,6 @@ app.post("/api/admin/users/:userId/toggle-admin", isAdmin, (req, res) => {
   } else {
     user.role = "admin";
   }
-  saveStore();
   broadcastUserUpdate(user.id);
   res.json({ success: true, user });
 });
@@ -3470,19 +3309,15 @@ app.post("/api/admin/broadcast", isAdmin, (req, res) => {
   res.json({ success: true, message: "Broadcast sent." });
 });
 app.post("/api/agent/login", async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { username, password } = req.body;
   if (!username || !password) {
     return res.status(400).json({ error: "Username and password are required." });
   }
   try {
-    const agentsRef = db.collection("agents");
-    const snapshot = await agentsRef.where("username", "==", username).limit(1).get();
-    if (snapshot.empty) {
+    const agent = await getAgentByUsername(username);
+    if (!agent) {
       return res.status(401).json({ error: "Invalid credentials." });
     }
-    const agentDoc = snapshot.docs[0];
-    const agent = agentDoc.data();
     if (agent.password !== password) {
       return res.status(401).json({ error: "Invalid credentials." });
     }
@@ -3496,18 +3331,15 @@ app.post("/api/agent/login", async (req, res) => {
   }
 });
 async function isAgent(req, res, next) {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const agentId = req.query.agentId;
   if (!agentId) {
     return res.status(401).json({ error: "Agent ID is required for this operation." });
   }
   try {
-    const agentRef = db.collection("agents").doc(agentId);
-    const agentDoc = await agentRef.get();
-    if (!agentDoc.exists) {
+    const agent = await getAgentById(agentId);
+    if (!agent) {
       return res.status(403).json({ error: "Access denied. Invalid agent ID." });
     }
-    const agent = agentDoc.data();
     if (agent.status !== "Active") {
       return res.status(403).json({ error: "Access denied. Inactive agent ID." });
     }
@@ -3532,12 +3364,9 @@ app.get("/api/agent/player-lookup", isAgent, (req, res) => {
   res.json(results);
 });
 app.get("/api/agent/transactions", isAgent, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const agent = req.agent;
   try {
-    const snapshot = await db.collection("agentTransactions").where("agentId", "==", agent.id).get();
-    const transactions = snapshot.docs.map((doc) => doc.data());
-    transactions.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+    const transactions = await getAgentTransactions(agent.id);
     res.json(transactions);
   } catch (error) {
     console.error(`Failed to get transactions for agent ${agent.id}:`, error);
@@ -3545,64 +3374,26 @@ app.get("/api/agent/transactions", isAgent, async (req, res) => {
   }
 });
 app.post("/api/agent/deposit", isAgent, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const agent = req.agent;
   const { playerId, amount } = req.body;
   const depositAmount = parseFloat(amount);
   if (!playerId || !depositAmount || depositAmount <= 0) {
     return res.status(400).json({ error: "Valid playerId and a positive amount are required." });
   }
-  const player = store.users[playerId];
-  if (!player) {
-    return res.status(404).json({ error: "Player not found." });
-  }
   try {
-    const agentRef = db.collection("agents").doc(agent.id);
-    const agentTxRef = db.collection("agentTransactions").doc();
-    await db.runTransaction(async (t) => {
-      const agentDoc = await t.get(agentRef);
-      if (!agentDoc.exists) throw new Error("Agent not found.");
-      const agentData = agentDoc.data();
-      if (agentData.floatBalance < depositAmount) {
-        throw new Error("Insufficient float balance.");
-      }
-      const newFloatBalance = agentData.floatBalance - depositAmount;
-      t.update(agentRef, { floatBalance: newFloatBalance });
-      const agentTx = {
-        id: agentTxRef.id,
-        agentId: agent.id,
-        type: "PlayerDeposit",
-        amount: depositAmount,
-        playerId,
-        timestamp: Date.now(),
-        description: `Deposited ${depositAmount} into ${player.username}'s account.`
-      };
-      t.set(agentTxRef, agentTx);
-    });
-    player.balance += depositAmount;
-    addTransaction(
-      playerId,
-      "deposit",
-      depositAmount,
-      void 0,
-      `Deposit received from agent ${agent.id}.`
-    );
-    await saveStoreAndWait();
-    broadcastUserUpdate(player.id);
-    const updatedAgentDoc = await agentRef.get();
-    const updatedAgent = updatedAgentDoc.data();
-    res.json({ success: true, newAgentBalance: updatedAgent?.floatBalance, newPlayerBalance: player.balance });
+    const { newAgentBalance, newPlayerBalance } = await depositToPlayer(agent.id, playerId, depositAmount);
+    broadcastUserUpdate(playerId);
+    res.json({ success: true, newAgentBalance, newPlayerBalance });
   } catch (error) {
     console.error(`Agent ${agent.id} failed to deposit to player ${playerId}:`, error);
     const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-    if (errorMessage.includes("Insufficient")) {
+    if (errorMessage.includes("Insufficient") || errorMessage.includes("not found")) {
       return res.status(400).json({ error: errorMessage });
     }
     res.status(500).json({ error: `Failed to process deposit: ${errorMessage}` });
   }
 });
 app.post("/api/agent/request-float", isAgent, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const agent = req.agent;
   const { amount } = req.body;
   const requestAmount = parseFloat(amount);
@@ -3610,16 +3401,15 @@ app.post("/api/agent/request-float", isAgent, async (req, res) => {
     return res.status(400).json({ error: "A positive amount is required." });
   }
   try {
-    const requestRef = db.collection("agentRequests").doc();
     const newRequest = {
-      id: requestRef.id,
+      id: `req_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
       agentId: agent.id,
       agentUsername: agent.username,
       amount: requestAmount,
       status: "pending",
       createdAt: Date.now()
     };
-    await requestRef.set(newRequest);
+    await createPlayerAgentRequest(newRequest);
     res.status(201).json({ success: true, message: "Your float request has been submitted for review.", request: newRequest });
   } catch (error) {
     console.error(`Agent ${agent.id} failed to request float:`, error);
@@ -3627,11 +3417,9 @@ app.post("/api/agent/request-float", isAgent, async (req, res) => {
   }
 });
 app.get("/api/agent/requests", isAgent, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const agent = req.agent;
   try {
-    const requestsSnapshot = await db.collection("agentRequests").where("agentId", "==", agent.id).get();
-    const requests = requestsSnapshot.docs.map((doc) => doc.data());
+    const requests = await getAgentRequests(agent.id);
     requests.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
     res.json(requests);
   } catch (error) {
@@ -3640,11 +3428,9 @@ app.get("/api/agent/requests", isAgent, async (req, res) => {
   }
 });
 app.get("/api/agent/player-requests", isAgent, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const agent = req.agent;
   try {
-    const requestsSnapshot = await db.collection("playerAgentRequests").where("agentId", "==", agent.id).where("status", "==", "pending").orderBy("createdAt", "desc").get();
-    const allAgentRequests = requestsSnapshot.docs.map((doc) => doc.data());
+    const allAgentRequests = await getAgentRequests(agent.id, "pending");
     const linkedPlayerIds = new Set(
       Object.values(store.users).filter((user) => user.linkedAgentId === agent.id).map((user) => user.id)
     );
@@ -3659,73 +3445,10 @@ app.get("/api/agent/player-requests", isAgent, async (req, res) => {
   }
 });
 app.post("/api/agent/player-requests/:requestId/approve", isAgent, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { requestId } = req.params;
   const agent = req.agent;
   try {
-    await db.runTransaction(async (t) => {
-      const requestRef = db.collection("playerAgentRequests").doc(requestId);
-      const requestDoc = await t.get(requestRef);
-      if (!requestDoc.exists) throw new Error("Request not found.");
-      const request = requestDoc.data();
-      if (request.status !== "pending") throw new Error("Request has already been processed.");
-      if (request.agentId !== agent.id) throw new Error("This request does not belong to you.");
-      const playerRef = db.collection("users").doc(request.playerId);
-      const playerDoc = await t.get(playerRef);
-      if (!playerDoc.exists) throw new Error("Player not found.");
-      const player = playerDoc.data();
-      const agentRef = db.collection("agents").doc(agent.id);
-      let newAgentFloat;
-      if (request.type === "deposit") {
-        if (agent.floatBalance < request.amount) {
-          throw new Error("Insufficient float balance to approve this deposit.");
-        }
-        newAgentFloat = agent.floatBalance - request.amount;
-        t.update(playerRef, { balance: player.balance + request.amount });
-        const playerTxRef = db.collection("transactions").doc();
-        t.set(playerTxRef, {
-          id: playerTxRef.id,
-          userId: player.id,
-          type: "deposit",
-          amount: request.amount,
-          timestamp: Date.now(),
-          description: `Deposit approved by agent ${agent.username}. Request ID: ${request.id}`
-        });
-      } else {
-        if (player.balance < request.amount) {
-          throw new Error("Player has insufficient balance for this withdrawal.");
-        }
-        newAgentFloat = agent.floatBalance + request.amount;
-        t.update(playerRef, { balance: player.balance - request.amount });
-        const playerTxRef = db.collection("transactions").doc();
-        t.set(playerTxRef, {
-          id: playerTxRef.id,
-          userId: player.id,
-          type: "withdrawal",
-          amount: request.amount,
-          timestamp: Date.now(),
-          description: `Withdrawal approved by agent ${agent.username}. Request ID: ${request.id}`
-        });
-      }
-      const agentTxRef = db.collection("agentTransactions").doc();
-      t.set(agentTxRef, {
-        id: agentTxRef.id,
-        agentId: agent.id,
-        type: request.type === "deposit" ? "PlayerDeposit" : "PlayerWithdrawal",
-        amount: request.amount,
-        playerId: player.id,
-        playerName: player.username,
-        timestamp: Date.now(),
-        description: `Approved ${request.type} of $${request.amount} for player ${player.username}.`
-      });
-      t.update(agentRef, { floatBalance: newAgentFloat });
-      t.update(requestRef, {
-        status: "approved",
-        resolvedAt: Date.now(),
-        resolvedBy: agent.id,
-        resolverUsername: agent.username
-      });
-    });
+    await approveAgentRequest(requestId, agent.id);
     res.json({ success: true, message: "Request approved successfully." });
   } catch (error) {
     console.error("Error processing agent transaction approval:", error);
@@ -3737,32 +3460,10 @@ app.post("/api/agent/player-requests/:requestId/approve", isAgent, async (req, r
   }
 });
 app.post("/api/agent/player-requests/:requestId/reject", isAgent, async (req, res) => {
-  if (!db) return res.status(500).json({ error: "Database not initialized" });
   const { requestId } = req.params;
   const agent = req.agent;
   try {
-    const requestRef = db.collection("playerAgentRequests").doc(requestId);
-    const requestDoc = await requestRef.get();
-    if (!requestDoc.exists) {
-      return res.status(404).json({ error: "Request not found." });
-    }
-    const request = requestDoc.data();
-    if (request.status !== "pending") {
-      return res.status(400).json({ error: "This request has already been processed." });
-    }
-    if (request.agentId !== agent.id) {
-      return res.status(403).json({ error: "This request does not belong to you." });
-    }
-    await requestRef.update({
-      status: "rejected",
-      resolvedAt: Date.now(),
-      resolvedBy: agent.id,
-      resolverUsername: agent.username
-    });
-    sendEventToUser(request.playerId, "user_notification", {
-      type: "info",
-      message: `Your ${request.type} request for $${request.amount} was rejected by agent ${agent.username}.`
-    });
+    await rejectAgentRequest(requestId, agent.id);
     res.json({ success: true, message: "Request rejected successfully." });
   } catch (error) {
     console.error(`Failed to reject player request ${requestId}:`, error);
@@ -3782,24 +3483,16 @@ app.get("/api/agent/my-players", isAgent, (req, res) => {
   });
   res.json(sanitizedPlayers);
 });
-app.use(express.static(path.join(process.cwd(), "dist")));
 app.get("*", (req, res, next) => {
   if (req.originalUrl.startsWith("/api")) {
     return next();
   }
   res.sendFile(path.join(process.cwd(), "dist", "index.html"));
 });
-var api = onRequest({
-  region: "us-central1",
-  // You can change this to your preferred region
-  memory: "1GiB",
-  // Adjust memory as needed
-  timeoutSeconds: 60
-  // Adjust timeout as needed
-}, app);
+var api = app;
 if (!(process.env.FUNCTION_TARGET || process.env.FUNCTIONS_EMULATOR)) {
-  const PORT2 = process.env.PORT || 3002;
-  app.listen(PORT2, "0.0.0.0", () => {
+  const PORT2 = process.env.PORT || 3003;
+  app.listen(Number(PORT2), "0.0.0.0", () => {
     console.log(`Server is listening on port ${PORT2}`);
   });
 }

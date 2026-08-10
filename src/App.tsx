@@ -10,6 +10,7 @@ import RejoinPrompt from './components/RejoinPrompt';
 import AdminDashboard from './pages/AdminDashboard';
 import BecomeVip from './pages/BecomeVip';
 import Tournaments from './pages/Tournaments';
+import AgentDashboard from './agent-dashboard'; // Import AgentDashboard
 import InstallPwaPrompt from './components/InstallPwaPrompt';
 import { Toaster } from 'react-hot-toast';
 import { VoiceChatProvider } from './context/VoiceChatContext';
@@ -832,17 +833,8 @@ export default function App() {
     );
   }
 
-  if (window.location.pathname === '/admin') {
-    return <AdminDashboard />;
-  }
 
-  if (window.location.pathname === '/vip') {
-    return <BecomeVip />;
-  }
   
-  if (window.location.pathname === '/tournaments') {
-    return <Tournaments />;
-  }
   
   if (rejoinableRoom) {
     return <RejoinPrompt rejoinableRoom={rejoinableRoom} onRejoin={handleRejoin} onDismissRejoin={handleDismissRejoin} />;
